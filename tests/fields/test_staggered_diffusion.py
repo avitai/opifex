@@ -425,3 +425,145 @@ class TestAnisotropicSpacing:
             # Same forward-error bound as the isotropic case, at this axis's own spacing.
             floor = 6.0 * float(np.finfo(np.float32).eps) * constant / spacing[normal] ** 2
             np.testing.assert_allclose(np.asarray(produced), expected, rtol=0.0, atol=floor)
+
+
+class TestTheNoPenetrationContract:
+    """A component's own normal wall carries no prescribed velocity, and saying so is refused.
+
+    ``WallVelocity.values[normal][axis]`` is ``None`` when ``axis == normal`` because that
+    wall holds the component's *normal* velocity, which no-penetration fixes at zero.
+    Accepting a value there would be injection through a solid boundary, and it would change
+    the pressure problem the projection solves rather than failing visibly.
+    """
+
+    @pytest.mark.parametrize("component", [0, 1])
+    @pytest.mark.parametrize("upper", [False, True])
+    def test_prescribing_a_component_on_its_own_normal_wall_is_refused(
+        self, component: int, upper: bool
+    ) -> None:
+        walls = WallVelocity.zeros(RESOLUTION, Extrapolation.ZERO)
+        shape = walls.values[component][1 - component]
+        assert shape is not None, "the tangential wall should exist; the test is mis-posed"
+
+        with pytest.raises(ValueError, match="no-penetration"):
+            walls.set(
+                normal=component,
+                axis=component,
+                upper=upper,
+                value=jnp.zeros_like(shape[0]),
+            )
+
+    def test_the_refusal_names_the_component_the_axis_and_the_reason(self) -> None:
+        """Both indices and the physics, because the fallback message also names the indices.
+
+        Dropping the guard does not silence this method: ``values[1][1]`` is ``None``, so the
+        next line raises "no wall array for component 1 on axis 1" instead. Matching only the
+        two indices therefore passes with the contract removed -- measured. The reason has to
+        be part of the match for this to be a test of *this* refusal.
+        """
+        walls = WallVelocity.zeros(RESOLUTION, Extrapolation.ZERO)
+
+        with pytest.raises(ValueError, match=r"component 1 .*axis 1.*no-penetration"):
+            walls.set(normal=1, axis=1, upper=False, value=jnp.zeros(RESOLUTION[0]))
+
+    def test_a_refused_call_leaves_the_original_untouched(self) -> None:
+        """``set`` documents that it returns a new value and leaves this one unchanged."""
+        walls = WallVelocity.uniform(RESOLUTION, Extrapolation.ZERO, 2.0)
+        before = jax.tree.map(lambda leaf: leaf.copy(), walls.values)
+
+        with pytest.raises(ValueError, match="no-penetration"):
+            walls.set(normal=0, axis=0, upper=True, value=jnp.zeros(RESOLUTION[1]))
+
+        pairs = zip(jax.tree.leaves(before), jax.tree.leaves(walls.values), strict=True)
+        for original, kept in pairs:
+            np.testing.assert_array_equal(np.asarray(original), np.asarray(kept))
+
+
+class TestTheWallTermMagnitude:
+    """``wall_source`` is ``2 u_wall / h^2`` on the wall-adjacent row, per its own docstring.
+
+    ``test_a_moving_wall_reaches_only_the_wall_rows`` already asserts *where* the term
+    lands. It does not assert *how large* it is, so dropping the factor of two, or dividing
+    by ``h`` instead of ``h^2``, leaves it green. The box here is deliberately anisotropic,
+    so the two components expect different numbers and reading the wrong axis' spacing
+    fails rather than cancelling.
+    """
+
+    #: Unit in x, twice that in y, so ``dx`` is ``(0.125, 0.25)`` at eight cells and the two
+    #: components' wall terms differ by a factor of four.
+    STRETCHED = Box(lower=(0.0, 0.0), upper=(1.0, 2.0))
+    SPEED = 3.0
+
+    def test_it_is_twice_the_wall_speed_over_the_perpendicular_spacing_squared(self) -> None:
+        """Exact, not approximate: at eight cells both spacings are powers of two.
+
+        ``1/8`` and ``2/8`` are representable in binary, so ``2 u / h^2`` is computed
+        without rounding and the assertion needs no tolerance at all. The companion test
+        below covers the case where the spacing is not representable.
+        """
+        field = StaggeredGrid.zeros(RESOLUTION, self.STRETCHED, Extrapolation.ZERO)
+        walls = WallVelocity.uniform(RESOLUTION, Extrapolation.ZERO, self.SPEED)
+        spacing = np.asarray(field.dx, dtype=np.float64)
+        assert spacing.tolist() == [0.125, 0.25], "spacings must stay exactly representable"
+
+        source = wall_source(field, walls)
+
+        for normal, component in enumerate(source.components):
+            perpendicular = 1 - normal
+            expected = 2.0 * self.SPEED / spacing[perpendicular] ** 2
+            values = np.asarray(component)
+            lower = values.take(0, axis=perpendicular)
+            upper = values.take(-1, axis=perpendicular)
+            np.testing.assert_array_equal(lower, np.full_like(lower, expected))
+            np.testing.assert_array_equal(upper, np.full_like(upper, expected))
+            interior = values.take(range(1, values.shape[perpendicular] - 1), perpendicular)
+            np.testing.assert_array_equal(interior, np.zeros_like(interior))
+
+    def test_it_holds_where_the_spacing_is_not_exactly_representable(self) -> None:
+        """Ten cells put ``h`` at 0.1, which binary floating point cannot hold.
+
+        Budget is the roundings on the path, read off ``wall_source`` and ``dx``: the
+        division forming ``dx``, its square, the reciprocal times two, and the multiply by
+        the prescribed profile -- four. Measured, the worst entry uses 0.15 of it.
+        """
+        resolution = (10, 10)
+        field = StaggeredGrid.zeros(resolution, self.STRETCHED, Extrapolation.ZERO)
+        walls = WallVelocity.uniform(resolution, Extrapolation.ZERO, self.SPEED)
+        spacing = np.asarray(field.dx, dtype=np.float64)
+        budget = 4.0 * float(np.finfo(np.float32).eps)
+
+        source = wall_source(field, walls)
+
+        for normal, component in enumerate(source.components):
+            perpendicular = 1 - normal
+            expected = 2.0 * self.SPEED / spacing[perpendicular] ** 2
+            produced = np.asarray(component, dtype=np.float64).take(0, axis=perpendicular)
+            used = float(np.max(np.abs(produced - expected))) / (budget * abs(expected))
+            assert used <= 1.0, (
+                f"component {normal} used {used:.4f} of a four-rounding budget; the budget "
+                "is an operation count read off wall_source, not a measured gap"
+            )
+
+    def test_a_periodic_box_has_no_walls_to_prescribe(self) -> None:
+        """Periodic boundaries carry no wall, so prescribed data must not reach the field.
+
+        Exactly zero rather than nearly zero: the periodic branch builds the result with
+        ``zeros_like`` and never reads ``walls`` at all. The control is the same wall speed
+        under a solid boundary, which must be loudly non-zero -- without it this test would
+        pass just as well if wall data stopped registering everywhere.
+        """
+        shape = RESOLUTION
+        loud = WallVelocity.uniform(shape, Extrapolation.PERIODIC, 7.0)
+        periodic = StaggeredGrid.zeros(shape, BOX, Extrapolation.PERIODIC)
+
+        source = wall_source(periodic, loud)
+
+        for produced, reference in zip(source.components, periodic.components, strict=True):
+            np.testing.assert_array_equal(np.asarray(produced), np.zeros_like(reference))
+            assert produced.shape == reference.shape, "the layout must survive the shortcut"
+
+        walled = StaggeredGrid.zeros(shape, BOX, Extrapolation.ZERO)
+        control = wall_source(walled, WallVelocity.uniform(shape, Extrapolation.ZERO, 7.0))
+        assert float(jnp.max(jnp.abs(flatten(control)))) > 0.0, (
+            "the control is silent, so the periodic assertion above proves nothing"
+        )

@@ -27,6 +27,9 @@ References:
       Navier-Stokes equations*, J. Comput. Phys. 233, 100.
 """
 
+import enum
+import typing as tp
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -47,6 +50,17 @@ from opifex.fields.staggered_pressure import project
 
 
 BOX = Box(lower=(0.0, 0.0), upper=(1.0, 1.0))
+
+
+class _FutureBoundary(enum.Enum):
+    """Stands in for a boundary condition added to ``Extrapolation`` but not to this layer.
+
+    Declared here rather than monkey-patching the real enum, which is frozen at import and
+    whose members other modules hold by identity.
+    """
+
+    MIRROR = "mirror"
+
 
 # Every operation the contract names, so a row of the table can be checked against the
 # operator it governs rather than against the table itself. A new row with no entry here
@@ -117,6 +131,23 @@ class TestFaceCounts:
         self, extrapolation: Extrapolation, expected: int
     ) -> None:
         assert face_count(8, extrapolation) == expected
+
+    def test_a_boundary_the_layout_does_not_define_is_refused(self) -> None:
+        """The fall-through guards a *future* member, which is the only way to reach it.
+
+        ``Extrapolation`` has exactly three members today and the chain above handles all
+        three, so no value of the declared type reaches this line -- it exists against the
+        enum growing a fourth. That is worth a test rather than a pragma: silently returning
+        one of the three counts for a boundary nobody sized would mis-shape every component
+        array in the layout, and the failure would surface far from here as a shape error.
+        """
+        with pytest.raises(ValueError, match="Unknown extrapolation"):
+            face_count(8, tp.cast("Extrapolation", _FutureBoundary.MIRROR))
+
+    def test_the_refusal_names_the_boundary_it_was_given(self) -> None:
+        """A message naming only the function would leave the caller guessing which axis."""
+        with pytest.raises(ValueError, match="MIRROR"):
+            face_count(8, tp.cast("Extrapolation", _FutureBoundary.MIRROR))
 
 
 class TestDiscreteAdjointness:
@@ -269,3 +300,39 @@ class TestTheBoundaryContract:
         field = StaggeredGrid.zeros((8, 8), BOX, extrapolation)
 
         OPERATIONS[operation](field)
+
+
+class TestTheRepr:
+    """What ``__repr__`` is overridden for, asserted rather than assumed.
+
+    Its docstring says the generated dataclass repr "prints every entry, which buries a
+    shape mismatch -- the most common failure here -- under pages of numbers". So the
+    property is not that the repr is pretty: it is that the shapes are present and the
+    values are absent.
+    """
+
+    def test_it_shows_every_component_shape(self) -> None:
+        """A staggered layout gives its components *different* shapes, so all are needed."""
+        grid = StaggeredGrid.zeros((4, 6), BOX, Extrapolation.ZERO)
+
+        text = repr(grid)
+
+        assert [component.shape for component in grid.components] == [(3, 6), (4, 5)], (
+            "the layout changed; this test's point is that the two shapes differ"
+        )
+        for shape in (component.shape for component in grid.components):
+            assert str(shape) in text, f"{shape} missing from {text}"
+        assert "resolution=(4, 6)" in text
+        assert "extrapolation=zero" in text
+
+    def test_it_does_not_print_the_entries(self) -> None:
+        """The whole reason for the override: a distinctive value must not appear."""
+        grid = StaggeredGrid.zeros((4, 6), BOX, Extrapolation.ZERO)
+        marked = StaggeredGrid(
+            tuple(jnp.full_like(component, 12345.0) for component in grid.components),
+            grid.box,
+            grid.extrapolation,
+            grid.resolution,
+        )
+
+        assert "12345" not in repr(marked), "the repr is printing entries again"

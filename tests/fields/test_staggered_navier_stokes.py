@@ -21,6 +21,7 @@ References:
 
 import itertools
 import math
+from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
@@ -31,12 +32,18 @@ from opifex.fields.field import Box, Extrapolation
 from opifex.fields.staggered import divergence, StaggeredGrid
 from opifex.fields.staggered_convection import convect
 from opifex.fields.staggered_diffusion import laplacian, wall_source, WallVelocity
-from opifex.fields.staggered_navier_stokes import integrate, step, tendency
+from opifex.fields.staggered_navier_stokes import (
+    integrate,
+    stable_step_count,
+    step,
+    tendency,
+)
 from opifex.fields.staggered_pressure import project
 from tests.fields.staggered_support import (
     gradient_transform_agreement,
     gradient_versus_central_difference,
     JIT_GRADIENT_ULP,
+    operator_matrix,
     TAYLOR_RATE_FLOOR,
     taylor_remainder_rates,
     TAYLOR_RESIDUAL_FLOOR,
@@ -513,3 +520,210 @@ class TestBoundaries:
 
         with pytest.raises(ValueError, match="does not carry"):
             tendency(field, viscosity=0.01)
+
+
+def _real_axis_stability_limit(stability_polynomial: Callable[[float], float]) -> float:
+    """The largest ``L`` with ``|R(-L)| <= 1``, by bisection on ``[0, 8]``.
+
+    Args:
+        stability_polynomial: ``R(z)`` for the scheme.
+
+    Returns:
+        Where the scheme leaves the unit disc on the negative real axis.
+    """
+    low, high = 0.0, 8.0
+    for _ in range(60):
+        middle = (low + high) / 2.0
+        low, high = (middle, high) if abs(stability_polynomial(-middle)) <= 1.0 else (low, middle)
+    return low
+
+
+def _forward_euler(z: float) -> float:
+    """``R(z) = 1 + z``, the scheme jax-cfd's published limit is derived for.
+
+    Args:
+        z: Point on the real axis.
+
+    Returns:
+        The amplification factor.
+    """
+    return 1.0 + z
+
+
+def _classical_rk4(z: float) -> float:
+    """``R(z)`` for the four-stage, fourth-order Runge-Kutta method ``step`` implements.
+
+    Args:
+        z: Point on the real axis.
+
+    Returns:
+        The amplification factor.
+    """
+    return 1.0 + z + z**2 / 2.0 + z**3 / 6.0 + z**4 / 24.0
+
+
+class TestTheStabilityConstant:
+    """``stable_step_count``'s ``0.348`` is checked against its derivation and against a
+    maintained reference implementation, rather than quoted.
+
+    The number appears in two docstrings and once in the code, and both docstrings explain
+    where it comes from: classical RK4 is stable on the negative real axis to 2.785, and the
+    most negative eigenvalue of the MAC Laplacian is ``8 nu / dx^2`` in two dimensions, so
+    the diffusive limit is ``2.785 / 8 = 0.348`` times ``dx^2 / nu``.
+
+    **A docstring is a record of what was true when it was written**, so every half is
+    measured here. The same construction -- a time scheme's real-axis stability limit over
+    the spatial operator's spectral radius -- is what two maintained libraries use:
+
+    * ``google/jax-cfd``'s ``jax_cfd.base.diffusion.stable_time_step`` returns
+      ``dx ** 2 / (viscosity * 2 ** ndim)``, which is ``0.25 dx^2 / nu`` in two dimensions.
+      That is the same ``8/dx^2`` spectral radius under forward Euler, whose limit is 2
+      rather than 2.785, and ``0.348 / 0.25`` is ``2.785 / 2`` exactly.
+    * ``CliMA/Oceananigans.jl`` PR #6389 multiplies its ``cell_diffusion_timescale`` by
+      ``3/4`` for a fourth-order Laplacian "because the spectral radius of the five-point
+      Laplacian (16/3 d^2) is 4/3 that of the three-point Laplacian" -- the same rule, applied
+      to a change of stencil rather than a change of scheme.
+
+    Neither library tests its own constant: ``jax_cfd/base/diffusion_test.py`` has no test of
+    ``stable_time_step``, and Oceananigans' PR lists ``cell_diffusion_timescale`` as covered
+    without showing an assertion. So the cross-check below is the reference these tests lean
+    on, and the tests themselves are this repository's own.
+    """
+
+    #: The constant as ``stable_step_count`` declares it, rounded to three decimals there.
+    DECLARED = 0.348
+
+    #: ``jax_cfd.base.diffusion.stable_time_step``: ``dx**2 / (viscosity * 2**ndim)``.
+    JAX_CFD_TWO_DIMENSIONAL = 0.25
+
+    def test_the_time_scheme_is_stable_to_the_declared_point_on_the_real_axis(self) -> None:
+        """Classical RK4's stability polynomial, bisected rather than recalled."""
+        measured = _real_axis_stability_limit(_classical_rk4)
+
+        assert measured == pytest.approx(2.785, abs=1e-3), (
+            f"RK4's real-axis limit measures {measured:.6f}; the derivation behind 0.348 "
+            "assumes 2.785, so either the scheme changed or the constant needs rederiving"
+        )
+
+    def test_the_constant_is_jax_cfds_rescaled_by_the_time_scheme(self) -> None:
+        """Cross-library: the same spectral radius under a different scheme.
+
+        ``jax-cfd`` sizes the explicit diffusive step for forward Euler and this package for
+        RK4, over the identical ``8 nu / dx^2`` spectral radius, so the two constants must
+        stand in the ratio of the two schemes' real-axis limits. Both limits are bisected
+        here rather than quoted, so nothing in this assertion is a number read off a page.
+        """
+        euler = _real_axis_stability_limit(_forward_euler)
+        runge_kutta = _real_axis_stability_limit(_classical_rk4)
+
+        assert euler == pytest.approx(2.0, abs=1e-9), "forward Euler leaves the disc at -2"
+        allowed_ratio = self.DECLARED / self.JAX_CFD_TWO_DIMENSIONAL
+
+        assert allowed_ratio == pytest.approx(runge_kutta / euler, rel=1e-3), (
+            f"this package allows {self.DECLARED / self.JAX_CFD_TWO_DIMENSIONAL:.6f} times "
+            f"jax-cfd's step while its scheme tolerates {runge_kutta / euler:.6f} times the "
+            "eigenvalue; one of the two constants no longer matches its scheme"
+        )
+
+    @pytest.mark.parametrize("cells", [8, 9, 16])
+    def test_the_viscous_operator_is_bounded_by_eight_over_the_spacing_squared(
+        self, cells: int
+    ) -> None:
+        """The other half, read off the assembled operator rather than assumed.
+
+        **The bound is attained only for an even cell count, and that precondition is part
+        of the claim.** The periodic second difference has eigenvalues
+        ``-4 sin^2(pi k / n) / h^2`` for ``k = 0 .. n-1``, so ``-4/h^2`` is reached by the
+        Nyquist mode ``k = n/2``, which exists only when ``n`` is even. Measured: the ratio
+        to the bound is 1.00000000 at 8 and 16 cells and 0.96984632 at 9. Asserting
+        attainment unconditionally would fail on any odd resolution and report it as a
+        changed stencil, which is why ``cells`` is parametrised across both parities here.
+
+        Under a solid boundary the extreme eigenvalue is less negative at either parity,
+        which leaves the step count conservative in the safe direction.
+        """
+        for extrapolation in (Extrapolation.PERIODIC, Extrapolation.ZERO):
+            field = StaggeredGrid.zeros((cells, cells), BOX, extrapolation)
+            spacing = float(np.asarray(field.dx)[0])
+            matrix = np.asarray(
+                operator_matrix(laplacian, (cells, cells), extrapolation), dtype=np.float64
+            )
+            worst = float(np.linalg.eigvalsh((matrix + matrix.T) / 2.0).min())
+            bound = -8.0 / spacing**2
+            # At an even cell count the bound is ATTAINED, so this comparison sits on a
+            # knife edge and must allow the eigensolver its own error. LAPACK's symmetric
+            # driver is backward stable: computed eigenvalues lie within p(n) * eps *
+            # ||A||_2 of the true ones, with ||A||_2 = |bound|; p(n) is instantiated as n,
+            # conservatively. Measured at 16 cells the overshoot is 4.5e-13 against the
+            # 2.3e-10 allowed -- 500x of headroom, which costs nothing here because the
+            # defect this detects (a changed viscous stencil) moves the eigenvalue by order
+            # ||A||, thirteen decades above the allowance.
+            eigensolver_error = matrix.shape[0] * float(np.finfo(np.float64).eps) * abs(bound)
+
+            assert worst >= bound - eigensolver_error, (
+                f"{extrapolation.value}: most negative eigenvalue {worst:.6f} is beyond the "
+                f"{bound:.6f} the step count is sized against, by more than the "
+                f"{eigensolver_error:.3e} the symmetric eigensolver is entitled to"
+            )
+            if extrapolation == Extrapolation.PERIODIC and cells % 2 == 0:
+                assert worst == pytest.approx(bound, rel=1e-5), (
+                    f"at {cells} cells the periodic Nyquist mode should attain the bound "
+                    "exactly; if it no longer does, the viscous stencil changed"
+                )
+            elif extrapolation == Extrapolation.PERIODIC:
+                assert worst > bound * (1.0 - 1e-6), (
+                    f"an odd cell count has no Nyquist mode, so {cells} cells must fall "
+                    "strictly inside the bound rather than reach it"
+                )
+
+    def test_the_declared_constant_is_the_ratio_of_those_two(self) -> None:
+        """2.785 / 8, which is the whole derivation, to the three decimals the source keeps.
+
+        The tolerance is the half-width of a three-decimal rounding, which is what the
+        source performs: ``2.785 / 8`` is 0.348125 and it is written as ``0.348``. Anything
+        tighter would reject a correct rounding; the exact-ceiling test below is what
+        catches a constant that is actually wrong.
+        """
+        declared = self.DECLARED
+
+        assert declared == pytest.approx(2.785 / 8.0, abs=5e-4)
+
+    @pytest.mark.parametrize(
+        ("cells", "viscosity", "total_time"),
+        [(16, 0.05, 0.5), (8, 0.1, 0.25), (24, 0.02, 1.0), (12, 0.03, 2.0)],
+    )
+    def test_the_step_count_is_exactly_the_ceiling_of_the_limit(
+        self, cells: int, viscosity: float, total_time: float
+    ) -> None:
+        """The count is an integer, so this compares integers and needs no tolerance at all.
+
+        An earlier version compared the realised step against half the limit with
+        ``rel=1/count``, which is the right bound on what ``ceil`` can cost -- and useless,
+        because at ten steps it permits a tenth, which is exactly the size of an off-by-one
+        in the count. Comparing ``ceil`` to ``ceil`` removes the tolerance and the blind spot
+        together.
+
+        **The expectation is derived, never measured**: ``DECLARED`` is the constant the
+        source states, checked above against RK4's bisected limit over the operator's
+        measured spectral radius and against jax-cfd's published constant. Nothing here is
+        read back out of ``stable_step_count``.
+
+        The configurations avoid quotients that sit on a ceiling edge, and the test says so
+        rather than depending on it silently: at 32 cells over an interval of 4 the quotient
+        is 1177.01, where the source's rounding of the constant to three decimals is the
+        difference between 1177 and 1178.
+        """
+        field = StaggeredGrid.zeros((cells, cells), BOX, Extrapolation.ZERO)
+        spacing = float(np.asarray(field.dx)[0])
+        step = 0.5 * self.DECLARED * spacing**2 / viscosity
+        quotient = total_time / step
+        assert 0.05 < quotient - math.floor(quotient) < 0.95, (
+            f"quotient {quotient:.4f} sits on a ceiling edge, where rounding the constant "
+            "decides the count; this configuration cannot test the ceiling"
+        )
+
+        # The field is at rest, so the advective limit is infinite and the diffusive one binds.
+        count = stable_step_count(field, total_time, viscosity)
+
+        assert count == math.ceil(quotient)
+        assert total_time / count <= step, "the ceiling must never round the step up"

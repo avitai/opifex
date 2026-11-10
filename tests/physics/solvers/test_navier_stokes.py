@@ -461,3 +461,73 @@ class TestLidDrivenCavity:
         cavity = solve_lid_driven_cavity(32, nu=0.05, lid_velocity=1.0, total_time=4.0)
 
         assert all(bool(jnp.all(jnp.isfinite(c))) for c in cavity.components)
+
+    #: The diffusive stability limit as a multiple of ``dx^2 / nu``, from
+    #: ``stable_step_count``'s own derivation: classical RK4 is stable on the negative real
+    #: axis to 2.785, and the MAC Laplacian's most negative eigenvalue is ``8 nu / dx^2`` in
+    #: two dimensions, so ``2.785 / 8``. Both halves are checked against the code in
+    #: ``tests/fields/test_staggered_navier_stokes.py::TestTheStabilityConstant`` rather
+    #: than taken from the prose, because a docstring is not an authority.
+    DIFFUSIVE_LIMIT = 0.348
+
+    def test_an_explicit_step_count_reproduces_the_derived_one(self):
+        """The ``num_steps`` argument, whose branch no test took.
+
+        Every other test here lets ``num_steps`` default to ``None``. Passing the count the
+        default would have computed must land on exactly the same trajectory -- bit-identical,
+        since it is the same arithmetic in the same order -- which is what shows the explicit
+        branch feeds ``integrate`` the same number rather than, say, an off-by-one.
+
+        **This test alone cannot show the argument is honoured**, and the companion below is
+        what does. Measured: a mutation that ignores ``num_steps`` entirely and always
+        recomputes the default leaves this green, because the two sides then agree trivially.
+        It is a consistency check on the two branches; the NaN test is the one with teeth.
+        """
+        from opifex.fields.field import Box, Extrapolation
+        from opifex.fields.staggered import StaggeredGrid
+        from opifex.fields.staggered_navier_stokes import stable_step_count
+        from opifex.physics.solvers.navier_stokes import solve_lid_driven_cavity
+
+        resolution, nu, total_time = 16, 0.05, 0.5
+        still = StaggeredGrid.zeros(
+            (resolution, resolution),
+            Box(lower=(0.0, 0.0), upper=(1.0, 1.0)),
+            Extrapolation.ZERO,
+        )
+        derived = stable_step_count(still, total_time, nu)
+
+        default = solve_lid_driven_cavity(resolution, nu=nu, total_time=total_time)
+        explicit = solve_lid_driven_cavity(
+            resolution, nu=nu, total_time=total_time, num_steps=derived
+        )
+
+        assert derived > 1, "a one-step default would make this test vacuous"
+        for produced, reference in zip(explicit.components, default.components, strict=True):
+            np.testing.assert_array_equal(np.asarray(produced), np.asarray(reference))
+
+    def test_a_step_count_below_the_stability_limit_returns_nan(self):
+        """The hazard the ``num_steps`` docstring warns about, asserted rather than described.
+
+        "A step above it returns NaN rather than raising, so a caller who guesses gets
+        silence." The count here is derived from the stability limit, not found by scanning
+        for where it breaks: half the minimum step count puts the step at twice the limit.
+        """
+        import math
+
+        from opifex.physics.solvers.navier_stokes import solve_lid_driven_cavity
+
+        resolution, nu, total_time = 16, 0.05, 0.5
+        spacing = 1.0 / resolution
+        limit = self.DIFFUSIVE_LIMIT * spacing**2 / nu
+        minimum_steps = math.ceil(total_time / limit)
+        unstable = max(1, minimum_steps // 2)
+
+        blown = solve_lid_driven_cavity(
+            resolution, nu=nu, total_time=total_time, num_steps=unstable
+        )
+
+        assert total_time / unstable > 2.0 * limit, "the chosen step is not actually unstable"
+        assert not all(bool(jnp.all(jnp.isfinite(c))) for c in blown.components), (
+            f"{unstable} steps is a step of {total_time / unstable:.4g} against a limit of "
+            f"{limit:.4g}; the scheme should have diverged"
+        )
