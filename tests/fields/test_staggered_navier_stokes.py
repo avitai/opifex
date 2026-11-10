@@ -33,9 +33,32 @@ from opifex.fields.staggered_convection import convect
 from opifex.fields.staggered_diffusion import laplacian, wall_source, WallVelocity
 from opifex.fields.staggered_navier_stokes import integrate, step, tendency
 from opifex.fields.staggered_pressure import project
+from tests.fields.staggered_support import (
+    gradient_transform_agreement,
+    gradient_versus_central_difference,
+    JIT_GRADIENT_ULP,
+    TAYLOR_RATE_FLOOR,
+    taylor_remainder_rates,
+    TAYLOR_RESIDUAL_FLOOR,
+    VMAP_GRADIENT_ULP,
+)
 
 
 BOX = Box(lower=(0.0, 0.0), upper=(1.0, 1.0))
+
+#: Central-difference step for the gradient checks, at the minimum of the measured error
+#: curve for both of them.
+CENTRAL_DIFFERENCE_STEP = 1e-4
+
+#: Budget for the trajectory gradient. Looser than the pressure projection's 1e-9
+#: because this accumulates over five steps, each holding a convection, a diffusion and
+#: a solve: the measured worst case over two seeds is 7.536e-10, leaving about a hundred
+#: and thirty times headroom.
+TRAJECTORY_GRADIENT_TOLERANCE = 1e-7
+
+#: Budget for the gradient with respect to the wall velocity, which runs over four steps
+#: on an eight-cell grid and measures 2.264e-11 -- about four hundred times inside this.
+LID_GRADIENT_TOLERANCE = 1e-8
 
 
 def _solenoidal(n: int, seed: int = 0) -> StaggeredGrid:
@@ -190,19 +213,93 @@ class TestTransforms:
 
         assert traces["count"] == 1
 
-    def test_it_differentiates_in_reverse_mode(self) -> None:
-        # `solve_navier_stokes_2d` raises here: its adaptive sub-stepping is a
-        # `lax.while_loop` with a data-dependent trip count, which has no reverse rule.
+    @pytest.mark.parametrize("seed", [0, 5])
+    def test_the_trajectory_gradient_matches_a_central_difference(self, seed: int) -> None:
+        """The gradient through five steps must be the derivative, not merely finite.
+
+        ``solve_navier_stokes_2d`` raises here: its adaptive sub-stepping is a
+        ``lax.while_loop`` with a data-dependent trip count, which has no reverse rule.
+        That is what this test exists for -- but ``isfinite`` plus ``max |g| > 0``, which
+        is what it used to assert, is satisfied by a gradient that is entirely wrong.
+        Measured on the Burgers solver, a ``stop_gradient`` on the advecting coefficient
+        leaves the primal bit-identical, corrupts the adjoint, and passes both.
+
+        The reference calls only the primal, so a broken transpose rule cannot hide
+        behind it.
+        """
+        start = _solenoidal(16, seed=seed)
+
+        with jax.enable_x64(True):
+            components = tuple(c.astype(jnp.float64) for c in start.components)
+
+            def loss(parts: tuple[jax.Array, ...]) -> jax.Array:
+                field = StaggeredGrid(parts, BOX, Extrapolation.PERIODIC, (16, 16))
+                return _energy(integrate(field, total_time=0.05, num_steps=5, viscosity=0.01))
+
+            relative = gradient_versus_central_difference(
+                loss, components, step=CENTRAL_DIFFERENCE_STEP
+            )
+
+        assert relative <= TRAJECTORY_GRADIENT_TOLERANCE, (
+            f"reverse mode and a central difference disagree by a relative {relative:.3e}, "
+            f"against a measured worst case of 7.5e-10 and a budget of "
+            f"{TRAJECTORY_GRADIENT_TOLERANCE:.0e}"
+        )
+
+    def test_the_taylor_remainder_converges_at_second_order(self) -> None:
+        """Adjoint verification through five steps, judged by a rate not a tolerance.
+
+        Follows pyadjoint's ``taylor_test``. The remainder
+        ``|J(m + eps h) - J(m) - eps <grad J, h>|`` is O(eps^2) for a correct gradient
+        and O(eps) for a wrong one, so the criterion is rate 2 against rate 1 -- nothing
+        to tune, which is what makes it the right primary check for a gradient taken
+        through a loop of convections, diffusions and solves.
+
+        Measured: residuals 1.18e-05, 2.95e-06, 7.37e-07, 1.84e-07, rates all 2.000.
+        """
         start = _solenoidal(16)
 
-        def loss(components: tuple[jax.Array, ...]) -> jax.Array:
-            field = StaggeredGrid(components, BOX, Extrapolation.PERIODIC, (16, 16))
+        with jax.enable_x64(True):
+            components = tuple(c.astype(jnp.float64) for c in start.components)
+
+            def loss(parts: tuple[jax.Array, ...]) -> jax.Array:
+                field = StaggeredGrid(parts, BOX, Extrapolation.PERIODIC, (16, 16))
+                return _energy(integrate(field, total_time=0.05, num_steps=5, viscosity=0.01))
+
+            residuals, rates = taylor_remainder_rates(loss, components)
+
+        assert min(residuals) > TAYLOR_RESIDUAL_FLOOR, (
+            f"smallest remainder {min(residuals):.3e} is at the rounding floor"
+        )
+        assert min(rates) > TAYLOR_RATE_FLOOR, (
+            f"Taylor rates {[f'{r:.3f}' for r in rates]} from residuals "
+            f"{[f'{r:.3e}' for r in residuals]}; a rate near 1 is a wrong gradient"
+        )
+
+    def test_the_trajectory_gradient_survives_jit_and_vmap(self) -> None:
+        """The composition that matters most for the ``while_loop`` to ``scan`` change.
+
+        ``while_loop`` has no transpose rule, so the adjoint of this trajectory did not
+        exist at all before. Having gained it, it has to survive being compiled and
+        being mapped: ``vmap`` of a trajectory gradient is what an ensemble or batched
+        control problem runs, and it had no coverage anywhere in this suite.
+        """
+        start = _solenoidal(16)
+
+        def loss(parts: tuple[jax.Array, ...]) -> jax.Array:
+            field = StaggeredGrid(parts, BOX, Extrapolation.PERIODIC, (16, 16))
             return _energy(integrate(field, total_time=0.05, num_steps=5, viscosity=0.01))
 
-        grads = jax.grad(loss)(start.components)
+        jit_gap, vmap_gap = gradient_transform_agreement(loss, start.components)
 
-        assert all(bool(jnp.all(jnp.isfinite(g))) for g in grads)
-        assert any(float(jnp.max(jnp.abs(g))) > 0 for g in grads)
+        assert jit_gap <= JIT_GRADIENT_ULP, (
+            f"jit(grad) differs from grad by {jit_gap:.2f} ULP; measured 1.38 on the CPU "
+            "backend CI pins and 0.00 on this machine's GPU"
+        )
+        assert vmap_gap <= VMAP_GRADIENT_ULP, (
+            f"vmap(grad) differs from a loop by {vmap_gap:.2f} ULP; this measured exactly "
+            "zero on both backends"
+        )
 
     def test_it_maps_over_a_batch(self) -> None:
         start = _solenoidal(16)
@@ -337,20 +434,40 @@ class TestAMovingWall:
         # Scaled by the differencing the divergence performs, which divides by the cell.
         assert float(jnp.max(jnp.abs(divergence(driven)))) < 1e-5 * speed * 16
 
-    def test_the_trajectory_differentiates_with_respect_to_the_lid(self) -> None:
-        # The wall velocity is an array in the residual path, so a wall profile is an
-        # ordinary differentiable input -- which is what makes boundary control possible.
-        still = StaggeredGrid.zeros((8, 8), BOX, Extrapolation.ZERO)
+    def test_the_lid_gradient_matches_a_central_difference(self) -> None:
+        """Boundary control needs the *right* gradient, not just a finite one.
 
-        def energy(walls: WallVelocity) -> jax.Array:
-            driven = integrate(still, 0.02, 4, 0.01, walls)
-            return jnp.stack([jnp.sum(part**2) for part in driven.components]).sum()
+        The wall velocity is an array in the residual path, so a wall profile is an
+        ordinary differentiable input -- which is what makes boundary control possible,
+        and which is worth nothing if the gradient is wrong. This replaces an
+        ``isfinite`` plus ``max |leaf| > 0`` pair that a corrupted adjoint satisfies.
 
-        gradient = jax.grad(energy)(self._lid(8))
-        leaves = [leaf for leaf in jax.tree.leaves(gradient) if leaf is not None]
+        The lid is a pytree rather than a component tuple, so it is flattened to its
+        leaves and rebuilt inside the loss; the helper then perturbs the leaves exactly
+        as it does a velocity's components.
+        """
+        with jax.enable_x64(True):
+            # Built inside the context on purpose: a float32 carry meeting float64 walls
+            # makes `lax.scan` reject the trajectory outright, because the carry's output
+            # dtype no longer matches its input's.
+            still = StaggeredGrid.zeros((8, 8), BOX, Extrapolation.ZERO)
+            leaves, structure = jax.tree.flatten(self._lid(8))
+            components = tuple(jnp.asarray(leaf, dtype=jnp.float64) for leaf in leaves)
 
-        assert leaves and all(bool(jnp.all(jnp.isfinite(leaf))) for leaf in leaves)
-        assert max(float(jnp.max(jnp.abs(leaf))) for leaf in leaves) > 0.0
+            def energy(parts: tuple[jax.Array, ...]) -> jax.Array:
+                walls = jax.tree.unflatten(structure, list(parts))
+                driven = integrate(still, 0.02, 4, 0.01, walls)
+                return jnp.stack([jnp.sum(part**2) for part in driven.components]).sum()
+
+            relative = gradient_versus_central_difference(
+                energy, components, step=CENTRAL_DIFFERENCE_STEP
+            )
+
+        assert relative <= LID_GRADIENT_TOLERANCE, (
+            f"the wall-velocity gradient and a central difference disagree by a relative "
+            f"{relative:.3e}, against a measured 2.3e-11 and a budget of "
+            f"{LID_GRADIENT_TOLERANCE:.0e}"
+        )
 
     def test_it_traces_once_with_the_lid_crossing_the_scan(self) -> None:
         still = StaggeredGrid.zeros((8, 8), BOX, Extrapolation.ZERO)

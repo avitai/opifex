@@ -48,7 +48,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from opifex.fields.field import Extrapolation
+from opifex.fields.field import Box, Extrapolation
 from opifex.fields.staggered import StaggeredGrid
 from opifex.fields.staggered_diffusion import laplacian, wall_source, WallVelocity
 from tests.fields.staggered_support import (
@@ -176,7 +176,17 @@ class TestTheWallVelocity:
             far = tuple(slice(None) if i != normal else -1 for i in range(produced.ndim))
             expected[near] = -constant / spacing**2
             expected[far] = -constant / spacing**2
-            np.testing.assert_allclose(np.asarray(produced), expected, rtol=1e-5, atol=1e-2)
+            # The tolerance is the method's own forward-error bound, never a measured
+            # value: Eq. (92)'s wall row is (-3 u_1 + u_2 + 2 u_wall)/h^2, about six
+            # IEEE-754 roundings each of magnitude c/h^2, so the error cannot exceed
+            # 6 eps c/h^2. A fixed absolute tolerance cannot express that, because the
+            # quantity scales as h^-2: the `atol=1e-2` this line used to carry was 236x
+            # the bound at 4 cells and only 3.7x at 32, so it was at once far too slack
+            # here and too tight to survive a finer grid. `rtol` is zero because every
+            # interior entry of `expected` is zero, where a relative tolerance
+            # contributes nothing.
+            floor = 6.0 * float(np.finfo(np.float32).eps) * constant / spacing**2
+            np.testing.assert_allclose(np.asarray(produced), expected, rtol=0.0, atol=floor)
 
     def test_the_lid_profile_is_carried_pointwise_not_as_one_number(self) -> None:
         # The reason this is a field: both the standard energy test (Sanderse Eq. 166)
@@ -367,3 +377,51 @@ class TestBoundariesNotYetCarried:
 
         with pytest.raises(ValueError, match="does not carry"):
             laplacian(field)
+
+
+class TestAnisotropicSpacing:
+    """Each axis must divide by *its own* cell size, which a square grid cannot show.
+
+    Every other case in this module -- and in every staggered module beside it -- uses a
+    square resolution inside the unit box, so ``dx`` equals ``dy`` and
+    ``spacing[axis] ** 2`` is numerically indistinguishable from ``spacing[0] ** 2``.
+    The operator indexes per axis and is correct; nothing was measuring it.
+
+    That is not an argument, it is measured: replacing ``spacing[axis] ** 2`` with
+    ``spacing[0] ** 2`` in ``staggered_diffusion.py`` leaves
+    ``test_staggered_diffusion.py`` and ``test_staggered_navier_stokes.py`` at
+    **38 passed**. Under ``dy = 2 dx`` the same mutation moves the y-component's wall row
+    from ``-c/dy^2`` to ``-c/dx^2``, a factor of four, so this case is the detector the
+    suite was missing. The x-component is deliberately asserted too even though the
+    mutation cannot change it: a test that only looked at y would not notice an operator
+    that had stopped being right on x.
+    """
+
+    def test_each_axis_divides_by_its_own_cell_size(self) -> None:
+        constant, resolution = 3.7, (8, 8)
+        box = Box(lower=(0.0, 0.0), upper=(1.0, 2.0))
+        shapes = StaggeredGrid.component_shapes(resolution, Extrapolation.ZERO)
+        field = StaggeredGrid(
+            tuple(jnp.full(shape, constant) for shape in shapes),
+            box,
+            Extrapolation.ZERO,
+            resolution,
+        )
+        spacing = np.asarray(field.dx)
+        assert not np.isclose(spacing[0], spacing[1]), (
+            "this case only detects a per-axis spacing defect while the cells are "
+            "genuinely anisotropic; an isotropic box makes the assertion vacuous"
+        )
+        walls = WallVelocity.uniform(resolution, Extrapolation.ZERO, constant)
+
+        residual = jax.tree.map(lambda a, b: a + b, laplacian(field), wall_source(field, walls))
+
+        for normal, produced in enumerate(residual.components):
+            expected = np.zeros(produced.shape)
+            near = tuple(slice(None) if i != normal else 0 for i in range(produced.ndim))
+            far = tuple(slice(None) if i != normal else -1 for i in range(produced.ndim))
+            expected[near] = -constant / spacing[normal] ** 2
+            expected[far] = -constant / spacing[normal] ** 2
+            # Same forward-error bound as the isotropic case, at this axis's own spacing.
+            floor = 6.0 * float(np.finfo(np.float32).eps) * constant / spacing[normal] ** 2
+            np.testing.assert_allclose(np.asarray(produced), expected, rtol=0.0, atol=floor)
