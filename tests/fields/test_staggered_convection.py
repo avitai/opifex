@@ -32,7 +32,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from opifex.fields.field import Extrapolation
+from opifex.fields.field import Box, Extrapolation
 from opifex.fields.staggered import divergence, StaggeredGrid
 from opifex.fields.staggered_convection import convect
 from opifex.fields.staggered_pressure import project
@@ -42,15 +42,32 @@ from tests.fields.staggered_support import (
     CARRIED,
     flatten,
     FLOAT32_EPS,
+    gradient_transform_agreement,
+    gradient_versus_central_difference,
+    JIT_GRADIENT_ULP,
     observed_orders,
     operator_matrix,
     random_field,
     stream_field,
     STREAMS,
+    TAYLOR_RATE_FLOOR,
+    taylor_remainder_rates,
+    TAYLOR_RESIDUAL_FLOOR,
+    VMAP_GRADIENT_ULP,
 )
 
 
 RESOLUTION = (8, 8)
+
+#: Central-difference step at the minimum of this operator's error curve. Measured in
+#: float64 over h = 1e-2 .. 1e-8, the relative gap runs 7.7e-07, 7.9e-11, 5.3e-10,
+#: 1.3e-09: truncation falling as h^2, then roundoff rising as 1/h.
+CENTRAL_DIFFERENCE_STEP = 1e-4
+
+#: Budget for that comparison, from the measured worst case over both boundaries and
+#: seeds 0, 5 and 11 -- 1.478e-10 -- leaving about seventy times headroom. A genuinely
+#: wrong adjoint misses by O(1), so this refuses one by seven orders of magnitude.
+GRADIENT_TOLERANCE = 1e-8
 
 
 def _relative_divergence(projected: StaggeredGrid, before: StaggeredGrid) -> float:
@@ -137,16 +154,103 @@ class TestTransforms:
         assert traces["count"] == 1
 
     @pytest.mark.parametrize("extrapolation", CARRIED)
-    def test_it_differentiates_in_reverse_mode(self, extrapolation: Extrapolation) -> None:
+    @pytest.mark.parametrize("seed", [5, 11])
+    def test_the_gradient_matches_a_central_difference(
+        self, extrapolation: Extrapolation, seed: int
+    ) -> None:
+        """The gradient must be the derivative, not merely finite.
+
+        This assertion used to be ``all(isfinite(g))`` alone, which a gradient that is
+        entirely wrong satisfies -- measured on the Burgers solver, a ``stop_gradient``
+        on the advecting coefficient leaves the primal bit-identical, corrupts the
+        adjoint, and passes both ``isfinite`` and ``max |g| > 0``. The reference here
+        calls only the primal, so it cannot be fooled that way.
+
+        The step is 1e-4, the minimum of this operator's own error curve, and the
+        tolerance comes from the measured worst case over both boundaries and three
+        seeds -- 1.5e-10, the largest being `zero` at seed 5 -- which 1e-8 clears by
+        about seventy. Unlike the Burgers solver there is no kink to avoid: convection is
+        polynomial in the field, so the difference converges as h^2 and no choice of
+        sample field sits on a switching surface.
+        """
+        velocity = random_field(RESOLUTION, seed=seed, extrapolation=extrapolation)
+
+        with jax.enable_x64(True):
+            components = tuple(c.astype(jnp.float64) for c in velocity.components)
+
+            def loss(parts: tuple[jax.Array, ...]) -> jax.Array:
+                field = StaggeredGrid(parts, BOX, extrapolation, RESOLUTION)
+                return jnp.sum(flatten(convect(field, field)) ** 2)
+
+            relative = gradient_versus_central_difference(
+                loss, components, step=CENTRAL_DIFFERENCE_STEP
+            )
+
+        assert relative <= GRADIENT_TOLERANCE, (
+            f"reverse mode and a central difference disagree by a relative {relative:.3e}, "
+            f"above the measured floor of 1.5e-10 by more than the {GRADIENT_TOLERANCE:.0e} "
+            "budget allows"
+        )
+
+    @pytest.mark.parametrize("extrapolation", CARRIED)
+    def test_the_taylor_remainder_converges_at_second_order(
+        self, extrapolation: Extrapolation
+    ) -> None:
+        """The adjoint check whose pass criterion is a rate, not a tolerance.
+
+        ``taylor_remainder_rates`` follows pyadjoint's ``taylor_test``, the standard
+        adjoint verification of the PDE-constrained optimisation literature. The
+        remainder ``|J(m + eps h) - J(m) - eps <grad J, h>|`` is O(eps^2) when the
+        gradient is right and O(eps) when it is wrong, so halving ``eps`` quarters the
+        former and merely halves the latter. Rate 2 against rate 1 -- a dimensionless
+        factor of two, with no threshold for anyone to tune.
+
+        Measured here: residuals 1.06e-02, 2.64e-03, 6.60e-04, 1.65e-04 and rates
+        2.000, 2.000, 2.000.
+        """
         velocity = random_field(RESOLUTION, seed=5, extrapolation=extrapolation)
 
-        def loss(components: tuple[jax.Array, ...]) -> jax.Array:
-            field = StaggeredGrid(components, BOX, extrapolation, RESOLUTION)
+        with jax.enable_x64(True):
+            components = tuple(c.astype(jnp.float64) for c in velocity.components)
+
+            def loss(parts: tuple[jax.Array, ...]) -> jax.Array:
+                field = StaggeredGrid(parts, BOX, extrapolation, RESOLUTION)
+                return jnp.sum(flatten(convect(field, field)) ** 2)
+
+            residuals, rates = taylor_remainder_rates(loss, components)
+
+        assert min(residuals) > TAYLOR_RESIDUAL_FLOOR, (
+            f"the smallest remainder {min(residuals):.3e} is at the rounding floor, so "
+            "the rates below describe noise rather than a Taylor expansion"
+        )
+        assert min(rates) > TAYLOR_RATE_FLOOR, (
+            f"Taylor remainder rates {[f'{r:.3f}' for r in rates]} from residuals "
+            f"{[f'{r:.3e}' for r in residuals]}; a rate near 1 means the first-order term "
+            "does not cancel, which is a wrong gradient rather than a loose tolerance"
+        )
+
+    @pytest.mark.parametrize("extrapolation", CARRIED)
+    def test_the_gradient_survives_jit_and_vmap(self, extrapolation: Extrapolation) -> None:
+        """Eager, jitted and mapped reverse mode are three XLA programs, not one.
+
+        ``test_it_traces_once_under_jit`` covers the primal under ``jit`` and
+        ``test_it_maps_over_a_batch`` the primal under ``vmap``; neither says anything
+        about the adjoint, and ``vmap`` of a gradient had no coverage anywhere in this
+        suite. It is also the composition a batched optimisation runs.
+        """
+        velocity = random_field(RESOLUTION, seed=5, extrapolation=extrapolation)
+
+        def loss(parts: tuple[jax.Array, ...]) -> jax.Array:
+            field = StaggeredGrid(parts, BOX, extrapolation, RESOLUTION)
             return jnp.sum(flatten(convect(field, field)) ** 2)
 
-        grads = jax.grad(loss)(velocity.components)
+        jit_gap, vmap_gap = gradient_transform_agreement(loss, velocity.components)
 
-        assert all(bool(jnp.all(jnp.isfinite(g))) for g in grads)
+        assert jit_gap <= JIT_GRADIENT_ULP, f"jit(grad) differs from grad by {jit_gap:.2f} ULP"
+        assert vmap_gap <= VMAP_GRADIENT_ULP, (
+            f"vmap(grad) differs from a loop by {vmap_gap:.2f} ULP; this measured exactly "
+            "zero on both the CPU and GPU backends"
+        )
 
     @pytest.mark.parametrize("extrapolation", CARRIED)
     def test_it_maps_over_a_batch(self, extrapolation: Extrapolation) -> None:
@@ -207,6 +311,67 @@ class TestWalls:
 
         for label, errors in (("wall", walls), ("interior", interiors)):
             assert min(observed_orders(errors)) > 1.85, f"{label} is not 2nd order: {errors}"
+
+
+class TestAnisotropicSpacing:
+    """Each axis must divide by its own cell size, which a square unit box cannot show.
+
+    ``convect`` divides by ``spacing[normal]`` and ``spacing[direction]`` at four sites.
+    Every other case in this module -- and in ``staggered_support.BOX`` itself -- uses a
+    square resolution inside the unit square, so ``dx`` equals ``dy`` and all four are
+    numerically indistinguishable from ``spacing[0]``.
+
+    Measured, not argued. Replacing both subscripts with ``[0]`` leaves the energy
+    production below *unchanged at 1.15e-07* on the unit box, and moves it to **4.9e-02**
+    once the box is twice as tall -- six orders, against a clean value that barely
+    shifts with aspect ratio (1.2e-07 isotropic, 7.7e-08 at aspect 2, 2.1e-07 at
+    aspect 4).
+
+    The invariant is the module's own: convection about a divergence-free carrier
+    produces no energy. It needs no reference values and holds on any grid, so it stays
+    a statement about the operator rather than about this fixture.
+    """
+
+    @pytest.mark.parametrize("extrapolation", CARRIED)
+    @pytest.mark.parametrize("aspect", [2.0, 4.0])
+    def test_it_produces_no_energy_on_an_anisotropic_grid(
+        self, extrapolation: Extrapolation, aspect: float
+    ) -> None:
+        box = Box(lower=(0.0, 0.0), upper=(1.0, aspect))
+        resolution = RESOLUTION
+        shapes = StaggeredGrid.component_shapes(resolution, extrapolation)
+
+        def noise(seed: int) -> StaggeredGrid:
+            """A field of standard normal noise on `box`, which `random_field` cannot give.
+
+            Args:
+                seed: Seed for the draw.
+
+            Returns:
+                A staggered field on the anisotropic box.
+            """
+            keys = jax.random.split(jax.random.key(seed), len(shapes))
+            drawn = tuple(
+                jax.random.normal(key, shape) for key, shape in zip(keys, shapes, strict=True)
+            )
+            return StaggeredGrid(drawn, box, extrapolation, resolution)
+
+        solenoidal, _ = project(noise(2))
+        assert (
+            float(jnp.linalg.norm(divergence(solenoidal)))
+            / float(jnp.linalg.norm(divergence(noise(2))))
+            < 1e-6
+        ), "the carrier must be divergence free, or skewness does not apply at all"
+        transported = noise(3)
+
+        convected = convect(transported, solenoidal)
+        produced = float(flatten(transported) @ flatten(convected))
+        scale = float(jnp.sum(jnp.abs(flatten(transported) * flatten(convected))))
+
+        assert abs(produced) / scale <= 1e-5, (
+            f"energy production {abs(produced) / scale:.3e} on an aspect-{aspect:g} box; "
+            "a per-axis spacing defect reads 4.9e-02 here and is invisible on a square box"
+        )
 
 
 class TestBoundariesNotYetCarried:
