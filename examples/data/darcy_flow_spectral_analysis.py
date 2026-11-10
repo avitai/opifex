@@ -499,8 +499,16 @@ def create_spectral_visualization(results: dict[str, Any], save_path: str | None
 
 
 # %%
-def main(output_dir: str | Path | None = None):
-    """Main function demonstrating full Darcy flow spectral analysis."""
+def main(output_dir: str | Path | None = None) -> dict[str, float]:
+    """Run the full Darcy flow spectral analysis and return finite summary metrics.
+
+    The analysis dict carries per-resolution spectra and mode arrays, which the plots
+    need and which JSON has no representation for: the example harness encodes what
+    ``main`` returns with ``json.dumps``, converting only 0-d arrays to scalars, so
+    returning that dict refused ``spectral_data`` on its ``(50,)`` ``k_centers``.
+    Return the scalar metrics instead, keyed by resolution as the sibling
+    ``darcy_flow_analysis.py`` keys its own summary.
+    """
     output_dir = resolve_output_dir(
         "darcy_flow_spectral_analysis_files",
         explicit=None if output_dir is None else Path(output_dir),
@@ -544,7 +552,26 @@ def main(output_dir: str | Path | None = None):
         print("  Analyzed energy distributions")
         print("  Created full visualization")
 
-        return results
+        summary: dict[str, float] = {
+            "resolutions_analyzed": float(len(results["resolutions"])),
+            "samples_analyzed": float(results["samples_analyzed"]),
+        }
+        for resolution in results["resolutions"]:
+            energy = results["energy_distributions"][resolution]
+            modes = results["dominant_modes"][resolution]
+            summary[f"low_freq_percentage_{resolution}"] = float(energy["low_freq_percentage"])
+            summary[f"high_freq_percentage_{resolution}"] = float(energy["high_freq_percentage"])
+            summary[f"total_energy_{resolution}"] = float(energy["total_energy"])
+            summary[f"generation_time_{resolution}"] = float(
+                results["spectral_data"][resolution]["generation_time"]
+            )
+            # Both are already Python floats from ``compute_dominant_modes``; the ratio
+            # is what carries the meaning, and the denominator is a sum of squared
+            # magnitudes over a non-empty field, so it cannot be zero here.
+            summary[f"dominant_mode_power_fraction_{resolution}"] = float(
+                modes["total_power_in_modes"] / modes["total_field_power"]
+            )
+        return summary
 
     except Exception as e:
         print(f"Error during spectral analysis: {e}")
@@ -552,4 +579,4 @@ def main(output_dir: str | Path | None = None):
 
 
 if __name__ == "__main__":
-    results = main()
+    main()
