@@ -197,7 +197,6 @@ nav:
       - Fields: api/fields.md
   - Development:
       - Contributing: development/contributing.md
-      - Breaking Changes: development/breaking-changes.md
       - Testing: development/testing.md
       - GPU Development: development/gpu-development.md
       - Architecture: development/architecture.md
