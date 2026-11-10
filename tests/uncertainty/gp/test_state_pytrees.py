@@ -28,6 +28,7 @@ why, before this change, ``jax.jit`` and ``nnx.jit`` rejected a fitted state ali
 from __future__ import annotations
 
 import dataclasses
+import functools
 import typing as tp
 
 import jax
@@ -47,6 +48,14 @@ from opifex.uncertainty.gp import (
     StochasticSVGPState,
     SVGPState,
 )
+from tests.uncertainty.gp._accuracy import assert_reduction_agreement
+
+
+#: The fitted problem the transform-agreement tests below are posed on.
+TRAIN_SIZE = 6
+LENGTHSCALE = 0.4
+OUTPUT_SCALE = 1.0
+NOISE_STD = 0.1
 
 
 #: Every GP state container, with the fields that must be treedef metadata rather than
@@ -167,75 +176,166 @@ class TestTheStateCrossesTransformBoundaries:
         Returns:
             The fitted state and the inputs it was fitted on.
         """
-        x = jnp.linspace(-1.0, 1.0, 6).reshape(-1, 1)
+        x = jnp.linspace(-1.0, 1.0, TRAIN_SIZE).reshape(-1, 1)
         y = jnp.sin(3.0 * x[:, 0])
         return fit_exact_gp(
-            x_train=x, y_train=y, lengthscale=0.4, output_scale=1.0, noise_std=0.1
+            x_train=x,
+            y_train=y,
+            lengthscale=LENGTHSCALE,
+            output_scale=OUTPUT_SCALE,
+            noise_std=NOISE_STD,
         ), x
 
     def test_a_jitted_fit_can_return_the_state(self) -> None:
-        """This raised ``TypeError`` before registration."""
-        x = jnp.linspace(-1.0, 1.0, 6).reshape(-1, 1)
+        """This raised ``TypeError`` before registration.
+
+        ``isfinite`` was the whole numeric assertion here, which a fit that solved against
+        the wrong right-hand side passes. The budget is torch-harmonics' reduction tolerance
+        over the ``n``-term triangular solves; see :mod:`tests.uncertainty.gp._accuracy`.
+        """
+        x = jnp.linspace(-1.0, 1.0, TRAIN_SIZE).reshape(-1, 1)
         y = jnp.sin(3.0 * x[:, 0])
 
         state = jax.jit(
             lambda a, b: fit_exact_gp(
-                x_train=a, y_train=b, lengthscale=0.4, output_scale=1.0, noise_std=0.1
+                x_train=a,
+                y_train=b,
+                lengthscale=LENGTHSCALE,
+                output_scale=OUTPUT_SCALE,
+                noise_std=NOISE_STD,
             )
         )(x, y)
 
         assert isinstance(state, ExactGPState)
-        assert jnp.all(jnp.isfinite(state.alpha))
+        eager, _ = self._fitted()
+        assert_reduction_agreement(
+            state.cholesky, eager.cholesky, terms=TRAIN_SIZE, what="cholesky, compiled fit"
+        )
+        assert_reduction_agreement(
+            state.alpha, eager.alpha, terms=TRAIN_SIZE, what="alpha, compiled fit"
+        )
 
     def test_a_jitted_function_can_take_the_state(self) -> None:
-        """The other direction, which is how a cached fit gets reused."""
+        """The other direction, which is how a cached fit gets reused.
+
+        The variance passes an explicit ``scale``. It is ``k_diag - sum(v * v)``, and at a
+        training point the GP nearly interpolates, so the result is about 7.7e-03 while both
+        operands are about 1. The rounding happens at the operands' scale --- measured at
+        exactly 0.5 to 1.0 ULP of ``k_diag`` on both backends in both precisions --- so
+        scaling the budget by the cancelled result instead violates it at 1.63x.
+        """
         state, x = self._fitted()
 
-        mean = jax.jit(lambda s, q: predict_exact_gp(state=s, x_test=q).mean)(state, x)
+        predicted = jax.jit(lambda s, q: predict_exact_gp(state=s, x_test=q))(state, x)
+        eager = predict_exact_gp(state=state, x_test=x)
 
-        assert mean.shape == (6,)
+        assert predicted.mean is not None, "the predictive distribution carries no mean"
+        assert predicted.mean.shape == (TRAIN_SIZE,)
+        assert_reduction_agreement(
+            jnp.asarray(predicted.mean),
+            jnp.asarray(eager.mean),
+            terms=TRAIN_SIZE,
+            what="mean, compiled predict",
+        )
+        assert_reduction_agreement(
+            jnp.asarray(predicted.variance),
+            jnp.asarray(eager.variance),
+            terms=TRAIN_SIZE,
+            what="variance, compiled predict",
+            scale=OUTPUT_SCALE**2,
+        )
 
     def test_vmap_over_fits_produces_one_batched_state(self) -> None:
         """Fitting a batch of targets at once, which is how a curve over seeds is built.
 
         An unregistered container cannot be a ``vmap`` output at all, and a misclassified
-        array field would be batched into the treedef rather than the leaves.
+        array field would be batched into the treedef rather than the leaves. Batching must
+        also not change the fit: measured, ``alpha`` is bit-identical to the loop on CPU and
+        differs by 2064 ULP on CUDA float32, so bit-equality is not the assertable property
+        and the published reduction budget is.
         """
-        x = jnp.linspace(-1.0, 1.0, 6).reshape(-1, 1)
+        x = jnp.linspace(-1.0, 1.0, TRAIN_SIZE).reshape(-1, 1)
         targets = jnp.stack([jnp.sin(3.0 * x[:, 0]), jnp.cos(3.0 * x[:, 0])])
 
         states = jax.vmap(
             lambda y: fit_exact_gp(
-                x_train=x, y_train=y, lengthscale=0.4, output_scale=1.0, noise_std=0.1
+                x_train=x,
+                y_train=y,
+                lengthscale=LENGTHSCALE,
+                output_scale=OUTPUT_SCALE,
+                noise_std=NOISE_STD,
             )
         )(targets)
 
         assert isinstance(states, ExactGPState)
-        assert states.alpha.shape == (2, 6)
+        assert states.alpha.shape == (2, TRAIN_SIZE)
+        looped = jnp.stack(
+            [
+                fit_exact_gp(
+                    x_train=x,
+                    y_train=target,
+                    lengthscale=LENGTHSCALE,
+                    output_scale=OUTPUT_SCALE,
+                    noise_std=NOISE_STD,
+                ).alpha
+                for target in targets
+            ]
+        )
+        assert_reduction_agreement(
+            states.alpha, looped, terms=TRAIN_SIZE, what="alpha, batched versus looped fit"
+        )
 
     def test_vmap_predicts_from_a_batch_of_states(self) -> None:
         """The other half: a batched state consumed by a vmapped prediction."""
-        x = jnp.linspace(-1.0, 1.0, 6).reshape(-1, 1)
+        x = jnp.linspace(-1.0, 1.0, TRAIN_SIZE).reshape(-1, 1)
         targets = jnp.stack([jnp.sin(3.0 * x[:, 0]), jnp.cos(3.0 * x[:, 0])])
-        states = jax.vmap(
-            lambda y: fit_exact_gp(
-                x_train=x, y_train=y, lengthscale=0.4, output_scale=1.0, noise_std=0.1
-            )
-        )(targets)
+        fit = functools.partial(
+            fit_exact_gp,
+            x_train=x,
+            lengthscale=LENGTHSCALE,
+            output_scale=OUTPUT_SCALE,
+            noise_std=NOISE_STD,
+        )
+        states = jax.vmap(lambda y: fit(y_train=y))(targets)
 
         means = jax.vmap(lambda s: predict_exact_gp(state=s, x_test=x).mean)(states)
 
-        assert means.shape == (2, 6)
-        assert jnp.all(jnp.isfinite(means))
+        assert means.shape == (2, TRAIN_SIZE)
+        looped = jnp.stack(
+            [predict_exact_gp(state=fit(y_train=target), x_test=x).mean for target in targets]
+        )
+        assert_reduction_agreement(
+            means, looped, terms=TRAIN_SIZE, what="mean, batched versus looped predict"
+        )
 
     def test_gradients_flow_through_the_state(self) -> None:
-        """Every data field is differentiable; the metadata field is not a leaf."""
+        """Every data field is differentiable; the metadata field is not a leaf.
+
+        ``isfinite`` on the leaves was the whole numeric assertion, and a ``stop_gradient``
+        on any one field passes it, because the remaining fields still carry signal. The
+        gradient with respect to ``alpha`` is checked against the value the chain rule fixes
+        exactly: ``sum(mean)`` is linear in ``alpha`` with coefficient ``sum(k_cross, axis=1)``,
+        so no tolerance is needed beyond the reduction budget for that one sum.
+        """
         state, x = self._fitted()
 
         grads = jax.grad(lambda s: jnp.sum(predict_exact_gp(state=s, x_test=x).mean))(state)
 
         assert len(jax.tree.leaves(grads)) == len(jax.tree.leaves(state))
         assert all(jnp.all(jnp.isfinite(leaf)) for leaf in jax.tree.leaves(grads))
+        expected = jnp.sum(
+            state.kernel_fn(
+                state.x_train,
+                x,
+                lengthscale=state.lengthscale,
+                output_scale=state.output_scale,
+            ),
+            axis=1,
+        )
+        assert_reduction_agreement(
+            grads.alpha, expected, terms=TRAIN_SIZE, what="d sum(mean) / d alpha"
+        )
+        assert float(jnp.max(jnp.abs(grads.alpha))) > 0.0
 
 
 class TestTheStateWorksUnderNnxTransforms:
@@ -255,7 +355,7 @@ class TestTheStateWorksUnderNnxTransforms:
         Returns:
             Inputs and targets.
         """
-        x = jnp.linspace(-1.0, 1.0, 6).reshape(-1, 1)
+        x = jnp.linspace(-1.0, 1.0, TRAIN_SIZE).reshape(-1, 1)
         return x, jnp.sin(3.0 * x[:, 0])
 
     def test_nnx_jit_can_return_the_state(self) -> None:
@@ -265,30 +365,75 @@ class TestTheStateWorksUnderNnxTransforms:
         @nnx.jit
         def fit(a: jax.Array, b: jax.Array) -> ExactGPState:
             return fit_exact_gp(
-                x_train=a, y_train=b, lengthscale=0.4, output_scale=1.0, noise_std=0.1
+                x_train=a,
+                y_train=b,
+                lengthscale=LENGTHSCALE,
+                output_scale=OUTPUT_SCALE,
+                noise_std=NOISE_STD,
             )
 
         assert isinstance(fit(x, y), ExactGPState)
+        assert_reduction_agreement(
+            fit(x, y).alpha,
+            fit_exact_gp(
+                x_train=x,
+                y_train=y,
+                lengthscale=LENGTHSCALE,
+                output_scale=OUTPUT_SCALE,
+                noise_std=NOISE_STD,
+            ).alpha,
+            terms=TRAIN_SIZE,
+            what="alpha from a fit compiled by nnx.jit",
+        )
 
     def test_nnx_jit_can_take_the_state(self) -> None:
-        """A fitted state passed into a compiled NNX function."""
+        """A fitted state passed into a compiled NNX function, giving the same numbers.
+
+        Crossing NNX's boundary must be a no-op numerically. Shape alone would pass for a
+        state whose float hyperparameters NNX had inferred static and frozen at the value of
+        the first call --- which is the failure mode the class below this one guards against.
+        """
         x, y = self._problem()
-        state = fit_exact_gp(x_train=x, y_train=y, lengthscale=0.4, output_scale=1.0, noise_std=0.1)
+        state = fit_exact_gp(
+            x_train=x,
+            y_train=y,
+            lengthscale=LENGTHSCALE,
+            output_scale=OUTPUT_SCALE,
+            noise_std=NOISE_STD,
+        )
 
         @nnx.jit
         def score(s: ExactGPState, q: jax.Array) -> jax.Array:
             return predict_exact_gp(state=s, x_test=q).mean
 
-        assert score(state, x).shape == (6,)
+        produced = score(state, x)
+
+        assert produced.shape == (TRAIN_SIZE,)
+        assert_reduction_agreement(
+            produced,
+            predict_exact_gp(state=state, x_test=x).mean,
+            terms=TRAIN_SIZE,
+            what="mean under nnx.jit versus eager",
+        )
 
     def test_nnx_grad_differentiates_through_the_state(self) -> None:
         """Gradients reach every data field under NNX's own transform."""
         x, y = self._problem()
-        state = fit_exact_gp(x_train=x, y_train=y, lengthscale=0.4, output_scale=1.0, noise_std=0.1)
+        state = fit_exact_gp(
+            x_train=x,
+            y_train=y,
+            lengthscale=LENGTHSCALE,
+            output_scale=OUTPUT_SCALE,
+            noise_std=NOISE_STD,
+        )
 
         grads = nnx.grad(lambda s: jnp.sum(predict_exact_gp(state=s, x_test=x).mean))(state)
 
         assert len(jax.tree.leaves(grads)) == len(jax.tree.leaves(state))
+        jax_grads = jax.grad(lambda s: jnp.sum(predict_exact_gp(state=s, x_test=x).mean))(state)
+        assert_reduction_agreement(
+            grads.alpha, jax_grads.alpha, terms=TRAIN_SIZE, what="nnx.grad versus jax.grad"
+        )
 
     def test_a_float_hyperparameter_is_data_and_not_metadata(self) -> None:
         """The reason these are ``flax.struct`` containers rather than ``nnx.Pytree``.
