@@ -371,3 +371,136 @@ def test_grouped_split_conformal_is_silent_when_every_group_is_large_enough() ->
         state = cp.fit(predictions=jnp.zeros_like(targets), targets=targets, groups=groups)
     assert dict(state.metadata)["underfilled_groups"] == ()
     assert bool(jnp.all(jnp.isfinite(state.quantiles)))
+
+
+# ---------------------------------------------------------------------------
+# A test group the calibration partition never saw (issue #65)
+# ---------------------------------------------------------------------------
+
+#: A calibration partition and a test partition need not hold the same groups. In a
+#: building-block-disjoint split of a DNA-encoded library the calibration blocks are a
+#: subset of the test blocks, because a test row needs only one of its synthesis cycles
+#: held out, so some test rows carry a block with no calibration data at all.
+#:
+#: Such a group has no threshold rather than a small one. The gather's one-hot row is
+#: all-``False``, and a bare sum of it is ``0.0``: a zero-width interval, carrying the
+#: nominal coverage of a calibrated group. ``+inf`` is what the neighbouring condition
+#: already returns (a calibration set too small to carry the level) and where both
+#: reference implementations point -- MAPIE 0.9's ``MondrianCP`` refused an unseen group
+#: outright, and crepes' identical zero-width result is open as
+#: ``henrikbostrom/crepes#54`` with ``[-inf, inf]`` proposed.
+UNCALIBRATED_GROUP = 7
+
+
+def _fitted_two_group_regressor(alpha: float = 0.10):
+    """A regressor calibrated on groups 0 and 1 only, with enough scores in each."""
+    regression = _import_regression_module()
+    rng = np.random.default_rng(0)
+    n = 120
+    predictions = jnp.asarray(rng.normal(size=n).astype(np.float32))
+    targets = predictions + jnp.asarray(rng.normal(scale=0.3, size=n).astype(np.float32))
+    groups = jnp.asarray((np.arange(n) % 2).astype(np.int32))
+    cp = regression.GroupedSplitConformalRegressor(alpha=alpha)
+    state = cp.fit(predictions=predictions, targets=targets, groups=groups)
+    return cp.with_state(state), state
+
+
+def test_an_uncalibrated_group_gets_an_unbounded_interval() -> None:
+    """A group absent from calibration yields ``[-inf, +inf]``, not a zero-width interval.
+
+    Exact rather than approximate: the bound is infinite, so there is nothing to tolerance.
+    """
+    fitted, state = _fitted_two_group_regressor()
+    predictions = jnp.asarray([0.0, 1.0, 2.0], dtype=jnp.float32)
+    unseen = jnp.full((3,), UNCALIBRATED_GROUP, dtype=jnp.int32)
+    assert UNCALIBRATED_GROUP not in state.group_ids.tolist(), "the group must be absent"
+
+    interval = fitted.predict(predictions=predictions, groups=unseen)
+    assert bool(jnp.all(jnp.isneginf(interval.lower)))
+    assert bool(jnp.all(jnp.isposinf(interval.upper)))
+
+
+def test_the_zero_width_result_is_what_changed() -> None:
+    """Positive control: the bare gather this replaced returns 0.0 on the same input.
+
+    Without this the test above passes just as happily against an implementation that
+    never had the defect, and says nothing about the one that did.
+    """
+    regression = _import_regression_module()
+    _, state = _fitted_two_group_regressor()
+    unseen = jnp.full((3,), UNCALIBRATED_GROUP, dtype=jnp.int32)
+
+    matches = unseen[:, None] == state.group_ids[None, :]
+    bare_sum = jnp.sum(matches * state.quantiles[None, :], axis=-1)
+    assert bool(jnp.all(bare_sum == 0.0)), "the old formula no longer returns zero"
+
+    guarded = regression._lookup_per_group_quantile(
+        groups=unseen, group_ids=state.group_ids, quantiles=state.quantiles
+    )
+    assert bool(jnp.all(jnp.isposinf(guarded)))
+
+
+def test_a_calibrated_group_is_untouched_by_the_guard() -> None:
+    """The guard must not perturb a calibrated row: bit-exact against the bare gather."""
+    regression = _import_regression_module()
+    _, state = _fitted_two_group_regressor()
+    calibrated = jnp.asarray([0, 1, 0, 1], dtype=jnp.int32)
+
+    matches = calibrated[:, None] == state.group_ids[None, :]
+    bare_sum = jnp.sum(matches * state.quantiles[None, :], axis=-1)
+    guarded = regression._lookup_per_group_quantile(
+        groups=calibrated, group_ids=state.group_ids, quantiles=state.quantiles
+    )
+    assert bool(jnp.all(guarded == bare_sum))
+    assert bool(jnp.all(jnp.isfinite(guarded)))
+
+
+def test_a_mixed_batch_bounds_only_the_calibrated_rows() -> None:
+    """Per-sample, not per-batch: one unseen row must not widen its calibrated neighbours."""
+    fitted, _ = _fitted_two_group_regressor()
+    predictions = jnp.asarray([0.0, 1.0, 2.0], dtype=jnp.float32)
+    groups = jnp.asarray([0, UNCALIBRATED_GROUP, 1], dtype=jnp.int32)
+
+    interval = fitted.predict(predictions=predictions, groups=groups)
+    widths = interval.upper - interval.lower
+    assert bool(jnp.isfinite(widths[0]))
+    assert bool(jnp.isposinf(widths[1]))
+    assert bool(jnp.isfinite(widths[2]))
+
+
+def test_the_guard_stays_traceable() -> None:
+    """``jnp.where`` keeps the gather jit- and vmap-compatible, which a raise would not.
+
+    This is why the fix is an infinite bound rather than MAPIE's eager refusal: the
+    condition is per sample and data-dependent, so it cannot resolve at trace time.
+    """
+    regression = _import_regression_module()
+    _, state = _fitted_two_group_regressor()
+    groups = jnp.asarray([0, UNCALIBRATED_GROUP, 1], dtype=jnp.int32)
+
+    def gather(g: jax.Array) -> jax.Array:
+        return regression._lookup_per_group_quantile(
+            groups=g, group_ids=state.group_ids, quantiles=state.quantiles
+        )
+
+    eager = gather(groups)
+    assert bool(jnp.all(jax.jit(gather)(groups) == eager))
+    batched = jax.vmap(gather)(groups[None, :])
+    assert bool(jnp.all(batched[0] == eager))
+
+
+def test_the_calibrated_groups_travel_on_the_interval() -> None:
+    """A caller holding only the interval can see which groups were calibrated.
+
+    ``num_groups`` alone cannot distinguish a sample whose group was absent from one that
+    was calibrated, which is what made the zero-width result unattributable.
+    """
+    fitted, state = _fitted_two_group_regressor()
+    interval = fitted.predict(
+        predictions=jnp.asarray([0.0], dtype=jnp.float32),
+        groups=jnp.asarray([UNCALIBRATED_GROUP], dtype=jnp.int32),
+    )
+    metadata = dict(interval.metadata)
+    assert metadata["calibrated_groups"] == (0, 1)
+    assert UNCALIBRATED_GROUP not in metadata["calibrated_groups"]
+    assert tuple(state.group_ids.tolist()) == metadata["calibrated_groups"]

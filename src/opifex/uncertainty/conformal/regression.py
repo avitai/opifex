@@ -239,6 +239,10 @@ class GroupedSplitConformalRegressor:
             ("num_groups", int(unique_groups.shape[0])),
             ("min_group_size", required),
             ("underfilled_groups", tuple(underfilled)),
+            # Travels on every PredictionInterval predict returns, so a caller holding only
+            # the interval can see which groups were calibrated. num_groups alone cannot
+            # distinguish a sample whose group was absent from one that was calibrated.
+            ("calibrated_groups", tuple(int(gid) for gid in unique_groups.tolist())),
         )
         return GroupedSplitConformalState(
             quantiles=quantiles,
@@ -248,7 +252,11 @@ class GroupedSplitConformalRegressor:
         )
 
     def predict(self, *, predictions: jax.Array, groups: jax.Array) -> PredictionInterval:
-        """Return a :class:`PredictionInterval` with per-sample width set by group."""
+        """Return a :class:`PredictionInterval` with per-sample width set by group.
+
+        A sample whose group was not calibrated gets an unbounded interval rather than a
+        zero-width one; ``metadata['calibrated_groups']`` names the groups that were.
+        """
         state = require_fitted_state(self._state, surface="GroupedSplitConformalRegressor.predict")
         per_sample_quantile = _lookup_per_group_quantile(
             groups=groups,
@@ -267,12 +275,35 @@ class GroupedSplitConformalRegressor:
 def _lookup_per_group_quantile(
     *, groups: jax.Array, group_ids: jax.Array, quantiles: jax.Array
 ) -> jax.Array:
-    """Vectorised gather of per-sample group quantile.
+    """Vectorised gather of per-sample group quantile; ``+inf`` where the group is unknown.
 
     ``group_ids`` is assumed sorted; for each entry in ``groups`` we find
     the matching slot in ``group_ids`` and gather the corresponding
     ``quantiles`` value.
+
+    A group absent from ``group_ids`` contributed no calibration scores, so no quantile of
+    them covers it at any level: it has no threshold rather than a small one. Its row of
+    ``matches`` is all-``False``, and the bare sum would be ``0.0`` -- a zero-width interval,
+    indistinguishable from a legitimately tiny quantile and carrying the nominal coverage of
+    a calibrated group. Such a row yields ``+inf`` instead, the unbounded interval
+    :func:`~opifex.uncertainty.conformal.scores.conformal_quantile` already returns for a
+    calibration set too small to carry the level.
+
+    Unlike that function, whose ``n`` and ``alpha`` are static so its branch resolves at
+    trace time, this condition is per sample and data-dependent; ``jnp.where`` keeps the
+    gather jit- and vmap-compatible.
+
+    The two reference implementations of group-conditional (Mondrian) conformal split on
+    this condition, and neither path is fully available here. MAPIE 0.9's
+    ``MondrianCP.predict`` refused it eagerly -- ``_check_partition_predict`` rejects "at
+    least one new group in the prediction" -- which a traced function cannot do, and that
+    class was removed in MAPIE 1.0. crepes returns exactly the zero-width interval described
+    above; it is open as ``henrikbostrom/crepes#54``, whose reporter proposes warning and
+    falling back to ``[-inf, inf]`` to match that package's own too-small-bin behaviour. The
+    unbounded interval is where both of those point, and it is what this repository already
+    does for the neighbouring condition.
     """
     # (n_samples, n_groups) one-hot match.
     matches = groups[:, None] == group_ids[None, :]
-    return jnp.sum(matches * quantiles[None, :], axis=-1)
+    gathered = jnp.sum(matches * quantiles[None, :], axis=-1)
+    return jnp.where(jnp.any(matches, axis=-1), gathered, jnp.inf)
