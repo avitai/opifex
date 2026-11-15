@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pass `--timeout=1800` to the `extended-tests` job in `.github/workflows/tests-extended.yml` so nightly slow and integration suites do not inherit `pyproject.toml`'s 300 s per-test timeout, guarded by `tests/packaging/test_ci_workflow_contracts.py`.
 - Raise transitive security constraint floors in `[tool.uv] constraint-dependencies` (`tornado>=6.6.1`, `opentelemetry-api>=1.45.2`, `oauthlib>=4.0.1`, `soupsieve>=4.1.1`) and refresh `uv.lock` so `pip-audit` passes cleanly across all extras.
 
 ## [0.2.11] - 2026-11-10

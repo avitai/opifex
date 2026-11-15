@@ -234,3 +234,23 @@ def test_every_shard_of_a_run_takes_its_group_of_one_collection_in_one_order(
     assert job["strategy"]["matrix"]["group"] == list(range(1, splits + 1)), name
     assert "--group ${{ matrix.group }}" in run, name
     assert SHARED_SEED in run, name
+
+
+PER_TEST_TIMEOUT = re.compile(r"--timeout[= ](\d+)")
+MINIMUM_CI_TEST_TIMEOUT_SECONDS = 1800
+
+
+def test_every_ci_pytest_run_overrides_the_default_per_test_timeout() -> None:
+    """Every CI pytest invocation raises pyproject.toml's 300 s default to at least 1800 s."""
+    pytest_jobs = {name: runs for name, job in _jobs().items() if (runs := _pytest_runs(job))}
+    assert pytest_jobs, "no workflow runs pytest"
+    missing_or_low: list[str] = []
+    for name, runs in pytest_jobs.items():
+        for run in runs:
+            match = PER_TEST_TIMEOUT.search(run)
+            if match is None or int(match.group(1)) < MINIMUM_CI_TEST_TIMEOUT_SECONDS:
+                missing_or_low.append(name)
+    assert missing_or_low == [], (
+        f"CI pytest invocations missing --timeout>={MINIMUM_CI_TEST_TIMEOUT_SECONDS}: "
+        f"{missing_or_low}"
+    )

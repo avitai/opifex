@@ -113,4 +113,5 @@ jobs:
         run: |
           uv run pytest tests/ \
             -m "slow or integration or e2e or performance or benchmark or distributed or gpu_required" \
+            --timeout=1800 \
             --cov-fail-under=0
