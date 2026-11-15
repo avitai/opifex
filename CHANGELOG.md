@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Raise transitive security constraint floors in `[tool.uv] constraint-dependencies` (`tornado>=6.6.1`, `opentelemetry-api>=1.45.2`, `oauthlib>=4.0.1`, `soupsieve>=4.1.1`) and refresh `uv.lock` so `pip-audit` passes cleanly across all extras.
+
 ## [0.2.11] - 2026-11-10
 
 ### Added
