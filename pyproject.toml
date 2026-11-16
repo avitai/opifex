@@ -505,7 +505,10 @@ XLA_PYTHON_CLIENT_MEM_FRACTION = {skip_if_set = true, value = "0.75"}
 XLA_PYTHON_CLIENT_PREALLOCATE = {skip_if_set = true, value = "false"}
 
 [tool.ruff]
-extend-include = ["*.ipynb"]
+# An example's notebook is written by `substrax-notebooks convert` alone; its script is linted.
+# force-exclude keeps the exclusion when a hook names a notebook.
+extend-exclude = ["examples/**/*.ipynb"]
+force-exclude = true
 line-length = 100
 src = ["src/opifex"]
 target-version = "py312" # Enforce Python 3.12+ features

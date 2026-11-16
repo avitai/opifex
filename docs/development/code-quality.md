@@ -76,14 +76,11 @@ The framework uses a full `.pre-commit-config.yaml` with the following hooks:
     - id: pydocstyle
 ```
 
-#### 6. Jupyter Notebook Quality
+#### 6. Example Notebooks
 
-```yaml
-# nbqa-ruff for notebook linting
-- repo: https://github.com/nbQA-dev/nbQA
-  hooks:
-    - id: nbqa-ruff
-```
+An example's notebook is written from its script by `substrax-notebooks convert` and nothing else,
+so no hook lints or rewrites it; ruff lints the script. See substrax's
+[Writing examples](https://substrax.readthedocs.io/en/latest/guides/writing-examples/) guide.
 
 #### 7. Shell Script Validation
 
@@ -186,7 +183,8 @@ def neural_operator_forward(
 target-version = "py312"
 line-length = 100
 src = ["src/opifex"]
-extend-include = ["*.ipynb"]
+extend-exclude = ["examples/**/*.ipynb"]  # written by substrax-notebooks convert
+force-exclude = true                       # also when a hook names a notebook
 
 [tool.ruff.lint]
 select = [

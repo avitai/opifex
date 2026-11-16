@@ -34,12 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The documentation build sets `validation.nav.omitted_files: warn`, so under `--strict` a page
   left out of the navigation fails the build; `development/nequip-symmetric-contraction.md`, the one
   such page, joins the Development section.
+- ruff leaves `examples/**/*.ipynb` to `substrax-notebooks convert` (`extend-exclude` with
+  `force-exclude`, so a hook naming a notebook skips it too) and lints the scripts;
+  `trailing-whitespace` leaves the generated pages under `docs/examples/` alone.
 
 ### Removed
 
 - `docs/development/example-documentation-design.md`. Examples follow substrax's
   [Writing examples](https://substrax.readthedocs.io/en/latest/guides/writing-examples/) guide,
   which the Development navigation and the examples index link instead.
+- `scripts/jupytext_converter.py`, `.jupytext.toml`, and the `nbstripout` and `nbqa-ruff` hooks,
+  which only ever reached the example notebooks; `substrax-notebooks convert` writes those.
 
 ### Fixed
 

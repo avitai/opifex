@@ -1,6 +1,6 @@
 # Opifex Scripts
 
-Utility scripts for environment setup, verification, benchmarking, and notebook generation.
+Utility scripts for environment setup, verification, and benchmarking.
 
 Most users only need the root-level `setup.sh` and `activate.sh` -- these scripts are called by them or used for specific workflows.
 
@@ -21,21 +21,6 @@ GPU verification and diagnostics. Called by `setup.sh` after installation and re
 
 ```bash
 uv run python scripts/verify_opifex_gpu.py
-```
-
-### jupytext_converter.py
-
-Converts between Python scripts (`.py` with `py:percent` format) and Jupyter notebooks (`.ipynb`).
-
-```bash
-# Convert a Python script to notebook
-python scripts/jupytext_converter.py py-to-nb examples/pinns/poisson.py
-
-# Convert a notebook to Python script
-python scripts/jupytext_converter.py nb-to-py examples/pinns/poisson.ipynb
-
-# Batch convert all examples
-python scripts/jupytext_converter.py batch-py-to-nb examples/
 ```
 
 ### run_pdebench_comparison.py
@@ -63,8 +48,12 @@ uv run python scripts/verify_opifex_gpu.py   # Detailed GPU diagnostics
 uv run pytest tests/ -v                       # Run tests
 ```
 
-### Regenerating Notebooks
+### Regenerating a Notebook
+
+An example's notebook is written from its script by substrax's converter, as substrax's
+[Writing examples](https://substrax.readthedocs.io/en/latest/guides/writing-examples/) guide
+describes:
 
 ```bash
-python scripts/jupytext_converter.py batch-py-to-nb examples/
+uv run substrax-notebooks convert examples/pinns/poisson.py
 ```
