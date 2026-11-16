@@ -255,13 +255,6 @@ plugins:
             filters:
               - "!^_"
               - "^__init__$"
-  # Disabled mkdocs-jupyter plugin as there are no notebooks in docs/ directory
-  # and the plugin was scanning .uv-cache causing build to hang
-  # - mkdocs-jupyter:
-  #     execute: false
-  #     include_source: true
-  #     ignore_h1_titles: true
-  #     kernel_name: python3
   - include_exclude_files:
       exclude:
         - "*.tmp"

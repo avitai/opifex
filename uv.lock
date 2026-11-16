@@ -2925,36 +2925,6 @@ wheels = [
 ]
 
 [[package]]
-name = "mkdocs-ipynb"
-version = "0.1.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "mkdocs" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/68/b6/091efeb0a58031e31e72fbedfedf7832e466e1275e191e875f05abfad68a/mkdocs_ipynb-0.1.1.tar.gz", hash = "sha256:0bc8791e98e0aec305d7e640b51f17794ddf20ead72f93f894e1951ec5524a16", size = 8152, upload-time = "2025-04-13T12:24:59.163Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/01/76473cd0e3d06a30865a1aece673d9854381cc26e139cd38100ccca3e18f/mkdocs_ipynb-0.1.1-py3-none-any.whl", hash = "sha256:dae68bd4e9b6581a1d1a102c447c921cd0c43b23712137ca80a31e0f9f70e4c1", size = 11958, upload-time = "2025-04-13T12:24:58.058Z" },
-]
-
-[[package]]
-name = "mkdocs-jupyter"
-version = "0.27.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "beautifulsoup4" },
-    { name = "ipykernel" },
-    { name = "jupytext" },
-    { name = "mkdocs" },
-    { name = "mkdocs-material" },
-    { name = "nbconvert" },
-    { name = "pygments" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f8/80/7c12e5f285616eb634bac2fe9c52e3f58e6a59af163eee659061c5dd5d85/mkdocs_jupyter-0.27.0.tar.gz", hash = "sha256:2530405b9616534b8a8bb81da688c4e617b1f704cdfe4c1bd8462b071b9a4d03", size = 1671655, upload-time = "2026-10-22T02:29:17.735Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/e0/82531f365a9cd5e5b9f0b0003035c7d3e6a36d8278b236ef76d74b15b203/mkdocs_jupyter-0.27.0-py3-none-any.whl", hash = "sha256:9b7fd5be133ebc5cb20a01b9589b4e8d4f8fef0e247ba783c9f3ebb76cb907b9", size = 1505153, upload-time = "2026-10-22T02:29:15.904Z" },
-]
-
-[[package]]
 name = "mkdocs-material"
 version = "9.7.7"
 source = { registry = "https://pypi.org/simple" }
@@ -3869,8 +3839,6 @@ all = [
     { name = "meshio" },
     { name = "mkdocs" },
     { name = "mkdocs-include-exclude-files" },
-    { name = "mkdocs-ipynb" },
-    { name = "mkdocs-jupyter" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings" },
     { name = "mkdocstrings-python" },
@@ -3941,8 +3909,6 @@ all-cpu = [
     { name = "meshio" },
     { name = "mkdocs" },
     { name = "mkdocs-include-exclude-files" },
-    { name = "mkdocs-ipynb" },
-    { name = "mkdocs-jupyter" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings" },
     { name = "mkdocstrings-python" },
@@ -4001,8 +3967,6 @@ all-macos = [
     { name = "meshio" },
     { name = "mkdocs" },
     { name = "mkdocs-include-exclude-files" },
-    { name = "mkdocs-ipynb" },
-    { name = "mkdocs-jupyter" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings" },
     { name = "mkdocstrings-python" },
@@ -4129,8 +4093,6 @@ docs = [
     { name = "hippogriffe" },
     { name = "mkdocs" },
     { name = "mkdocs-include-exclude-files" },
-    { name = "mkdocs-ipynb" },
-    { name = "mkdocs-jupyter" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings" },
     { name = "mkdocstrings-python" },
@@ -4309,8 +4271,6 @@ requires-dist = [
     { name = "meshio", marker = "extra == 'scientific-data'", specifier = ">=5.3.0" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6.1" },
     { name = "mkdocs-include-exclude-files", marker = "extra == 'docs'", specifier = ">=0.1" },
-    { name = "mkdocs-ipynb", marker = "extra == 'docs'", specifier = ">=0.1" },
-    { name = "mkdocs-jupyter", marker = "extra == 'docs'", specifier = ">=0.24" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.6.7" },
     { name = "mkdocstrings", marker = "extra == 'docs'", specifier = ">=0.28.3" },
     { name = "mkdocstrings-python", marker = "extra == 'docs'", specifier = ">=1.1.2" },
