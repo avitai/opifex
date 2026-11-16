@@ -19,7 +19,8 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
+        # Generated example pages keep the trailing spaces their outputs hold.
+        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data|docs/examples)/
       - id: end-of-file-fixer
         exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
       - id: check-yaml
@@ -146,21 +147,6 @@ repos:
         args: ["-c", "pyproject.toml"]
         exclude: ^(memory-bank|documents|custom_modes|.cursor|tests|example_data)/
         additional_dependencies: ["bandit[toml]"]
-
-  # Strip notebook output cells before commit (keeps diffs clean)
-  - repo: https://github.com/kynan/nbstripout
-    rev: 0.7.1
-    hooks:
-      - id: nbstripout
-        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
-
-  # Notebook linting via ruff (after stripout to avoid format thrash)
-  - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.9.1
-    hooks:
-      - id: nbqa-ruff
-        exclude: ^(memory-bank|documents|custom_modes|.cursor|example_data)/
-        args: [--fix]
 
   # Workshop-inspired shell script quality
   - repo: https://github.com/shellcheck-py/shellcheck-py

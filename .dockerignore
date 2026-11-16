@@ -55,7 +55,6 @@ checkpoints
 .benchmarks
 .editorconfig
 .shellcheckrc
-.jupytext.toml
 .readthedocs.yaml
 .pre-commit-config.yaml
 CHANGELOG.md
