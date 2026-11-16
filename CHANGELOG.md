@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/examples/test_examples.py` is removed, `--ignore=tests/examples` keeps the directory out
   of the default pytest run, and the uncertainty result tests read each example's run through the
   `example_run` fixture.
+- The documentation build sets `validation.nav.omitted_files: warn`, so under `--strict` a page
+  left out of the navigation fails the build; `development/nequip-symmetric-contraction.md`, the one
+  such page, joins the Development section.
+
+### Removed
+
+- `docs/development/example-documentation-design.md`. Examples follow substrax's
+  [Writing examples](https://substrax.readthedocs.io/en/latest/guides/writing-examples/) guide,
+  which the Development navigation and the examples index link instead.
 
 ### Fixed
 

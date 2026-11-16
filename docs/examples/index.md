@@ -253,4 +253,4 @@ python examples/benchmarking/operator_benchmark.py
 - [Neural Operators Guide](../methods/neural-operators.md) -- Theory and architecture details
 - [PINNs Guide](../methods/pinns.md) -- Physics-informed methods
 - [Training Guide](../user-guide/training.md) -- `Trainer` API reference
-- [Example Documentation Design](../development/example-documentation-design.md) -- Contributing guidelines
+- [Writing examples](https://substrax.readthedocs.io/en/latest/guides/writing-examples/) -- How an example is written, checked and paged

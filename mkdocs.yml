@@ -201,7 +201,8 @@ nav:
       - GPU Development: development/gpu-development.md
       - Architecture: development/architecture.md
       - Code Quality: development/code-quality.md
-      - Example Documentation Design: development/example-documentation-design.md
+      - NequIP Symmetric Contraction: development/nequip-symmetric-contraction.md
+      - Writing Examples: https://substrax.readthedocs.io/en/latest/guides/writing-examples/
   - Deployment:
       - Local Development: deployment/local-development.md
       - AWS Deployment: deployment/aws-deployment.md
@@ -214,6 +215,11 @@ nav:
 # standalone nav entries -- keep them out of the "not in nav" orphan check.
 not_in_nav: |
   /assets/examples/**
+
+# A page missing from the nav fails the strict build rather than going unlisted.
+validation:
+  nav:
+    omitted_files: warn
 
 # Plugins configuration remains the same
 plugins:
