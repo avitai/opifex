@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which the Development navigation and the examples index link instead.
 - `scripts/jupytext_converter.py`, `.jupytext.toml`, and the `nbstripout` and `nbqa-ruff` hooks,
   which only ever reached the example notebooks; `substrax-notebooks convert` writes those.
+- `mkdocs-ipynb` and `mkdocs-jupyter` from the `docs` extra, and the commented-out
+  `mkdocs-jupyter` plugin from `mkdocs.yml`: no page is a notebook, and the strict build passes
+  without either installed.
 
 ### Fixed
 
