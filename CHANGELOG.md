@@ -15,6 +15,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Pförtner et al. 2024). On scalar observations with one CG iteration, and with `max_iter` equal
   to the observation dimension, the filter equals `kalman_filter`.
 
+### Changed
+
+- Require `calibrax>=0.1.20` and `substrax>=0.1.27`; the `test` extra installs
+  `substrax[notebooks,testing]`, which brings the notebook kernel and converter, so `ipykernel`
+  and `jupytext` leave `dev`.
+- The `[tool.substrax.compute]` example jobs take substrax 0.1.27's layout: `resources`,
+  `command_timeout_seconds` and `examples_mode = "test"`, and run on `["cuda", "cpu"]`, since with
+  `cuda` alone jax starts no CPU backend for a host callback. `[tool.substrax.examples]` holds the
+  examples' budgets: a Bazel timeout category from the nightly run's measured time for the 36
+  examples that finished in it; the other 23 have no measured time yet and fall back to
+  `budget_seconds`.
+  `tests/packaging/test_compute_jobs.py` resolves every job as `substrax-compute` does.
+- The example tests are substrax's shared ones, run by `substrax-notebooks test`;
+  `tests/examples/test_examples.py` is removed, `--ignore=tests/examples` keeps the directory out
+  of the default pytest run, and the uncertainty result tests read each example's run through the
+  `example_run` fixture.
+
 ### Fixed
 
 - `cakf_update` clamps `max_iter` to the observation dimension, where iterations beyond it lost

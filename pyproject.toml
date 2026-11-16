@@ -53,7 +53,7 @@ dependencies = [
   # the pytest workers during collection. The floor states that requirement so a
   # conservative re-lock cannot silently drop back to 0.1.0.
   "avitai-artifex>=0.1.15",
-  "calibrax[publication]>=0.1.17",
+  "calibrax[publication]>=0.1.20",
   # 0.1.17 moves the checkpoint-state protocol to substrax's ``Checkpointable`` and removes
   # ``datarax.typing.Checkpointable``. Nothing here imports that name — the two mentions in
   # ``uncertainty/sbi/simulators.py`` are prose in a docstring — so the floor is raised to
@@ -61,7 +61,7 @@ dependencies = [
   "datarax>=0.1.17",
   # 0.1.6 adds substrax.runtime, substrax.artifacts and substrax.testing; 0.1.8 substrax.rng
   # and substrax.optim.
-  "substrax>=0.1.25",
+  "substrax>=0.1.27",
   # TensorFlow Probability's JAX substrate supplies bessel_ive for the periodic state-space
   # kernels, as in bayesnewton. It was already installed through avitai-artifex -> distrax.
   "tfp-nightly>=0.26.0.dev20251024"
@@ -146,8 +146,6 @@ dev = [
   # Development tools
   "bandit>=1.7.5",
   "import-linter>=2.0",
-  "ipykernel>=6.29.5",
-  "jupytext>=1.16.0",
   "meshio>=5.3.0",
   "pip-audit>=2.6.0",
   "pre-commit>=4.2.0",
@@ -163,7 +161,7 @@ dev = [
   # deliberate change, not something a Tuesday should do to the gate.
   "ruff>=0.15.2,<0.16",
   # `substrax-compute` runs the examples on a GPU; the Modal backend needs Modal
-  "substrax[modal]>=0.1.25",
+  "substrax[modal]>=0.1.27",
   "twine>=4.0.2"
 ]
 docs = [
@@ -185,7 +183,7 @@ metal = [
 ]
 mlflow = [
   # The MLflow experiment backend records through substrax's MLFlowLogger.
-  "substrax[mlflow]>=0.1.25"
+  "substrax[mlflow]>=0.1.27"
 ]
 neural-dft = [
   # Neural DFT specific dependencies for quantum chemistry
@@ -255,7 +253,7 @@ test = [
   # so what the suite needs is declared here rather than in each workflow that runs
   # it. Referencing the extra keeps one source of truth for their versions.
   "opifex[platform]",
-  # tests/examples/test_examples_smoke.py imports every example module, and
+  # The shared example tests (substrax-notebooks test) run every example, and
   # examples/data/pdebench_loading.py imports h5py alongside
   # opifex.data.sources.scientific. scientific-data is the extra backing that
   # module; pdebench also carries h5py but drags in torch.
@@ -281,7 +279,8 @@ test = [
   "pytest-randomly>=3.15",
   "pytest-split>=0.10.0",
   "pytest-timeout>=2.4.0",
-  "pytest-xdist>=3.8.0"
+  "pytest-xdist>=3.8.0",
+  "substrax[notebooks,testing]>=0.1.27"
 ]
 
 [project.scripts]
@@ -459,6 +458,7 @@ addopts = [
   "--cov-report=term-missing",
   "--cov-fail-under=80",
   "--timeout=300",
+  "--ignore=tests/examples",
   "--json-report",
   "--json-report-file=temp/test-results.json",
   "--json-report-indent=2",
@@ -936,138 +936,178 @@ outputs_volume = "opifex-example-outputs"
 
 # 3 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-advanced-training]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/advanced-training"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 10800
 
 # 1 example; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-atomistic]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/atomistic"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 3600
 
 # 1 example; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-benchmarking]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/benchmarking"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 3600
 
 # 4 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-data]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/data"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 14400
 
 # 1 example; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-discovery]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/discovery"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 3600
 
 # 1 example; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-distributed]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/distributed"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 3600
 
 # 3 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-domain-decomposition]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/domain-decomposition"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 10800
 
 # 1 example; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-fields]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/fields"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 3600
 
 # 2 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-getting-started]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/getting-started"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 7200
 
 # 4 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-layers]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/layers"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 14400
 
 # 14 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-neural-operators]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/neural-operators"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 50400
 
 # 2 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-optimization]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/optimization"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 7200
 
 # 11 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-pinns]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/pinns"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 39600
 
 # 3 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-quantum-chemistry]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/quantum-chemistry"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 10800
 
 # 8 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-uncertainty]
-accelerator = {kind = "L4"}
+command_timeout_seconds = 3600
 examples = ["examples/uncertainty"]
+examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
-runtime = {platforms = ["cuda"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
-task_timeout_seconds = 3600
+resources = {accelerator = {kind = "L4"}}
+runtime = {platforms = ["cuda", "cpu"], preallocate = false, xla_flags = ["--xla_gpu_deterministic_ops=true"]}
 timeout_seconds = 28800
+
+[tool.substrax.examples]
+# Bazel's test timeout categories (short 60 s, moderate 300 s, long 900 s, eternal 3600 s), from
+# the nightly extended tests of 2026-11-16 (run 43851225024, one GitHub-hosted CPU runner each for
+# Python 3.12 and 3.13, run as a script, serially). 36 examples finished on both runners and get
+# the smallest category that holds their slower run: 25 took 4.6 to 57.2 s, under "short"; the
+# examples in budgets took longer and are "moderate". The other 23 stopped at that run's 300 s
+# limit on at least one runner, so they have no measured time and fall back to budget_seconds
+# until one is taken.
+budget_seconds = 60
+source_url = "https://github.com/avitai/opifex/blob/main"
+
+[tool.substrax.examples.budgets]
+# Python 3.12 time, then 3.13.
+"examples/advanced-training/adaptive_sampling.py" = 300 # 131.5 s, 239.5 s
+"examples/domain-decomposition/cpinn_advection_diffusion.py" = 300 # 33.3 s, 65.8 s
+"examples/domain-decomposition/xpinn_helmholtz.py" = 300 # 39.6 s, 78.2 s
+"examples/neural-operators/deeponet_antiderivative.py" = 300 # 100.7 s, 204.0 s
+"examples/optimization/learn_to_optimize.py" = 300 # 66.5 s, 126.3 s
+"examples/optimization/meta_optimization.py" = 300 # 79.8 s, 133.4 s
+"examples/pinns/allen_cahn.py" = 300 # 127.4 s, 227.0 s
+"examples/pinns/burgers.py" = 300 # 39.9 s, 76.1 s
+"examples/pinns/inverse_diffusion.py" = 300 # 35.5 s, 70.8 s
+"examples/pinns/poisson.py" = 300 # 63.4 s, 104.8 s
+"examples/pinns/wave.py" = 300 # 86.4 s, 147.5 s
 
 # UV Configuration for optimal performance
 [tool.uv]
