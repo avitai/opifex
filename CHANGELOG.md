@@ -7,8 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `opifex.uncertainty.statespace.cakf_filter` and `cakf_truncate`: the computation-aware Kalman
+  filter loop (predict, update, truncate, carrying the mean and the low-rank factor) and the
+  factor truncation, ported from ComputationAwareKalman.jl's `filter!` and `truncate`
+  (Pförtner et al. 2024). On scalar observations with one CG iteration, and with `max_iter` equal
+  to the observation dimension, the filter equals `kalman_filter`.
+
 ### Fixed
 
+- `cakf_update` clamps `max_iter` to the observation dimension, where iterations beyond it lost
+  their column, and stops once the residual norm is at most `max(abstol, reltol * ||y||)`, as the
+  reference's `update` does.
+- The CAKF example (`examples/uncertainty/statespace/cakf_smoothing.py`) dropped the factor at
+  every step and gave CAKF unmasked observation noise, so it reported a 0.73 gap from the exact
+  filter; it now runs `cakf_filter` on the masked noise, and its result test asserts the
+  reference's property, CAKF equal to the exact filter within `sqrt(eps)` of float32.
 - Pass `--timeout=1800` to the `extended-tests` job in `.github/workflows/tests-extended.yml` so nightly slow and integration suites do not inherit `pyproject.toml`'s 300 s per-test timeout, guarded by `tests/packaging/test_ci_workflow_contracts.py`.
 - Raise transitive security constraint floors in `[tool.uv] constraint-dependencies` (`tornado>=6.6.1`, `opentelemetry-api>=1.45.2`, `oauthlib>=4.0.1`, `soupsieve>=4.1.1`) and refresh `uv.lock` so `pip-audit` passes cleanly across all extras.
 

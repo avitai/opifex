@@ -10,12 +10,18 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 from substrax.testing import run_example
 
 
 ROOT = Path(__file__).resolve().parents[2]
 UNCERTAINTY = ROOT / "examples" / "uncertainty"
+
+# ComputationAwareKalman.jl's own test (test/gp_regression.jl at fc6b4109) asserts CAKF equals the
+# exact posterior with Julia's `≈`, whose relative tolerance is sqrt(eps) of the element type; the
+# examples run in float32.
+CAKF_EXACTNESS_RTOL = math.sqrt(float(np.finfo(np.float32).eps))
 
 
 @pytest.fixture
@@ -79,18 +85,18 @@ def test_statespace_cakf_smoothing(output_dir: Path, request: pytest.FixtureRequ
         "num_steps",
         "observed_fraction",
         "max_iter",
-        "cakf_vs_exact_mean_l2",
+        "cakf_vs_exact_mean_relative",
+        "cakf_vs_exact_cov_relative",
         "cakf_vs_truth_mean_l2",
         "exact_vs_truth_mean_l2",
         "exact_final_trace",
     }
     assert summary["num_steps"] > 0
     assert 0.0 < summary["observed_fraction"] <= 1.0
-    assert math.isfinite(summary["cakf_vs_exact_mean_l2"])
     assert math.isfinite(summary["exact_final_trace"])
-    # The exact Kalman filter tracks the truth at least as well as CAKF with one CG
-    # iteration.
-    assert summary["exact_vs_truth_mean_l2"] <= summary["cakf_vs_truth_mean_l2"] + 1e-3
+    # The observation is a scalar, so one CG iteration spans it and CAKF is the exact filter.
+    assert summary["cakf_vs_exact_mean_relative"] <= CAKF_EXACTNESS_RTOL
+    assert summary["cakf_vs_exact_cov_relative"] <= CAKF_EXACTNESS_RTOL
 
 
 @pytest.mark.timeout(0)

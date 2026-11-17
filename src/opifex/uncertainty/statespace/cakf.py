@@ -25,6 +25,7 @@ from enum import StrEnum
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from opifex.uncertainty.statespace.kalman import kalman_smoother
 
@@ -96,10 +97,15 @@ def cakf_update(
     max_iter: int,
     policy: CAKFPolicy = CAKFPolicy.CG,
     key: jax.Array | None = None,
+    abstol: float = 1e-10,
+    reltol: float = 1e-12,
 ) -> tuple[jax.Array, jax.Array]:
     """CAKF update step using the CG search-direction policy.
 
-    Iterates up to ``max_iter`` times. Each iteration:
+    Iterates up to ``min(max_iter, obs_dim)`` times and stops once the residual norm is at most
+    ``max(abstol, reltol * ||y||)``, as ComputationAwareKalman.jl's ``update``
+    (``src/filter/update.jl:46-49`` at ``fc6b4109``); the defaults are its own. Shapes stay
+    static: an iteration after the stop contributes a zero column. Each iteration:
 
     1. Uses the current residual ``r`` as the search direction
        (``CGPolicy``).
@@ -122,13 +128,22 @@ def cakf_update(
         observation_cov: Observation noise ``Λ`` of shape ``(k, k)``.
         max_iter: Maximum number of CG iterations (must be a static
             Python ``int`` so the shapes of ``U`` and ``M_new`` are known
-            at trace time).
+            at trace time). Clamped to the observation dimension.
+        policy: The search-direction policy.
+        key: PRNG key, required by ``CAKFPolicy.RANDOM``.
+        abstol: Absolute residual tolerance.
+        reltol: Residual tolerance relative to ``||y||``.
 
     Returns:
         Posterior ``(mean, factor)``. The returned factor has shape
-        ``(n, r0 + max_iter)``.
+        ``(n, r0 + min(max_iter, k))``.
+
+    Raises:
+        ValueError: If ``CAKFPolicy.RANDOM`` is given no ``key``, or the policy is unknown.
     """
     obs_dim = observation_matrix.shape[0]
+    max_iter = min(max_iter, obs_dim)
+    tolerance = jnp.maximum(abstol, reltol * jnp.linalg.norm(observation))
     cov_obs_t = prior_cov @ observation_matrix.T  # (n, k)
     factor_obs = observation_matrix @ factor  # (k, r0)
 
@@ -175,7 +190,7 @@ def cakf_update(
         # the step becomes a no-op (the residual is already in the span of
         # previously selected directions).
         safe_eta = jnp.where(eta > 0.0, eta, jnp.ones_like(eta))
-        valid = eta > 0.0
+        valid = (eta > 0.0) & (jnp.linalg.norm(residual) > tolerance)
         alpha = raw_direction @ residual
         scaled_alpha = jnp.where(valid, alpha / safe_eta, 0.0)
         normaliser = jnp.where(valid, jnp.sqrt(1.0 / safe_eta), 0.0)
@@ -256,6 +271,120 @@ def cakf_step(
         observation_cov=observation_cov,
         max_iter=max_iter,
     )
+
+
+def cakf_truncate(
+    factor: jax.Array,
+    *,
+    max_cols: int | None = None,
+    min_sval: float | None = None,
+) -> jax.Array:
+    """Truncate a low-rank factor ``M`` to its leading singular directions.
+
+    The port of ComputationAwareKalman.jl's ``truncate`` (``src/truncate.jl`` at ``fc6b4109``):
+    the SVD ``M = U S V^T`` keeps the singular values of at least ``min_sval``, at most
+    ``max_cols`` of them, and returns ``U S``. The reference returns a variable number of
+    columns; here the result always has ``max_cols`` columns, those beyond the kept ones zero,
+    which leaves ``M M^T`` and so the posterior covariance ``Σ - M M^T`` the same.
+
+    Args:
+        factor: The factor ``M``, shape ``(n, r)``.
+        max_cols: Columns kept; the state dimension ``n`` when ``None``, the reference's default.
+        min_sval: Smallest singular value kept; ``sqrt(eps)`` of the factor's dtype when
+            ``None``, the reference's default.
+
+    Returns:
+        The truncated factor, shape ``(n, max_cols)``.
+    """
+    state_dim = factor.shape[0]
+    max_cols = state_dim if max_cols is None else max_cols
+    if min_sval is None:
+        min_sval = float(np.sqrt(np.finfo(factor.dtype).eps))
+    left, singular_values, _ = jnp.linalg.svd(factor, full_matrices=False)
+    kept = jnp.where(singular_values >= min_sval, singular_values, 0.0)
+    truncated = left[:, :max_cols] * kept[:max_cols]
+    missing = max_cols - truncated.shape[1]
+    if missing > 0:
+        truncated = jnp.concatenate([truncated, jnp.zeros((state_dim, missing), factor.dtype)], 1)
+    return truncated
+
+
+def cakf_filter(
+    *,
+    transitions: jax.Array,
+    process_noises: jax.Array,
+    observations: jax.Array,
+    observation_matrix: jax.Array,
+    observation_covs: jax.Array,
+    initial_mean: jax.Array,
+    initial_cov: jax.Array,
+    max_iter: int,
+    abstol: float = 1e-10,
+    reltol: float = 1e-12,
+    min_sval: float | None = None,
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """Run the computation-aware Kalman filter over a sequence.
+
+    The port of ComputationAwareKalman.jl's ``filter!`` (``src/filter/loop.jl`` at
+    ``fc6b4109``): each step predicts the mean and the factor through the transition
+    (:func:`cakf_predict`), updates them with the observation (:func:`cakf_update`) and truncates
+    the factor (:func:`cakf_truncate`), carrying both to the next step. The prior marginal
+    covariance ``Σ_k = A Σ_{k-1} A^T + Q_k`` is propagated alongside, and the posterior covariance
+    at step ``k`` is ``Σ_k - M_k M_k^T``. The arguments follow :func:`kalman_filter`.
+
+    Args:
+        transitions: Transition matrices, shape ``(num_steps, n, n)``.
+        process_noises: Process noise covariances, shape ``(num_steps, n, n)``.
+        observations: Observations, shape ``(num_steps, k)``.
+        observation_matrix: Observation matrix ``H``, shape ``(k, n)``.
+        observation_covs: Observation noise covariances, shape ``(num_steps, k, k)``.
+        initial_mean: Prior mean at step 0, shape ``(n,)``.
+        initial_cov: Prior covariance at step 0, shape ``(n, n)``.
+        max_iter: CG iterations per update (static); clamped to ``k``.
+        abstol: Absolute residual tolerance of each update.
+        reltol: Residual tolerance of each update relative to ``||y||``.
+        min_sval: Smallest singular value the truncation keeps (see :func:`cakf_truncate`).
+
+    Returns:
+        ``(means, factors, prior_covs)`` of shapes ``(num_steps, n)``, ``(num_steps, n, n)`` and
+        ``(num_steps, n, n)``: the posterior mean, the truncated factor ``M`` and the prior
+        marginal covariance ``Σ`` after each update.
+    """
+    state_dim = initial_mean.shape[0]
+
+    def step(
+        carry: tuple[jax.Array, jax.Array, jax.Array],
+        inputs: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
+    ) -> tuple[tuple[jax.Array, jax.Array, jax.Array], tuple[jax.Array, jax.Array, jax.Array]]:
+        """Predict, update and truncate one step."""
+        mean, factor, prior_cov = carry
+        observation, transition, process_noise, observation_cov = inputs
+        predicted_mean, predicted_factor = cakf_predict(
+            mean=mean, factor=factor, transition=transition
+        )
+        predicted_prior_cov = transition @ prior_cov @ transition.T + process_noise
+        updated_mean, updated_factor = cakf_update(
+            mean=predicted_mean,
+            prior_cov=predicted_prior_cov,
+            factor=predicted_factor,
+            observation=observation,
+            observation_matrix=observation_matrix,
+            observation_cov=observation_cov,
+            max_iter=max_iter,
+            abstol=abstol,
+            reltol=reltol,
+        )
+        truncated = cakf_truncate(updated_factor, max_cols=state_dim, min_sval=min_sval)
+        new_carry = (updated_mean, truncated, predicted_prior_cov)
+        return new_carry, new_carry
+
+    initial_factor = jnp.zeros((state_dim, state_dim), initial_mean.dtype)
+    _, (means, factors, prior_covs) = jax.lax.scan(
+        step,
+        (initial_mean, initial_factor, initial_cov),
+        (observations, transitions, process_noises, observation_covs),
+    )
+    return means, factors, prior_covs
 
 
 def cakf_smooth(
