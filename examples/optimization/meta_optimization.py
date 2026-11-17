@@ -17,12 +17,10 @@
 # Meta-Optimization: MAML and Reptile for a Family of PDEs
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Advanced |
-| **Runtime** | ~3 min (GPU) / ~10 min (CPU) |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX, Flax NNX, PINNs, gradient-based meta-learning |
-| **Format** | Python + Jupyter |
-| **Memory** | ~1 GB |
 
 ## Overview
 

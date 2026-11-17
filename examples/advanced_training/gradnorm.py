@@ -16,6 +16,12 @@
 """
 # GradNorm: Automatic Loss Balancing for PINNs
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics, multi-objective losses |
+
 This example demonstrates how to use GradNorm for automatic loss weight
 balancing in multi-objective PINN training. GradNorm dynamically adjusts
 weights to equalize gradient contributions across loss components.

@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Each example's `main()` prints its summary and returns it, and its last cell ends with a bare
   `if __name__ == "__main__": main()` (56 examples), so a notebook run keeps the value
   `main()` returns: the five uncertainty result tests read it rather than `None`.
+- Every example opens with substrax's metadata table, directly under its title: Tier, Devices and
+  Prerequisites. Tier follows the old Level (Advanced is an Advanced Guide; Intermediate and
+  Beginner are Tutorials) or, for the 20 examples without one, the guide's definitions; Devices is
+  CPU-compatible for the 39 examples that finish within 5 minutes on a CPU runner and GPU-optional
+  for the other 20; Prerequisites names the knowledge each example assumes and, for
+  `atomistic/nequip_md17.py`, the rMD17 aspirin dataset (154 MB). The Level, Runtime, Memory and
+  Format rows are gone: a page records its run's real duration and device instead.
 - Require `calibrax>=0.1.20` and `substrax>=0.1.28`; the `test` extra installs
   `substrax[notebooks,testing]`, which brings the notebook kernel and converter, so `ipykernel`
   and `jupytext` leave `dev`.

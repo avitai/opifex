@@ -12,10 +12,10 @@
 """
 # Fenrir vs DALTON likelihoods on a linear-drift ODE inverse problem
 
-| Property | Value |
-|---|---|
-| **Level** | Advanced |
-| **Runtime** | < 5 s (CPU) |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX, linear Gaussian state-space models, ODE likelihoods |
 
 ## Overview

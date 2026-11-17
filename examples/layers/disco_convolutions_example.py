@@ -17,12 +17,10 @@
 # DISCO Convolutions: Discretisation-Invariant Convolution on Arbitrary Point Sets
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Advanced |
-| **Runtime** | ~30 s (GPU) / ~2 min (CPU) |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX, Flax NNX, neural operators, quadrature basics |
-| **Format** | Python + Jupyter |
-| **Memory** | ~0.5 GB |
 
 ## Overview
 

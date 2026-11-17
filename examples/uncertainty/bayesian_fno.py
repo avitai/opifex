@@ -12,12 +12,11 @@
 """
 # Bayesian FNO on Darcy Flow
 
-| Property      | Value                                    |
-|---------------|------------------------------------------|
-| Level         | Intermediate                             |
-| Runtime       | ~2 min (GPU) / ~10 min (CPU)             |
-| Memory        | ~2 GB                                    |
-| Prerequisites | JAX, Flax NNX, Deep Ensembles            |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, deep ensembles |
 
 ## Overview
 

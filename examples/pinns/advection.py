@@ -16,6 +16,12 @@
 """
 # Advection Equation PINN
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics |
+
 This example demonstrates solving the 1D linear advection equation using a
 Physics-Informed Neural Network (PINN). The advection equation describes
 transport of a quantity by a flow field without diffusion.

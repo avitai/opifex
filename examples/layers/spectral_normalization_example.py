@@ -17,12 +17,10 @@
 # Spectral Normalization: Lipschitz Control for Stable Deep Training
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Intermediate |
-| **Runtime** | ~1 min (GPU) / ~3 min (CPU) |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX, Flax NNX, basic optimisation |
-| **Format** | Python + Jupyter |
-| **Memory** | ~0.5 GB |
 
 ## Overview
 

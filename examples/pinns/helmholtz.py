@@ -16,6 +16,12 @@
 """
 # Helmholtz Equation PINN
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, PINN basics |
+
 This example demonstrates solving the 2D Helmholtz equation using a
 Physics-Informed Neural Network (PINN). The Helmholtz equation arises
 in acoustics, electromagnetics, and quantum mechanics (time-independent

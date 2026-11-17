@@ -12,12 +12,11 @@
 """
 # DeepONet on Antiderivative Operator
 
-| Property      | Value                                    |
-|---------------|------------------------------------------|
-| Level         | Beginner                                 |
-| Runtime       | ~30s (CPU), ~5s (GPU)                    |
-| Memory        | ~500 MB                                  |
-| Prerequisites | JAX, Flax NNX, Neural Operators basics   |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, neural operator basics |
 
 ## Overview
 

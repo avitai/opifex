@@ -22,12 +22,11 @@
 """
 # NequIP on rMD17 (Aspirin)
 
-| Property      | Value                                              |
-|---------------|----------------------------------------------------|
-| Level         | Advanced                                           |
-| Runtime       | ~60 min (GPU, scan-fused, early-stopped)           |
-| Memory        | ~3 GB                                               |
-| Prerequisites | JAX, Flax NNX, E(3)-equivariant networks, MLIPs    |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, E(3)-equivariant networks, machine-learned interatomic potentials; the rMD17 aspirin dataset (154 MB, downloaded from figshare on first run) |
 
 ## Overview
 

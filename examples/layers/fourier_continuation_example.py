@@ -17,12 +17,10 @@
 # Fourier Continuation: Accurate Spectral Derivatives for Non-Periodic Functions
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Intermediate |
-| **Runtime** | ~30 s (CPU/GPU) |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX, FFTs, basic spectral methods |
-| **Format** | Python + Jupyter |
-| **Memory** | ~0.3 GB |
 
 ## Overview
 

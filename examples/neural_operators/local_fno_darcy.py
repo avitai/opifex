@@ -16,12 +16,11 @@
 """
 # Local FNO on Darcy Flow
 
-| Property      | Value                                          |
-|---------------|------------------------------------------------|
-| Level         | Intermediate                                   |
-| Runtime       | ~5 min (CPU) / ~1 min (GPU)                     |
-| Memory        | ~2 GB                                          |
-| Prerequisites | JAX, Flax NNX, Neural Operators basics         |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, neural operator basics |
 
 ## Overview
 

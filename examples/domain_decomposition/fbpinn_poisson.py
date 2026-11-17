@@ -16,6 +16,12 @@
 """
 # FBPINN: Finite Basis PINN on Damped Harmonic Oscillator
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics, domain decomposition |
+
 This example demonstrates solving the damped harmonic oscillator ODE using FBPINN
 (Finite Basis Physics-Informed Neural Network).
 
