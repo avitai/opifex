@@ -12,12 +12,11 @@
 """
 # FNO on 2D Navier-Stokes Equations
 
-| Property      | Value                                    |
-|---------------|------------------------------------------|
-| Level         | Intermediate                             |
-| Runtime       | ~3 min (CPU) / ~30 sec (GPU)             |
-| Memory        | ~3 GB                                    |
-| Prerequisites | JAX, Flax NNX, FNO basics, CFD concepts  |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, FNO basics, CFD concepts |
 
 ## Overview
 

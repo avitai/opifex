@@ -12,11 +12,11 @@
 """
 # Full U-FNO for Turbulence Modeling
 
-| Property    | Value                                                      |
-|-------------|------------------------------------------------------------|
-| Level       | Advanced                                                   |
-| Runtime     | ~15 min (CPU/GPU)                                          |
-| Prerequisites | JAX, Flax NNX, Multi-scale Analysis, Energy Conservation |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, multi-scale analysis, energy conservation |
 
 ## Overview
 This example demonstrates U-FNO functionality for multi-scale 2D Navier-Stokes

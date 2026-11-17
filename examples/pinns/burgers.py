@@ -16,6 +16,12 @@
 """
 # Burgers Equation PINN
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics |
+
 This example demonstrates solving the viscous Burgers equation using a
 Physics-Informed Neural Network (PINN). The Burgers equation is a
 fundamental nonlinear PDE used in fluid mechanics and shock wave theory.

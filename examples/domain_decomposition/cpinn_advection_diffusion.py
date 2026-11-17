@@ -16,6 +16,12 @@
 """
 # CPINN: Conservative PINN on Advection-Diffusion Equation
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics, conservation laws |
+
 This example demonstrates solving the 1D advection-diffusion equation using CPINN
 (Conservative Physics-Informed Neural Network). CPINNs enforce strong flux
 conservation at subdomain interfaces, critical for conservation laws.

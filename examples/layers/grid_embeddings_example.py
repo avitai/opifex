@@ -17,12 +17,10 @@
 # Grid Embeddings: Why Positional Coordinates Matter for Neural Operators
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Intermediate |
-| **Runtime** | ~3 min (GPU) / ~12 min (CPU) |
-| **Prerequisites** | JAX, Flax NNX, [FNO on Darcy](../neural-operators/fno-darcy.md) |
-| **Format** | Python + Jupyter |
-| **Memory** | ~1 GB |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, the FNO on Darcy example |
 
 ## Overview
 

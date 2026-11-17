@@ -12,10 +12,10 @@
 """
 # Compute-aware Kalman filtering on sparsely observed linear systems
 
-| Property | Value |
-|---|---|
-| **Level** | Intermediate |
-| **Runtime** | < 5 s (CPU) |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX, linear-Gaussian state-space models |
 
 ## Overview

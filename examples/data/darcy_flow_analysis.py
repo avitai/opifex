@@ -13,11 +13,10 @@
 # Darcy Flow Dataset Analysis
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Intermediate |
-| **Runtime** | ~2 min (CPU) |
-| **Prerequisites** | JAX, NumPy, Darcy Flow basics |
-| **Format** | Python + Jupyter |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, NumPy, Darcy flow basics |
 
 ## Overview
 

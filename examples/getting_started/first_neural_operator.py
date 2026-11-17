@@ -22,12 +22,11 @@
 """
 # Your First Neural Operator: Zero-Shot Super-Resolution
 
-| Property      | Value                                |
-|---------------|--------------------------------------|
-| Level         | Beginner                             |
-| Runtime       | ~2 minutes                           |
-| Memory        | ~1 GB                                |
-| Prerequisites | `source activate.sh`                 |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | GPU-optional |
+| **Prerequisites** | Basic JAX and Flax NNX |
 
 ## Overview
 

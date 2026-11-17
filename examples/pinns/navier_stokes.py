@@ -16,6 +16,12 @@
 """
 # Navier-Stokes PINN: Kovasznay Flow
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, PINN basics, incompressible flow |
+
 This example demonstrates solving the 2D steady Navier-Stokes equations
 using a Physics-Informed Neural Network (PINN). The Kovasznay flow is an
 exact solution that serves as an important benchmark for incompressible

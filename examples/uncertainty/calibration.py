@@ -12,11 +12,11 @@
 """
 # Enhanced Calibration Methods
 
-| Property | Value |
-|---|---|
-| **Level** | Advanced |
-| **Runtime** | ~5 min (CPU) |
-| **Prerequisites** | JAX, Flax NNX, Uncertainty Quantification |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, uncertainty quantification |
 
 ## Overview
 

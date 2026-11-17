@@ -12,10 +12,10 @@
 """
 # Matrix-free PINN curvature: Lanczos log-det + XNysTrace Fisher trace
 
-| Property | Value |
-|---|---|
-| **Level** | Intermediate |
-| **Runtime** | < 5 s (CPU) |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX, Flax NNX |
 
 ## Overview

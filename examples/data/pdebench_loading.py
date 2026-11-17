@@ -13,11 +13,10 @@
 # PDEBench Dataset Loading with Opifex
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Beginner |
-| **Runtime** | ~30 sec (GPU) |
-| **Prerequisites** | JAX, h5py, HDF5 file |
-| **Format** | Python + Jupyter |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, h5py and the HDF5 format |
 
 ## Overview
 

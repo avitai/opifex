@@ -16,6 +16,12 @@
 """
 # Inverse Diffusion Equation PINN
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics, inverse problems |
+
 This example demonstrates solving an inverse problem: discovering the unknown
 diffusion coefficient in the heat/diffusion equation from sparse observations.
 

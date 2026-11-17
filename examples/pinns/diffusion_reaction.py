@@ -16,6 +16,12 @@
 """
 # Diffusion-Reaction Equation PINN
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics |
+
 This example demonstrates solving a diffusion-reaction equation using a PINN.
 The problem features multiple frequency components that the network must learn.
 

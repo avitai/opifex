@@ -12,10 +12,10 @@
 """
 # Diagonal Laplace posterior for a small MLP classifier
 
-| Property | Value |
-|---|---|
-| **Level** | Intermediate |
-| **Runtime** | < 5 s (CPU) |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX, Flax NNX, Laplace approximation |
 
 ## Overview

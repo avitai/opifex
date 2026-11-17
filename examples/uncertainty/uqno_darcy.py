@@ -12,12 +12,11 @@
 """
 # UQNO on Darcy Flow — Conformal Prediction Bands
 
-| Property      | Value                                    |
-|---------------|------------------------------------------|
-| Level         | Intermediate                             |
-| Runtime       | ~3 min (GPU) / ~15 min (CPU)             |
-| Memory        | ~1 GB                                    |
-| Prerequisites | JAX, Flax NNX, Conformal Prediction      |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, conformal prediction |
 
 ## Overview
 
