@@ -914,7 +914,6 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 "src/opifex/uncertainty/markov/markov_pl_likelihoods.py" = ["ANN202"]
 "src/opifex/uncertainty/monitoring/reliability_report.py" = ["D417"]
 "src/opifex/uncertainty/scientific/sampling.py" = ["ANN202", "D417"]
-"src/opifex/uncertainty/statespace/cakf.py" = ["D417"]
 "src/opifex/visualization/animation.py" = ["ANN001", "ANN202"]
 
 [tool.ruff.lint.pydocstyle]

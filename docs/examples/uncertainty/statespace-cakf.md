@@ -24,26 +24,18 @@ exact sequential Kalman filter from
 
 ## What You Will Learn
 
-1. Use `cakf_predict` and `cakf_update` from
-   `opifex.uncertainty.statespace.cakf` directly.
-2. Drive a sequential CAKF roll-out via `jax.lax.scan` while
-   preserving a fixed-shape factor carry (a JAX scan requirement).
-3. Compare the CAKF posterior mean against the exact
-   `kalman_filter` posterior at matched observation budget.
+1. Run the computation-aware Kalman filter with
+   `opifex.uncertainty.statespace.cakf_filter`, which carries the mean and
+   the low-rank factor from step to step.
+2. Form the CAKF posterior covariance `Σ - M M^T` from the filter's
+   prior covariances and factors.
+3. Check that, with one CG iteration on a scalar observation, CAKF is the
+   exact `kalman_filter` posterior.
 
 ## Files
 
 - **Python Script**: `/examples/uncertainty/statespace/cakf_smoothing.py`
 - **Jupyter Notebook**: `/examples/uncertainty/statespace/cakf_smoothing.ipynb`
-
-## Note on API Surface
-
-The current public surface of `opifex.uncertainty.statespace.cakf` is
-the low-level pair `cakf_predict` / `cakf_update`. A higher-level
-`cakf_smooth` wrapper is **not** part of this slice — the example
-demonstrates a sequential filter via `jax.lax.scan` over the low-level
-primitives. Pförtner et al. (2024) also describe computation-aware
-smoothing; opifex will land an analogous wrapper in a future slice.
 
 ## Core Concepts
 
@@ -51,9 +43,10 @@ smoothing; opifex will land an analogous wrapper in a future slice.
 
 CAKF maintains the implicit posterior covariance as
 `Σ - M M^T` where `Σ` is the prior marginal covariance and `M` is a
-growing low-rank factor. After `k` CG iterations per update step,
-`M` has `k` extra columns. The example uses a sliding window of width
-`max_iter` to keep the JAX-traced carry shape static.
+low-rank factor. Each update appends one column per CG iteration, and
+`cakf_filter` then truncates `M` to its leading singular directions, as
+ComputationAwareKalman.jl's `filter!` and `truncate` do, so the factor
+keeps the state dimension as its width across steps.
 
 ### CG search-direction policy
 
@@ -73,15 +66,18 @@ compute-aware idea to those settings — the linalg primitives in
 ## Expected Output
 
 The example prints the number of steps, the observed fraction
-(`1/3`), the CAKF iteration budget (`max_iter = 1`), and three L2
-posterior-mean error summaries:
+(`1/3`), the CAKF iteration budget (`max_iter = 1`), and:
 
-- `cakf_vs_exact_mean_l2` — CAKF vs exact Kalman posterior mean.
-- `cakf_vs_truth_mean_l2` — CAKF posterior mean vs ground truth.
-- `exact_vs_truth_mean_l2` — exact Kalman posterior mean vs truth.
+- `cakf_vs_exact_mean_relative` and `cakf_vs_exact_cov_relative`, the
+  relative difference between the CAKF and exact Kalman posterior means
+  and covariances over the whole sequence;
+- `cakf_vs_truth_mean_l2` and `exact_vs_truth_mean_l2`, each filter's
+  mean distance to the simulated states.
 
-With `max_iter = 1` and `observation_dim = 1` the CAKF posterior
-mean already tracks the exact Kalman filter at typical accuracy.
+With `max_iter = 1` and a scalar observation, one CG iteration spans the
+observation, so CAKF is the exact filter: on CPU in float32 the relative
+differences are about 2e-6 (mean) and 6e-6 (covariance), and both
+filters are 0.4272 from the states.
 
 ## Next Steps
 

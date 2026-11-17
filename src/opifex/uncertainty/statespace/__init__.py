@@ -20,9 +20,11 @@ from __future__ import annotations
 
 from opifex.uncertainty.statespace._uq_capabilities import STATESPACE_CAPABILITIES
 from opifex.uncertainty.statespace.cakf import (
+    cakf_filter,
     cakf_predict,
     cakf_smooth,
     cakf_step,
+    cakf_truncate,
     cakf_update,
     LowRankDowndatedMatrix,
 )
@@ -63,9 +65,11 @@ __all__ = [
     "STATESPACE_CAPABILITIES",
     "LowRankDowndatedMatrix",
     "StateSpaceKernel",
+    "cakf_filter",
     "cakf_predict",
     "cakf_smooth",
     "cakf_step",
+    "cakf_truncate",
     "cakf_update",
     "cosine_kernel",
     "diagonal_ek1_step",

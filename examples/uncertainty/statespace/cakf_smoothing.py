@@ -24,15 +24,14 @@ We compare the compute-aware Kalman filter (CAKF, Pförtner+ 2024,
 arXiv:2405.08971) against the exact sequential Kalman filter on a small
 linear-Gaussian state-space system with **sparse observations**.
 
-CAKF runs ``max_iter`` CG sweeps per update step and propagates a
-low-rank correction factor to the prior covariance. As ``max_iter``
-approaches the observation dimension, the CAKF posterior mean converges
-to the exact Kalman posterior mean.
+CAKF runs at most ``max_iter`` CG sweeps per update step and propagates a
+low-rank correction factor to the prior covariance. With ``max_iter``
+equal to the observation dimension the CAKF posterior is the exact Kalman
+posterior; here the observation is a scalar, so one sweep is enough.
 
-Pure JAX. The CAKF primitives — ``cakf_predict`` and ``cakf_update`` —
-live in :mod:`opifex.uncertainty.statespace.cakf`. We use them
-sequentially rather than via a higher-level ``cakf_smooth`` wrapper
-(which is not part of the public surface in this slice).
+The filter loop is :func:`opifex.uncertainty.statespace.cakf_filter`, a
+port of ComputationAwareKalman.jl's ``filter!``: each step predicts,
+updates and truncates the factor, carrying it to the next step.
 """
 
 # %% [markdown]
@@ -44,8 +43,7 @@ sequentially rather than via a higher-level ``cakf_smooth`` wrapper
 import jax
 import jax.numpy as jnp
 
-from opifex.uncertainty.statespace.cakf import cakf_predict, cakf_update
-from opifex.uncertainty.statespace.kalman import kalman_filter
+from opifex.uncertainty.statespace import cakf_filter, kalman_filter
 
 
 # %% [markdown]
@@ -103,70 +101,6 @@ def _simulate(
 
 # %% [markdown]
 """
-## Sequential CAKF roll-out
-
-`cakf_step` is not part of the slice's public API; we use
-`cakf_predict` + `cakf_update` directly inside a `jax.lax.scan` loop.
-"""
-
-
-# %%
-def _run_cakf(
-    *,
-    transitions: jax.Array,
-    process_noises: jax.Array,
-    observations: jax.Array,
-    observation_matrix: jax.Array,
-    observation_cov: jax.Array,
-    initial_mean: jax.Array,
-    initial_cov: jax.Array,
-    max_iter: int,
-) -> tuple[jax.Array, jax.Array]:
-    """Run a sequential CAKF filter and return posterior means + factors.
-
-    The factor matrix grows by ``max_iter`` columns per ``cakf_update``
-    step. We pre-allocate a *fixed-width* sliding window of ``max_iter``
-    columns and discard older columns at the start of each step — this
-    keeps the carry shapes static (a hard JAX requirement under
-    ``jax.lax.scan``).
-    """
-    state_dim = initial_mean.shape[0]
-    initial_factor = jnp.zeros((state_dim, max_iter))
-
-    def step(
-        carry: tuple[jax.Array, jax.Array, jax.Array],
-        inputs: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
-    ):
-        mean, factor, prior_cov = carry
-        observation, transition, process_noise, observation_cov_step = inputs
-        # Discard the previous-step columns to keep the carry shape fixed.
-        empty_factor = jnp.zeros_like(factor[:, :0])
-        predicted_mean, predicted_factor = cakf_predict(
-            mean=mean, factor=empty_factor, transition=transition
-        )
-        predicted_cov = transition @ prior_cov @ transition.T + process_noise
-        updated_mean, updated_factor = cakf_update(
-            mean=predicted_mean,
-            prior_cov=predicted_cov,
-            factor=predicted_factor,
-            observation=observation,
-            observation_matrix=observation_matrix,
-            observation_cov=observation_cov_step,
-            max_iter=max_iter,
-        )
-        return (updated_mean, updated_factor, predicted_cov), (updated_mean, updated_factor)
-
-    observation_covs = jnp.broadcast_to(observation_cov, (observations.shape[0], 1, 1))
-    _, (means, factors) = jax.lax.scan(
-        step,
-        (initial_mean, initial_factor, initial_cov),
-        (observations, transitions, process_noises, observation_covs),
-    )
-    return means, factors
-
-
-# %% [markdown]
-"""
 ## Run the example
 """
 
@@ -211,19 +145,21 @@ def main() -> dict[str, jax.Array | float | int]:
         initial_cov=initial_cov,
     )
 
-    cakf_jit = jax.jit(_run_cakf, static_argnames=("max_iter",))
-    cakf_means, _ = cakf_jit(
+    # CAKF sees the same masked observation noise as the exact filter.
+    cakf_means, cakf_factors, prior_covs = jax.jit(cakf_filter, static_argnames=("max_iter",))(
         transitions=transitions,
         process_noises=process_noises,
         observations=observations,
         observation_matrix=observation_matrix,
-        observation_cov=observation_cov_single,
+        observation_covs=observation_covs,
         initial_mean=initial_mean,
         initial_cov=initial_cov,
         max_iter=1,
     )
+    cakf_covs = prior_covs - cakf_factors @ jnp.swapaxes(cakf_factors, -1, -2)
 
-    cakf_vs_exact = jnp.mean(jnp.linalg.norm(cakf_means - exact_means, axis=-1))
+    mean_relative = jnp.linalg.norm(cakf_means - exact_means) / jnp.linalg.norm(exact_means)
+    cov_relative = jnp.linalg.norm(cakf_covs - exact_covs) / jnp.linalg.norm(exact_covs)
     cakf_vs_truth = jnp.mean(jnp.linalg.norm(cakf_means - states, axis=-1))
     exact_vs_truth = jnp.mean(jnp.linalg.norm(exact_means - states, axis=-1))
 
@@ -231,7 +167,8 @@ def main() -> dict[str, jax.Array | float | int]:
         "num_steps": int(num_steps),
         "observed_fraction": float(jnp.mean(observation_mask.astype(jnp.float32))),
         "max_iter": 1,
-        "cakf_vs_exact_mean_l2": cakf_vs_exact,
+        "cakf_vs_exact_mean_relative": mean_relative,
+        "cakf_vs_exact_cov_relative": cov_relative,
         "cakf_vs_truth_mean_l2": cakf_vs_truth,
         "exact_vs_truth_mean_l2": exact_vs_truth,
         "exact_final_trace": jnp.trace(exact_covs[-1]),

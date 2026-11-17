@@ -310,9 +310,6 @@
       "ANN202": 1,
       "D417": 3
     },
-    "src/opifex/uncertainty/statespace/cakf.py": {
-      "D417": 1
-    },
     "src/opifex/visualization/animation.py": {
       "ANN001": 1,
       "ANN202": 1
