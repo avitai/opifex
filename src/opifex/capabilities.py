@@ -27,6 +27,7 @@ from opifex.uncertainty.adapters import ADAPTER_CAPABILITIES
 from opifex.uncertainty.assimilation import ASSIMILATION_CAPABILITIES
 from opifex.uncertainty.curvature import CURVATURE_CAPABILITIES
 from opifex.uncertainty.inference_backends import INFERENCE_BACKEND_CAPABILITIES
+from opifex.uncertainty.likelihoods import LIKELIHOOD_CAPABILITIES
 from opifex.uncertainty.linalg import LINALG_CAPABILITIES
 from opifex.uncertainty.monitoring import MONITORING_CAPABILITIES
 from opifex.uncertainty.pac_bayes import PAC_BAYES_CAPABILITIES
@@ -74,6 +75,7 @@ UQ_CAPABILITIES: Mapping[str, UQCapability] = assemble(
     ASSIMILATION_CAPABILITIES,
     CURVATURE_CAPABILITIES,
     INFERENCE_BACKEND_CAPABILITIES,
+    LIKELIHOOD_CAPABILITIES,
     LINALG_CAPABILITIES,
     MONITORING_CAPABILITIES,
     PAC_BAYES_CAPABILITIES,
