@@ -181,7 +181,7 @@ def _score(
 # %%
 def main() -> dict[str, jax.Array | float]:
     """Score Fenrir and DALTON likelihoods in well-specified and misspecified regimes."""
-    rng_key = jax.random.PRNGKey(0)
+    rng_key = jax.random.key(0)
     dt = 0.1
     num_steps = 20
     true_theta = 0.5

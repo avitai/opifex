@@ -81,7 +81,7 @@ def generate_density_sample(key: jax.Array, grid_points: int) -> jax.Array:
 
     Uses a superposition of Gaussian functions to mimic atomic densities.
     """
-    key1, key2, key3 = jax.random.split(key, 3)
+    key1, key2, key3, key4 = jax.random.split(key, 4)
 
     # Number of atomic centers (1-4)
     n_centers = int(jax.random.randint(key1, (), 1, 5))
@@ -103,7 +103,7 @@ def generate_density_sample(key: jax.Array, grid_points: int) -> jax.Array:
     density = jnp.maximum(density, 1e-10)
 
     # Normalize to reasonable electron count (1-10 electrons)
-    target_electrons = jax.random.uniform(key1, (), minval=1.0, maxval=10.0)
+    target_electrons = jax.random.uniform(key4, (), minval=1.0, maxval=10.0)
 
     return density / jnp.sum(density) * target_electrons
 
@@ -201,7 +201,7 @@ def main() -> dict[str, float | int]:
     print(f"  Test samples: {NUM_TEST_SAMPLES}")
     print(f"  Grid points per sample: {GRID_POINTS}")
 
-    key = jax.random.PRNGKey(SEED)
+    key = jax.random.key(SEED)
 
     train_keys = jax.random.split(key, NUM_TRAIN_SAMPLES + 1)
     key = train_keys[0]

@@ -178,7 +178,7 @@ def main() -> dict[str, float | int]:
     print()
     print("Generating training data...")
 
-    key = jax.random.PRNGKey(SEED)
+    key = jax.random.key(SEED)
     ALPHA = 0.01  # Thermal diffusivity
     T_MAX = 0.5
 

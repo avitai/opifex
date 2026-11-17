@@ -292,7 +292,7 @@ def main() -> dict[str, float | int]:
     print(f"Parameters per subdomain: ~{total_params // len(subdomains)}")
 
     # Generate collocation points
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     keys = jax.random.split(key, 10)
 
     # Domain interior points for each subdomain

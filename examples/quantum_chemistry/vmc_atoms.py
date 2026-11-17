@@ -309,7 +309,7 @@ def main() -> dict[str, float | int]:
     for system in SYSTEMS:
         driver = build_driver(system)
         start_time = time.time()
-        result = driver.run(jax.random.PRNGKey(system.seed))
+        result = driver.run(jax.random.key(system.seed))
         elapsed = time.time() - start_time
         results[system.name] = result
         run_times[system.name] = elapsed

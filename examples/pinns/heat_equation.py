@@ -93,7 +93,7 @@ def main() -> dict[str, float | int]:
     print(f"Parameters: {n_params:,}")
 
     # Generate collocation points: (x, y, t) uniform in [0,1]^3
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     collocation_pts = jax.random.uniform(key, (1000, 3))
     targets = jnp.zeros((1000, 1))
 
