@@ -8,9 +8,6 @@
 #       format_version: '1.3'
 # ---
 
-# %%
-# !/usr/bin/env python3
-
 # %% [markdown]
 """
 # Darcy Flow Dataset Analysis
@@ -38,9 +35,7 @@ resolution scaling, and data quality metrics.
 """
 
 # %%
-import argparse
 import time
-from pathlib import Path
 from typing import Any
 
 import jax
@@ -442,27 +437,28 @@ def create_visualization(
 
 
 # %%
-def main(
-    n_samples: int = 100,
-    resolutions: tuple[int, ...] = (64, 128),
-    output_dir: str | Path | None = None,
-    save_plots: bool = True,
-) -> dict[str, float]:
+N_SAMPLES = 100
+"""Samples generated at each resolution."""
+RESOLUTIONS = (64, 128)
+"""The grid resolutions analysed."""
+SAVE_PLOTS = True
+"""Whether the figures are saved beside being shown."""
+
+
+def main() -> dict[str, float]:
     """Run full Darcy flow analysis and return finite summary metrics."""
-    output_dir = resolve_output_dir(
-        "darcy_flow_analysis_files", explicit=None if output_dir is None else Path(output_dir)
-    ).path
+    output_dir = resolve_output_dir("darcy_flow_analysis_files").path
 
     print("Starting full Darcy flow dataset analysis...")
     results = analyze_darcy_flow_dataset(
-        n_samples=n_samples,
-        resolutions=list(resolutions),
+        n_samples=N_SAMPLES,
+        resolutions=list(RESOLUTIONS),
         output_dir=output_dir,
     )
 
     preprocessing_results: dict = {}
     save_path = None
-    if save_plots:
+    if SAVE_PLOTS:
         save_path = f"{output_dir}/darcy_analysis"
     create_visualization(results, preprocessing_results, save_path)
 
@@ -483,15 +479,4 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Analyze Darcy flow dataset characteristics")
-    parser.add_argument("--n_samples", type=int, default=100)
-    parser.add_argument("--resolutions", nargs="+", type=int, default=[64, 128])
-    parser.add_argument("--output_dir", type=Path, default=None)
-    parser.add_argument("--save_plots", action="store_true", default=True)
-    cli = parser.parse_args()
-    main(
-        n_samples=cli.n_samples,
-        resolutions=tuple(cli.resolutions),
-        output_dir=cli.output_dir,
-        save_plots=cli.save_plots,
-    )
+    main()

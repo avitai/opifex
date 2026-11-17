@@ -13,11 +13,13 @@
 # ---
 
 # %% [markdown]
-# # Advection Equation PINN
-#
-# This example demonstrates solving the 1D linear advection equation using a
-# Physics-Informed Neural Network (PINN). The advection equation describes
-# transport of a quantity by a flow field without diffusion.
+"""
+# Advection Equation PINN
+
+This example demonstrates solving the 1D linear advection equation using a
+Physics-Informed Neural Network (PINN). The advection equation describes
+transport of a quantity by a flow field without diffusion.
+"""
 
 # %%
 
@@ -55,18 +57,20 @@ EPOCHS = 10000
 LEARNING_RATE = 1e-3
 
 # %% [markdown]
-# ## Problem Definition
-#
-# The 1D linear advection equation:
-#
-# $$\frac{\partial u}{\partial t} + c \frac{\partial u}{\partial x} = 0$$
-#
-# with:
-# - **Domain**: $x \in [0, 2]$, $t \in [0, 1]$
-# - **Initial condition**: $u(x, 0) = \exp(-(x-0.5)^2 / 0.1)$ (Gaussian pulse)
-# - **Inflow BC**: $u(0, t) = \exp(-(0-ct-0.5)^2 / 0.1)$ (matches analytical)
-#
-# **Analytical solution**: $u(x, t) = u_0(x - ct)$ (translating wave)
+r"""
+## Problem Definition
+
+The 1D linear advection equation:
+
+$$\frac{\partial u}{\partial t} + c \frac{\partial u}{\partial x} = 0$$
+
+with:
+- **Domain**: $x \in [0, 2]$, $t \in [0, 1]$
+- **Initial condition**: $u(x, 0) = \exp(-(x-0.5)^2 / 0.1)$ (Gaussian pulse)
+- **Inflow BC**: $u(0, t) = \exp(-(0-ct-0.5)^2 / 0.1)$ (matches analytical)
+
+**Analytical solution**: $u(x, t) = u_0(x - ct)$ (translating wave)
+"""
 
 
 # %%
@@ -93,7 +97,9 @@ def inflow_condition(t):
 
 
 # %% [markdown]
-# ## PINN Architecture
+"""
+## PINN Architecture
+"""
 
 
 # %%
@@ -122,10 +128,14 @@ class AdvectionPINN(nnx.Module):
 
 
 # %% [markdown]
-# ## Collocation Points
+"""
+## Collocation Points
+"""
 
 # %% [markdown]
-# ## Physics-Informed Loss
+"""
+## Physics-Informed Loss
+"""
 
 
 # %%
@@ -171,7 +181,9 @@ def total_loss(pinn, xt_dom, xt_ic, u_ic, xt_in, u_in, lambda_bc=10.0):
 
 
 # %% [markdown]
-# ## Training
+"""
+## Training
+"""
 
 
 # %%
@@ -188,10 +200,12 @@ def train_step(pinn, opt, xt_dom, xt_ic, u_ic, xt_in, u_in):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# Builds collocation points, trains the PINN, evaluates against the exact
-# translating-Gaussian solution, and saves the visualizations.
+"""
+## Run the example
+
+Builds collocation points, trains the PINN, evaluates against the exact
+translating-Gaussian solution, and saves the visualizations.
+"""
 
 
 # %%

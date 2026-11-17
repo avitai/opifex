@@ -13,13 +13,15 @@
 # ---
 
 # %% [markdown]
-# # Wave Equation PINN
-#
-# This example demonstrates solving the 1D wave equation using a Physics-Informed
-# Neural Network (PINN). The wave equation describes propagation of waves in
-# strings, acoustics, and electromagnetic fields.
-#
-# Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
+# Wave Equation PINN
+
+This example demonstrates solving the 1D wave equation using a Physics-Informed
+Neural Network (PINN). The wave equation describes propagation of waves in
+strings, acoustics, and electromagnetic fields.
+
+Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
 
 # %%
 
@@ -57,19 +59,21 @@ EPOCHS = 15000
 LEARNING_RATE = 1e-3
 
 # %% [markdown]
-# ## Problem Definition
-#
-# The 1D wave equation:
-#
-# $$\frac{\partial^2 u}{\partial t^2} = c^2 \frac{\partial^2 u}{\partial x^2}$$
-#
-# with:
-# - **Domain**: $x \in [0, 1]$, $t \in [0, 1]$
-# - **Initial condition**: $u(x, 0) = \sin(\pi x)$ (standing wave)
-# - **Initial velocity**: $\frac{\partial u}{\partial t}(x, 0) = 0$
-# - **Boundary conditions**: $u(0, t) = u(1, t) = 0$ (fixed ends)
-#
-# **Analytical solution**: $u(x, t) = \sin(\pi x) \cos(c \pi t)$
+r"""
+## Problem Definition
+
+The 1D wave equation:
+
+$$\frac{\partial^2 u}{\partial t^2} = c^2 \frac{\partial^2 u}{\partial x^2}$$
+
+with:
+- **Domain**: $x \in [0, 1]$, $t \in [0, 1]$
+- **Initial condition**: $u(x, 0) = \sin(\pi x)$ (standing wave)
+- **Initial velocity**: $\frac{\partial u}{\partial t}(x, 0) = 0$
+- **Boundary conditions**: $u(0, t) = u(1, t) = 0$ (fixed ends)
+
+**Analytical solution**: $u(x, t) = \sin(\pi x) \cos(c \pi t)$
+"""
 
 
 # %%
@@ -90,7 +94,9 @@ def initial_velocity(x):
 
 
 # %% [markdown]
-# ## PINN Architecture
+"""
+## PINN Architecture
+"""
 
 
 # %%
@@ -135,16 +141,20 @@ class WavePINN(nnx.Module):
 
 
 # %% [markdown]
-# ## Collocation Points
+"""
+## Collocation Points
+"""
 
 # %% [markdown]
-# ## Physics-Informed Loss
-#
-# The loss function combines:
-# 1. **PDE residual**: $|u_{tt} - c^2 u_{xx}|^2$
-# 2. **Boundary loss**: $|u(0, t)|^2 + |u(1, t)|^2$
-# 3. **Initial condition loss**: $|u(x, 0) - u_0(x)|^2$
-# 4. **Initial velocity loss**: $|u_t(x, 0)|^2$
+"""
+## Physics-Informed Loss
+
+The loss function combines:
+1. **PDE residual**: $|u_{tt} - c^2 u_{xx}|^2$
+2. **Boundary loss**: $|u(0, t)|^2 + |u(1, t)|^2$
+3. **Initial condition loss**: $|u(x, 0) - u_0(x)|^2$
+4. **Initial velocity loss**: $|u_t(x, 0)|^2$
+"""
 
 
 # %%
@@ -223,7 +233,9 @@ def total_loss(pinn, xt_dom, xt_bc, xt_ic, u_ic, lambda_bc=10.0, lambda_ic=10.0)
 
 
 # %% [markdown]
-# ## Training
+"""
+## Training
+"""
 
 
 # %%
@@ -240,10 +252,12 @@ def train_step(pinn, opt, xt_dom, xt_bc, xt_ic, u_ic):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# Builds collocation points, trains the PINN, evaluates against the exact
-# standing-wave solution, and saves the visualizations.
+"""
+## Run the example
+
+Builds collocation points, trains the PINN, evaluates against the exact
+standing-wave solution, and saves the visualizations.
+"""
 
 
 # %%
