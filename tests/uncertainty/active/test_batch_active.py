@@ -11,15 +11,14 @@
   Pareto front.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+import typing
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 from flax import nnx
+from jax.typing import DTypeLike
 
 from opifex.uncertainty.active import batch_active
 from opifex.uncertainty.active.acquisition import bald
@@ -32,10 +31,6 @@ from opifex.uncertainty.active.batch_active import (
     q_expected_hypervolume_improvement,
 )
 from opifex.uncertainty.types import PredictiveDistribution
-
-
-if TYPE_CHECKING:
-    from jax.typing import DTypeLike
 
 
 def _redundant_predictive() -> PredictiveDistribution:
@@ -106,6 +101,132 @@ class TestBatchBALD:
         a = batch_bald(pd, batch_size=2, rngs=nnx.Rngs(active_bald=7))
         b = batch_bald(pd, batch_size=2, rngs=nnx.Rngs(active_bald=7))
         assert jnp.array_equal(a.indices, b.indices)
+
+    def test_batch_bald_compiles_once_under_jit_and_supports_vmap(self) -> None:
+        """batch_bald traces once with static shapes under jit and composes under vmap."""
+        from substrax.testing import TraceCounter
+
+        def run_one(samples: jax.Array, key: jax.Array) -> batch_active.AcquiredBatch:
+            mean = jnp.mean(samples, axis=0)
+            epistemic = jnp.var(samples, axis=0)
+            aleatoric = jnp.full_like(epistemic, 0.05)
+            pd = PredictiveDistribution(
+                mean=mean,
+                samples=samples,
+                variance=epistemic + aleatoric,
+                epistemic=epistemic,
+                aleatoric=aleatoric,
+                total_uncertainty=epistemic + aleatoric,
+            )
+            return batch_bald(pd, batch_size=2, rngs=key, num_mc_samples=256)
+
+        counter = TraceCounter()
+        jitted = jax.jit(counter.wrap(run_one))
+
+        pd0 = _redundant_predictive()
+        assert pd0.samples is not None
+        # Give candidate 2 a smaller epistemic amplitude (0.35 vs 1.0) so candidate 0 has a
+        # strictly larger marginal MI (~0.66 vs ~0.45 nats) while candidate 2 still strictly
+        # beats redundant candidate 1 on step 2 across both CPU and CUDA reductions.
+        samples_a = pd0.samples * jnp.array([1.0, 1.0, 0.35, 1.0])
+        samples_b = samples_a[:, jnp.array([3, 2, 1, 0])]
+        key_a = jax.random.key(11)
+        key_b = jax.random.key(29)
+
+        with counter.expect(new_traces=1):
+            out_a = jitted(samples_a, key_a)
+        with counter.expect(new_traces=0):
+            out_b = jitted(samples_b, key_b)
+
+        eager_a = run_one(samples_a, key_a)
+        assert jnp.array_equal(out_a.indices, eager_a.indices)
+        assert out_a.auxiliary_scores is not None
+        assert out_a.auxiliary_scores.shape == (4,)
+        assert out_b.indices.shape == (2,)
+
+        keys = jnp.stack([key_a, key_b])
+        stacked_samples = jnp.stack([samples_a, samples_b])
+        vmapped = jax.vmap(run_one)(stacked_samples, keys)
+        assert jnp.array_equal(vmapped.indices[0], eager_a.indices)
+        assert jnp.array_equal(vmapped.indices[1], run_one(samples_b, key_b).indices)
+
+    def test_batch_bald_matches_two_bit_shannon_mutual_information_oracle(self) -> None:
+        """Well-separated 4-member orthogonal binary ensemble yields log(2), log(2), 0 gains.
+
+        With separation 20 / 0.1 = 200 sigma, Gaussian cluster overlap is identically 0 in
+        IEEE-754. Each step's MC estimator equals the exact discrete Shannon conditional MI
+        plus 0.5 * (mean(eps^2) - 1), whose exact standard error for M i.i.d. N(0, 1) draws
+        is 1 / sqrt(2 * M) (since Var(eps^2) = 2).
+        """
+        samples = jnp.array(
+            [
+                [-10.0, -10.0, 10.0, 0.0],
+                [10.0, 10.0, -10.0, 0.0],
+                [-10.0, -10.0, -10.0, 0.0],
+                [10.0, 10.0, 10.0, 0.0],
+            ],
+            dtype=jnp.float32,
+        )
+        num_mc = 4096
+        chi2_five_se = 5.0 / float(np.sqrt(2.0 * num_mc))
+        aleatoric = jnp.full((4,), 0.01, dtype=jnp.float32)
+        pd = PredictiveDistribution(
+            mean=jnp.mean(samples, axis=0),
+            samples=samples,
+            variance=jnp.var(samples, axis=0) + aleatoric,
+            aleatoric=aleatoric,
+        )
+        batch = batch_bald(pd, batch_size=3, rngs=jax.random.key(2026), num_mc_samples=num_mc)
+        chosen_first_two = {int(batch.indices[0]), int(batch.indices[1])}
+        assert 2 in chosen_first_two
+        assert chosen_first_two in ({0, 2}, {1, 2})
+        assert float(batch.scores[0]) == pytest.approx(float(np.log(2.0)), abs=chi2_five_se)
+        assert float(batch.scores[1]) == pytest.approx(float(np.log(2.0)), abs=chi2_five_se)
+        # Third pick must be the redundant twin (or constant point 3), carrying ~0 conditional MI.
+        assert float(batch.scores[2]) == pytest.approx(0.0, abs=2.0 * chi2_five_se)
+
+    def test_batch_bald_handles_zero_and_missing_float32_aleatoric_variance(self) -> None:
+        """Dtype-scaled variance floor keeps scores finite when aleatoric is 0 or None."""
+        pd_base = _redundant_predictive()
+        assert pd_base.samples is not None
+        samples = pd_base.samples.astype(jnp.float32)
+        for aleatoric in (None, jnp.zeros((4,), dtype=jnp.float32)):
+            pd = PredictiveDistribution(
+                mean=jnp.mean(samples, axis=0),
+                samples=samples,
+                aleatoric=aleatoric,
+            )
+            batch = batch_bald(pd, batch_size=2, rngs=jax.random.key(3), num_mc_samples=128)
+            assert batch.indices.shape == (2,)
+            assert int(batch.indices[0]) != int(batch.indices[1])
+            assert bool(jnp.all(jnp.isfinite(batch.scores)))
+            assert batch.auxiliary_scores is not None
+            assert bool(jnp.all(jnp.isfinite(batch.auxiliary_scores)))
+
+    def test_batch_bald_validates_inputs(self) -> None:
+        """Invalid batch_size, num_mc_samples, or missing/non-2D samples raise ValueError."""
+        pd = _redundant_predictive()
+        with pytest.raises(ValueError, match="batch_size must be positive"):
+            batch_bald(pd, batch_size=0, rngs=jax.random.key(0))
+        with pytest.raises(ValueError, match="exceeds num_candidates"):
+            batch_bald(pd, batch_size=5, rngs=jax.random.key(0))
+        with pytest.raises(ValueError, match="num_mc_samples must be positive"):
+            batch_bald(pd, batch_size=2, rngs=jax.random.key(0), num_mc_samples=0)
+        with pytest.raises(ValueError, match="samples"):
+            batch_bald(
+                PredictiveDistribution(mean=jnp.zeros((3,))),
+                batch_size=1,
+                rngs=jax.random.key(0),
+            )
+        with pytest.raises(ValueError, match="scalar-output"):
+            batch_bald(
+                PredictiveDistribution(mean=jnp.zeros((3, 2)), samples=jnp.zeros((4, 3, 2))),
+                batch_size=1,
+                rngs=jax.random.key(0),
+            )
+        hints = typing.get_type_hints(batch_bald)
+        assert "predictive_dist" in hints
+        assert "return" in hints
 
 
 class TestBatchMCExpectedImprovement:

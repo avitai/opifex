@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `AcquiredBatch.auxiliary_scores` (`jax.Array | None = None`) on `opifex.uncertainty.active.AcquiredBatch` so traced batch acquisitions can return per-candidate pool scores without concrete Python metadata conversions.
 - `opifex.uncertainty.statespace.cakf_filter` and `cakf_truncate`: the computation-aware Kalman
   filter loop (predict, update, truncate, carrying the mean and the low-rank factor) and the
   factor truncation, ported from ComputationAwareKalman.jl's `filter!` and `truncate`
@@ -78,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Rewrite `opifex.uncertainty.active.batch_bald` using Kirsch, van Amersfoort & Gal (2019, Algorithm 1) incremental joint log-probability caching over `jax.lax.scan` and `jax.vmap` (`O(B C M K)` with static `(num_mc_samples, K)` state, dtype-scaled `eps^2` variance floor, and traced `AcquiredBatch.auxiliary_scores`), eliminating Python `float(...)` branches, growing `(t + 1,)` slices, and `ConcretizationTypeError` under `jax.jit` and `jax.vmap`.
 - `HyperbolicManifold.geodesic_distance` measures with calibrax's `poincare_distance`,
   `2 asinh(sqrt(t))`, scaled by the radius, in place of its own `arccosh(1 + 2t)`: a pair
   1e-5 apart read 0 in float32 and now reads 2.1e-5, and identical points have a zero gradient
