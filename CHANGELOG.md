@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Require `calibrax>=0.1.20` and `substrax>=0.1.27`; the `test` extra installs
+- Require `calibrax>=0.1.20` and `substrax>=0.1.28`; the `test` extra installs
   `substrax[notebooks,testing]`, which brings the notebook kernel and converter, so `ipykernel`
   and `jupytext` leave `dev`.
 - The `[tool.substrax.compute]` example jobs take substrax 0.1.27's layout: `resources`,
