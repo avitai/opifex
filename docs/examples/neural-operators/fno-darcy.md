@@ -63,21 +63,21 @@ this workflow:
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/fno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_darcy.py)
-- **Jupyter Notebook**: [`examples/neural-operators/fno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_darcy.ipynb)
+- **Python Script**: [`examples/neural_operators/fno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/fno_darcy.py)
+- **Jupyter Notebook**: [`examples/neural_operators/fno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/fno_darcy.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/fno_darcy.py
+source activate.sh && python examples/neural_operators/fno_darcy.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/fno_darcy.ipynb
+jupyter lab examples/neural_operators/fno_darcy.ipynb
 ```
 
 ## Core Concepts

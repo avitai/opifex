@@ -40,21 +40,21 @@ for certain solution modes.
 
 ## Files
 
-- **Python script**: [`examples/advanced-training/ntk_analysis.py`](https://github.com/avitai/opifex/blob/main/examples/advanced-training/ntk_analysis.py)
-- **Jupyter notebook**: [`examples/advanced-training/ntk_analysis.ipynb`](https://github.com/avitai/opifex/blob/main/examples/advanced-training/ntk_analysis.ipynb)
+- **Python script**: [`examples/advanced_training/ntk_analysis.py`](https://github.com/avitai/opifex/blob/main/examples/advanced_training/ntk_analysis.py)
+- **Jupyter notebook**: [`examples/advanced_training/ntk_analysis.ipynb`](https://github.com/avitai/opifex/blob/main/examples/advanced_training/ntk_analysis.ipynb)
 
 ## Quick Start
 
 ### Run the script
 
 ```bash
-source activate.sh && python examples/advanced-training/ntk_analysis.py
+source activate.sh && python examples/advanced_training/ntk_analysis.py
 ```
 
 ### Run the notebook
 
 ```bash
-source activate.sh && jupyter lab examples/advanced-training/ntk_analysis.ipynb
+source activate.sh && jupyter lab examples/advanced_training/ntk_analysis.ipynb
 ```
 
 ## Core Concepts

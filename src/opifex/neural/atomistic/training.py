@@ -8,7 +8,7 @@ conservative ``"forces"`` = ``-grad(E)``) and is trained against *both*. This
 module supplies that capability, reusing the shared optimiser stack
 (:func:`substrax.optim.create_optimizer` over an ``nnx.Optimizer``)
 and the ``nnx.value_and_grad`` + ``optimizer.update`` step idiom from
-``examples/quantum-chemistry/neural_xc_functional.py``.
+``examples/quantum_chemistry/neural_xc_functional.py``.
 
 The combined objective is the standard weighted energy + forces loss
 
@@ -350,7 +350,7 @@ def make_atomistic_train_step(
     The returned ``@nnx.jit`` step computes the weighted loss and its gradient
     with :func:`flax.nnx.value_and_grad`, applies the update in place via
     ``optimizer.update`` and returns the (pre-update) loss -- the
-    ``examples/quantum-chemistry/neural_xc_functional.py`` idiom.
+    ``examples/quantum_chemistry/neural_xc_functional.py`` idiom.
 
     Args:
         model: The model to optimise (its graphdef pins the static structure).

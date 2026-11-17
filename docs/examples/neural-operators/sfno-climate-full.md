@@ -59,21 +59,21 @@ Conservation-aware training is a key feature of this example. By configuring `Co
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/sfno_climate_comprehensive.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/sfno_climate_comprehensive.py)
-- **Jupyter Notebook**: [`examples/neural-operators/sfno_climate_comprehensive.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/sfno_climate_comprehensive.ipynb)
+- **Python Script**: [`examples/neural_operators/sfno_climate_comprehensive.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/sfno_climate_comprehensive.py)
+- **Jupyter Notebook**: [`examples/neural_operators/sfno_climate_comprehensive.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/sfno_climate_comprehensive.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/sfno_climate_comprehensive.py
+source activate.sh && python examples/neural_operators/sfno_climate_comprehensive.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/sfno_climate_comprehensive.ipynb
+jupyter lab examples/neural_operators/sfno_climate_comprehensive.ipynb
 ```
 
 ## Core Concepts

@@ -212,7 +212,7 @@ block loss (`qh9_block_loss`, `make_block_train_step`).
 ## Running the example
 
 ```bash
-uv run python examples/quantum-chemistry/hamiltonian_prediction.py
+uv run python examples/quantum_chemistry/hamiltonian_prediction.py
 ```
 
 No external download is required (the molecules are defined inline).

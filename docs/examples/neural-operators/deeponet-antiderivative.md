@@ -49,21 +49,21 @@ this workflow:
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/deeponet_antiderivative.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/deeponet_antiderivative.py)
-- **Jupyter Notebook**: [`examples/neural-operators/deeponet_antiderivative.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/deeponet_antiderivative.ipynb)
+- **Python Script**: [`examples/neural_operators/deeponet_antiderivative.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/deeponet_antiderivative.py)
+- **Jupyter Notebook**: [`examples/neural_operators/deeponet_antiderivative.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/deeponet_antiderivative.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/deeponet_antiderivative.py
+source activate.sh && python examples/neural_operators/deeponet_antiderivative.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/deeponet_antiderivative.ipynb
+jupyter lab examples/neural_operators/deeponet_antiderivative.ipynb
 ```
 
 ## Core Concepts
