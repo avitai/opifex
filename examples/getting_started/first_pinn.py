@@ -12,12 +12,11 @@
 """
 # Your First PINN: Solving the Poisson Equation
 
-| Property      | Value                                |
-|---------------|--------------------------------------|
-| Level         | Beginner                             |
-| Runtime       | ~30 seconds                          |
-| Memory        | ~500 MB                              |
-| Prerequisites | `source activate.sh`                 |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | Basic JAX and Flax NNX |
 
 ## Overview
 

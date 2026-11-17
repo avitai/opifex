@@ -12,6 +12,12 @@
 """
 # Equation Discovery with SINDy on the Lorenz System
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, ordinary differential equations, sparse regression |
+
 This example demonstrates how to use Opifex's JAX-native SINDy
 (Sparse Identification of Nonlinear Dynamics) to automatically
 discover governing equations from time-series data.

@@ -16,6 +16,12 @@
 """
 # Learn-to-Optimize (L2O): a meta-trained optimiser for neural-network training
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, gradient-based optimisation, evolution strategies |
+
 This example meta-trains a **learned optimiser** — a small neural network that *is* an optimiser
 update rule — and shows it generalising to held-out neural-network training problems where it
 beats a *properly tuned* classical optimiser.

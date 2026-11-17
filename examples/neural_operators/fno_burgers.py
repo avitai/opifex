@@ -12,12 +12,11 @@
 """
 # FNO on Burgers Equation
 
-| Property      | Value                                    |
-|---------------|------------------------------------------|
-| Level         | Intermediate                             |
-| Runtime       | ~3 min (CPU)                             |
-| Memory        | ~1 GB                                    |
-| Prerequisites | JAX, Flax NNX, Neural Operators basics   |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, neural operator basics |
 
 ## Overview
 

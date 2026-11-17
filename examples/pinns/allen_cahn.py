@@ -16,6 +16,12 @@
 """
 # Allen-Cahn Equation PINN
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics |
+
 This example demonstrates solving the Allen-Cahn equation using a
 Physics-Informed Neural Network (PINN). The Allen-Cahn equation is a
 reaction-diffusion PDE that models phase separation and interface dynamics

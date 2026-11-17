@@ -16,6 +16,12 @@
 """
 # Wave Equation PINN
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics |
+
 This example demonstrates solving the 1D wave equation using a Physics-Informed
 Neural Network (PINN). The wave equation describes propagation of waves in
 strings, acoustics, and electromagnetic fields.

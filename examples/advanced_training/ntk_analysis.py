@@ -16,6 +16,12 @@
 """
 # Neural Tangent Kernel (NTK) Analysis for PINNs
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics, eigenvalue analysis |
+
 This example demonstrates how to use the Neural Tangent Kernel to diagnose
 and understand PINN training dynamics. NTK analysis reveals spectral bias,
 predicts convergence rates, and identifies problematic modes.

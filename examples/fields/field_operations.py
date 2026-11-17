@@ -13,12 +13,10 @@
 # Field Operations: Differential Operators and Fluid Simulation
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Intermediate |
-| **Runtime** | ~20 s (GPU) / ~40 s (CPU) |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX, finite differences, vector calculus |
-| **Format** | Python + Jupyter |
-| **Memory** | ~0.5 GB |
 
 ## Overview
 

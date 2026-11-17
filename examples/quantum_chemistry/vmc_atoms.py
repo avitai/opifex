@@ -22,12 +22,11 @@
 """
 # Variational Monte Carlo: H, He and H2 ground states
 
-| Property      | Value                                                       |
-|---------------|-------------------------------------------------------------|
-| Level         | Advanced                                                    |
-| Runtime       | ~2 min (GPU, jit + lax.scan sampler)                        |
-| Memory        | ~2 GB                                                       |
-| Prerequisites | JAX, Flax NNX, variational Monte Carlo, neural wavefunctions |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, variational Monte Carlo, neural wavefunctions |
 
 ## Overview
 

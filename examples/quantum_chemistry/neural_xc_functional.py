@@ -16,6 +16,12 @@
 """
 # Training a Neural Exchange-Correlation Functional
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, density functional theory basics |
+
 This example demonstrates training a neural exchange-correlation (XC) functional
 from electron density data. Neural XC functionals can learn complex
 exchange-correlation energy patterns beyond traditional LDA/GGA approximations.

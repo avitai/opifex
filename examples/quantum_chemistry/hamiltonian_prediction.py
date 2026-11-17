@@ -22,12 +22,11 @@
 """
 # Equivariant DFT Hamiltonian Prediction (QHNet block form)
 
-| Property      | Value                                                       |
-|---------------|-------------------------------------------------------------|
-| Level         | Advanced                                                    |
-| Runtime       | ~1 min (GPU)                                                |
-| Memory        | ~2 GB                                                       |
-| Prerequisites | JAX, Flax NNX, SE(3)-equivariant networks, DFT/Hartree-Fock |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, SE(3)-equivariant networks, DFT/Hartree-Fock |
 
 ## Overview
 

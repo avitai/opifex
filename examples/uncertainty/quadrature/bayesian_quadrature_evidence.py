@@ -12,10 +12,10 @@
 """
 # Bayesian quadrature evidence: VanillaBQ vs WSABI-L vs Monte Carlo
 
-| Property | Value |
-|---|---|
-| **Level** | Intermediate |
-| **Runtime** | < 5 s (CPU) |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX |
 
 ## Overview

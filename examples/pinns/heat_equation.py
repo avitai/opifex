@@ -12,12 +12,11 @@
 """
 # Heat Equation PINN
 
-| Property      | Value                                |
-|---------------|--------------------------------------|
-| Level         | Intermediate                         |
-| Runtime       | ~1 min                               |
-| Memory        | ~500 MB                              |
-| Prerequisites | `source activate.sh`                 |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics |
 
 ## Overview
 

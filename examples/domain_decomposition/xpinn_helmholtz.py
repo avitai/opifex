@@ -16,6 +16,12 @@
 """
 # XPINN: Extended PINN on Viscous Burgers Equation
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics, domain decomposition |
+
 This example demonstrates solving the 1D viscous Burgers equation using XPINN
 (Extended Physics-Informed Neural Network). XPINNs use non-overlapping
 subdomains with explicit interface conditions for continuity and flux matching.

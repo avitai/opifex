@@ -22,11 +22,11 @@
 """
 # Neural Operator Comparison Tour
 
-| Property      | Value                                   |
-|---------------|-----------------------------------------|
-| **Level**     | Advanced                                |
-| **Runtime**   | ~10 min (CPU), ~3 min (GPU)             |
-| **Prerequisites** | JAX, Flax NNX, Neural Operators     |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, neural operators |
 
 ## Overview
 

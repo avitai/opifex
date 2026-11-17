@@ -12,11 +12,11 @@
 """
 # Simple SFNO for Climate Modeling
 
-| Property      | Value                                        |
-|---------------|----------------------------------------------|
-| Level         | Intermediate                                 |
-| Runtime       | ~3 min (CPU/GPU)                             |
-| Prerequisites | JAX, Flax NNX, Spherical Harmonics basics    |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, spherical harmonics basics |
 
 ## Overview
 This example demonstrates the Spherical Fourier Neural Operator (SFNO) for climate

@@ -16,6 +16,12 @@
 """
 # Euler-Bernoulli Beam PINN
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics |
+
 This example demonstrates solving the Euler-Bernoulli beam equation using a PINN.
 This is a fourth-order ODE from structural mechanics describing beam deflection.
 

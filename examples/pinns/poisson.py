@@ -16,6 +16,12 @@
 """
 # Poisson Equation PINN
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics |
+
 This example demonstrates solving the 2D Poisson equation using a
 Physics-Informed Neural Network (PINN). The Poisson equation is
 fundamental to electrostatics, heat conduction, and potential flow.

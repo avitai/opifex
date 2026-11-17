@@ -12,12 +12,11 @@
 """
 # Distributed Data-Parallel Operator Learning
 
-| Property      | Value                                        |
-|---------------|----------------------------------------------|
-| Level         | Intermediate                                 |
-| Runtime       | ~1-2 min (1 GPU); faster per-step on 2+ GPUs |
-| Memory        | ~2 GB                                        |
-| Prerequisites | `source activate.sh`                         |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, the FNO on Darcy example, JAX device meshes |
 
 ## Overview
 

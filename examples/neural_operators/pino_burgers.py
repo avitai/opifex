@@ -12,12 +12,11 @@
 """
 # Physics-Informed Neural Operator (PINO) on Burgers Equation
 
-| Property      | Value                                    |
-|---------------|------------------------------------------|
-| Level         | Advanced                                 |
-| Runtime       | ~3 min (CPU) / ~1-2 min (GPU)           |
-| Memory        | ~2 GB                                    |
-| Prerequisites | JAX, Flax NNX, FNO, PDEs basics          |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, FNO, PDE basics |
 
 ## Overview
 

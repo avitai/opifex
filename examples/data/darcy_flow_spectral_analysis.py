@@ -13,11 +13,10 @@
 # Darcy Flow Spectral Analysis
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Advanced |
-| **Runtime** | ~3 min (CPU) |
-| **Prerequisites** | JAX, FFT/Spectral Analysis basics |
-| **Format** | Python + Jupyter |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, FFT and spectral analysis basics |
 
 ## Overview
 

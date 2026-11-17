@@ -16,6 +16,12 @@
 """
 # Residual-based Adaptive Sampling for PINNs
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, PINN basics |
+
 This example demonstrates how to use Residual-based Adaptive Distribution (RAD)
 sampling for more efficient PINN training. RAD concentrates collocation points
 in regions with high PDE residual.

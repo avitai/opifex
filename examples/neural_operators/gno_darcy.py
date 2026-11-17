@@ -16,6 +16,12 @@
 """
 # GNO on Darcy Flow
 
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, neural operator basics, graph message passing |
+
 This example demonstrates training a Graph Neural Operator (GNO) on the
 Darcy flow problem. GNO uses message passing neural networks to learn
 operators on irregular domains, making it suitable for problems with

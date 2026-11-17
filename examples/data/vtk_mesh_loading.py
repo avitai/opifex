@@ -17,12 +17,10 @@
 # VTK Mesh Loading: Batching Irregular Meshes on datarax
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Intermediate |
-| **Runtime** | ~20 s (GPU) / ~40 s (CPU) |
+| --- | --- |
+| **Tier** | Tutorial |
+| **Devices** | CPU-compatible |
 | **Prerequisites** | JAX, meshio, unstructured meshes, GNN batching |
-| **Format** | Python + Jupyter |
-| **Memory** | ~0.5 GB |
 
 ## Overview
 

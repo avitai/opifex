@@ -12,11 +12,11 @@
 """
 # Full SFNO for Climate Modeling
 
-| Property    | Value                                                  |
-|-------------|--------------------------------------------------------|
-| Level       | Advanced                                               |
-| Runtime     | ~10 min (CPU/GPU)                                      |
-| Prerequisites | JAX, Flax NNX, Spherical Harmonics, Conservation Laws |
+| Metadata | Value |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | CPU-compatible |
+| **Prerequisites** | JAX, Flax NNX, spherical harmonics, conservation laws |
 
 ## Overview
 This example demonstrates full Spherical FNO functionality for climate

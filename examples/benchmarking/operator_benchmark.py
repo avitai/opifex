@@ -23,11 +23,10 @@
 # Neural Operator Comparative Benchmark
 
 | Metadata | Value |
-|----------|-------|
-| **Level** | Advanced |
-| **Runtime** | ~15 min (CPU/GPU) |
-| **Prerequisites** | JAX, Flax NNX, Neural Operators, Benchmarking |
-| **Format** | Python + Jupyter |
+| --- | --- |
+| **Tier** | Advanced Guide |
+| **Devices** | GPU-optional |
+| **Prerequisites** | JAX, Flax NNX, neural operators, benchmarking |
 
 ## Overview
 
