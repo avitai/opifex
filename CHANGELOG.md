@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cells written as comments in 19 examples change form, their text unchanged; `data/` examples
   open with their title cell, without a shebang line; `data/darcy_flow_analysis.py` reads no
   command-line arguments, its sizes being named constants, and `main()` takes none.
+- The examples make typed keys with `jax.random.key`, never `jax.random.PRNGKey` (32 examples),
+  and each random draw has its own key: `quantum_chemistry/neural_xc_functional.py` drew the
+  centre count and the electron count from one key, `uncertainty/calibration.py` its features,
+  noise, labels and targets, and its predictions and uncertainties, and
+  `advanced_training/ntk_analysis.py` sampled a key it then split.
+  `data/darcy_flow_spectral_analysis.py` generated its data with seed 0 whatever key it was given,
+  the first word of a raw key below 2**32; it now takes the seed itself, 42.
 - Require `calibrax>=0.1.20` and `substrax>=0.1.28`; the `test` extra installs
   `substrax[notebooks,testing]`, which brings the notebook kernel and converter, so `ipykernel`
   and `jupytext` leave `dev`.

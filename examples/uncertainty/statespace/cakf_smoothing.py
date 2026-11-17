@@ -108,7 +108,7 @@ def _simulate(
 # %%
 def main() -> dict[str, jax.Array | float | int]:
     """Compare CAKF posterior mean against exact Kalman on sparse obs."""
-    rng_key = jax.random.PRNGKey(0)
+    rng_key = jax.random.key(0)
     num_steps = 24
     (
         transitions,

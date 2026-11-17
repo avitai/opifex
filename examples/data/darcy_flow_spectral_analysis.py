@@ -169,14 +169,11 @@ def analyze_darcy_spectral_properties(
     n_samples: int = 50,
     resolutions: list[int] | None = None,
     viscosity_range: tuple[float, float] = (1e-5, 1e-3),
-    key: jax.Array | None = None,
+    seed: int = 42,
 ) -> dict[str, Any]:
     """Analyze spectral properties of Darcy flow fields across resolutions."""
     if resolutions is None:
         resolutions = [64, 128]
-
-    if key is None:
-        key = jax.random.PRNGKey(42)
 
     print("Darcy Flow Spectral Analysis - Opifex Framework")
     print("=" * 60)
@@ -196,9 +193,7 @@ def analyze_darcy_spectral_properties(
         # channels-first ``(N, 1, H, W)``; drop the channel axis for the 2D
         # spectral analysis below.
         start_time = time.time()
-        data = generate_darcy(
-            n_samples=min(n_samples, 100), resolution=resolution, seed=int(key[0])
-        )
+        data = generate_darcy(n_samples=min(n_samples, 100), resolution=resolution, seed=seed)
         train_inputs = jnp.asarray(data["input"][:, 0])
         train_outputs = jnp.asarray(data["output"][:, 0])
         generation_time = time.time() - start_time
@@ -526,9 +521,6 @@ def main(output_dir: str | Path | None = None) -> dict[str, float]:
         "viscosity_range": (1e-5, 1e-3),
     }
 
-    # Set random seed for reproducibility
-    key = jax.random.PRNGKey(42)
-
     try:
         # Step 1: Spectral Analysis
         print("Step 1: Spectral Properties Analysis")
@@ -536,7 +528,7 @@ def main(output_dir: str | Path | None = None) -> dict[str, float]:
             n_samples=config["n_samples"],
             resolutions=config["resolutions"],
             viscosity_range=config["viscosity_range"],
-            key=key,
+            seed=42,
         )
 
         # Step 2: Visualization

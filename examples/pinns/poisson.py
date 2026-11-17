@@ -229,7 +229,7 @@ def main() -> dict[str, float | int]:
     n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn, nnx.Param)))
     print(f"PINN parameters: {n_params:,}")
 
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     key_interior, key_boundary = jax.random.split(key)
 
     # Interior points (uniform in [0, 1]^2)

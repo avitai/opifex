@@ -118,8 +118,8 @@ def build_precision_matvec(
 # %%
 def main() -> dict[str, jax.Array | float | int]:
     """Estimate log-det and Fisher trace of a tiny PINN-style classifier."""
-    rng_key = jax.random.PRNGKey(0)
-    rngs = nnx.Rngs(params=jax.random.PRNGKey(1))
+    rng_key = jax.random.key(0)
+    rngs = nnx.Rngs(params=jax.random.key(1))
     in_features, out_features, batch_size = 4, 3, 16
     head = TinyBayesianHead(in_features, out_features, rngs=rngs)
 

@@ -263,7 +263,7 @@ def main() -> dict[str, float | int]:
     n_params = sum(x.size for x in jax.tree_util.tree_leaves(nnx.state(pinn, nnx.Param)))
     print(f"PINN parameters: {n_params:,}")
 
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     x_domain = jax.random.uniform(key, (N_DOMAIN,), minval=X_MIN, maxval=X_MAX).reshape(-1, 1)
     x_left = jnp.zeros((N_BOUNDARY // 2, 1))  # x = 0
     x_right = jnp.ones((N_BOUNDARY // 2, 1))  # x = 1

@@ -77,7 +77,7 @@ GROUND_TRUTH = 1.0 / jnp.sqrt(2.0)
 # %%
 def main() -> dict[str, jax.Array | float]:
     """Compare VanillaBQ + WSABI-L vs MC against the closed-form Z."""
-    rng_key = jax.random.PRNGKey(0)
+    rng_key = jax.random.key(0)
     num_points = 16
 
     sample_key = rng_key

@@ -61,21 +61,23 @@ from opifex.uncertainty.conformal import SplitConformalRegressor
 # %%
 def generate_synthetic_data(key, n_samples=1000):
     """Generate synthetic data for calibration demonstration."""
+    feature_key, noise_key, label_key, target_key = jax.random.split(key, 4)
+
     # Generate features
-    X = jax.random.normal(key, (n_samples, 2))
+    X = jax.random.normal(feature_key, (n_samples, 2))
 
     # Generate logits with some predictive signal
     true_logits = 0.5 * X[:, 0] - 0.3 * X[:, 1] + 0.2 * jnp.sin(X[:, 0])
 
     # Add noise to create miscalibrated predictions
-    noisy_logits = true_logits + 0.3 * jax.random.normal(key, (n_samples,))
+    noisy_logits = true_logits + 0.3 * jax.random.normal(noise_key, (n_samples,))
 
     # Generate binary labels based on true logits
     probabilities = jax.nn.sigmoid(true_logits)
-    labels = jax.random.bernoulli(key, probabilities)
+    labels = jax.random.bernoulli(label_key, probabilities)
 
     # Generate regression targets for conformal prediction demo
-    regression_targets = true_logits + 0.2 * jax.random.normal(key, (n_samples,))
+    regression_targets = true_logits + 0.2 * jax.random.normal(target_key, (n_samples,))
 
     return X, noisy_logits, labels, regression_targets
 
@@ -94,7 +96,7 @@ def demonstrate_platt_scaling():
     print("=" * 50)
 
     # Initialize components
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     rngs = nnx.Rngs(42)
 
     # Generate data
@@ -160,7 +162,7 @@ def demonstrate_isotonic_regression():
     print("=" * 50)
 
     # Initialize components
-    key = jax.random.PRNGKey(123)
+    key = jax.random.key(123)
     rngs = nnx.Rngs(123)
 
     # Generate data with non-linear calibration needs
@@ -240,7 +242,7 @@ def demonstrate_conformal_prediction():
     print("=" * 50)
 
     # Initialize components
-    key = jax.random.PRNGKey(456)
+    key = jax.random.key(456)
     rngs = nnx.Rngs(456)
 
     # Generate regression data
@@ -296,7 +298,7 @@ def demonstrate_enhanced_temperature_scaling():
     print("=" * 50)
 
     # Initialize components
-    key = jax.random.PRNGKey(789)
+    key = jax.random.key(789)
     rngs = nnx.Rngs(789)
 
     # Generate data
@@ -356,11 +358,11 @@ def demonstrate_integrated_calibration_pipeline():
     print("=" * 50)
 
     # Initialize components
-    key = jax.random.PRNGKey(999)
+    data_key, prediction_key, uncertainty_key = jax.random.split(jax.random.key(999), 3)
     rngs = nnx.Rngs(999)
 
     # Generate full dataset
-    X, logits, labels, targets = generate_synthetic_data(key, n_samples=1000)
+    X, logits, labels, targets = generate_synthetic_data(data_key, n_samples=1000)
 
     # Split data into train/calib/test
     _train_X, _calib_X, test_X = X[:400], X[400:700], X[700:]
@@ -386,8 +388,8 @@ def demonstrate_integrated_calibration_pipeline():
     calibration_tools = CalibrationTools(rngs=rngs)
 
     # Convert logits to predictions for regression assessment
-    regression_preds = train_logits + 0.1 * jax.random.normal(key, train_logits.shape)
-    uncertainties = jnp.abs(0.2 * jax.random.normal(key, train_logits.shape)) + 0.1
+    regression_preds = train_logits + 0.1 * jax.random.normal(prediction_key, train_logits.shape)
+    uncertainties = jnp.abs(0.2 * jax.random.normal(uncertainty_key, train_logits.shape)) + 0.1
 
     initial_metrics = calibration_tools.assess_calibration(
         regression_preds, uncertainties, train_targets, num_bins=10
