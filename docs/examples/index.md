@@ -44,7 +44,7 @@ Data-driven operator learning: map input functions to output functions.
 | [Operator Comparison Tour](neural-operators/operator-tour.md) | All architectures | Multiple | Overview of all 26 operators |
 
 ```bash
-python examples/neural-operators/fno_darcy.py
+python examples/neural_operators/fno_darcy.py
 ```
 
 ---
@@ -84,7 +84,7 @@ Parallel and decomposed PINNs for large-scale problems.
 | [CPINN on Advection-Diffusion](domain-decomposition/cpinn-advection-diffusion.md) | Conservative PINN | Flux conservation at interfaces |
 
 ```bash
-python examples/domain-decomposition/fbpinn_poisson.py
+python examples/domain_decomposition/fbpinn_poisson.py
 ```
 
 ---
@@ -100,7 +100,7 @@ Techniques for improving PINN training dynamics and convergence.
 | [Adaptive Sampling](advanced-training/adaptive-sampling.md) | RAR-D Refinement | Residual-based collocation point refinement |
 
 ```bash
-python examples/advanced-training/ntk_analysis.py
+python examples/advanced_training/ntk_analysis.py
 ```
 
 ---
@@ -145,7 +145,7 @@ Neural approaches to density functional theory.
 | [Neural XC Functional](quantum-chemistry/neural-xc-functional.md) | Learned Exchange-Correlation | Training on LDA reference |
 
 ```bash
-python examples/quantum-chemistry/neural_xc_functional.py
+python examples/quantum_chemistry/neural_xc_functional.py
 ```
 
 ---

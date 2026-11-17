@@ -236,7 +236,7 @@ the Bohr radius `r = 1`.
 ## Running the example
 
 ```bash
-uv run python examples/quantum-chemistry/vmc_atoms.py
+uv run python examples/quantum_chemistry/vmc_atoms.py
 ```
 
 The run is self-contained — no dataset download. It enables float64 and pins the

@@ -48,21 +48,21 @@ satisfied.
 
 ## Files
 
-- **Python Script**: [`examples/domain-decomposition/fbpinn_poisson.py`](https://github.com/avitai/opifex/blob/main/examples/domain-decomposition/fbpinn_poisson.py)
-- **Jupyter Notebook**: [`examples/domain-decomposition/fbpinn_poisson.ipynb`](https://github.com/avitai/opifex/blob/main/examples/domain-decomposition/fbpinn_poisson.ipynb)
+- **Python Script**: [`examples/domain_decomposition/fbpinn_poisson.py`](https://github.com/avitai/opifex/blob/main/examples/domain_decomposition/fbpinn_poisson.py)
+- **Jupyter Notebook**: [`examples/domain_decomposition/fbpinn_poisson.ipynb`](https://github.com/avitai/opifex/blob/main/examples/domain_decomposition/fbpinn_poisson.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/domain-decomposition/fbpinn_poisson.py
+source activate.sh && python examples/domain_decomposition/fbpinn_poisson.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/domain-decomposition/fbpinn_poisson.ipynb
+jupyter lab examples/domain_decomposition/fbpinn_poisson.ipynb
 ```
 
 ## Core Concepts

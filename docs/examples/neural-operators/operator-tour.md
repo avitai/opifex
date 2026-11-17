@@ -53,21 +53,21 @@ this workflow:
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/operator_tour.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/operator_tour.py)
-- **Jupyter Notebook**: [`examples/neural-operators/operator_tour.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/operator_tour.ipynb)
+- **Python Script**: [`examples/neural_operators/operator_tour.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/operator_tour.py)
+- **Jupyter Notebook**: [`examples/neural_operators/operator_tour.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/operator_tour.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/operator_tour.py
+source activate.sh && python examples/neural_operators/operator_tour.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/operator_tour.ipynb
+jupyter lab examples/neural_operators/operator_tour.ipynb
 ```
 
 ## Core Concepts

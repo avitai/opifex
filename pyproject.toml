@@ -938,7 +938,7 @@ outputs_volume = "opifex-example-outputs"
 # 3 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-advanced-training]
 command_timeout_seconds = 3600
-examples = ["examples/advanced-training"]
+examples = ["examples/advanced_training"]
 examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
 resources = {accelerator = {kind = "L4"}}
@@ -998,7 +998,7 @@ timeout_seconds = 3600
 # 3 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-domain-decomposition]
 command_timeout_seconds = 3600
-examples = ["examples/domain-decomposition"]
+examples = ["examples/domain_decomposition"]
 examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
 resources = {accelerator = {kind = "L4"}}
@@ -1018,7 +1018,7 @@ timeout_seconds = 3600
 # 2 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-getting-started]
 command_timeout_seconds = 3600
-examples = ["examples/getting-started"]
+examples = ["examples/getting_started"]
 examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
 resources = {accelerator = {kind = "L4"}}
@@ -1038,7 +1038,7 @@ timeout_seconds = 14400
 # 14 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-neural-operators]
 command_timeout_seconds = 3600
-examples = ["examples/neural-operators"]
+examples = ["examples/neural_operators"]
 examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
 resources = {accelerator = {kind = "L4"}}
@@ -1068,7 +1068,7 @@ timeout_seconds = 39600
 # 3 examples; an hour each, run in order.
 [tool.substrax.compute.jobs.examples-quantum-chemistry]
 command_timeout_seconds = 3600
-examples = ["examples/quantum-chemistry"]
+examples = ["examples/quantum_chemistry"]
 examples_mode = "test"
 extras = ["cuda12", "dev", "test", "neural-dft", "quantum-chemistry"]
 resources = {accelerator = {kind = "L4"}}
@@ -1098,10 +1098,10 @@ source_url = "https://github.com/avitai/opifex/blob/main"
 
 [tool.substrax.examples.budgets]
 # Python 3.12 time, then 3.13.
-"examples/advanced-training/adaptive_sampling.py" = 300 # 131.5 s, 239.5 s
-"examples/domain-decomposition/cpinn_advection_diffusion.py" = 300 # 33.3 s, 65.8 s
-"examples/domain-decomposition/xpinn_helmholtz.py" = 300 # 39.6 s, 78.2 s
-"examples/neural-operators/deeponet_antiderivative.py" = 300 # 100.7 s, 204.0 s
+"examples/advanced_training/adaptive_sampling.py" = 300 # 131.5 s, 239.5 s
+"examples/domain_decomposition/cpinn_advection_diffusion.py" = 300 # 33.3 s, 65.8 s
+"examples/domain_decomposition/xpinn_helmholtz.py" = 300 # 39.6 s, 78.2 s
+"examples/neural_operators/deeponet_antiderivative.py" = 300 # 100.7 s, 204.0 s
 "examples/optimization/learn_to_optimize.py" = 300 # 66.5 s, 126.3 s
 "examples/optimization/meta_optimization.py" = 300 # 79.8 s, 133.4 s
 "examples/pinns/allen_cahn.py" = 300 # 127.4 s, 227.0 s

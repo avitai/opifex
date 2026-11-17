@@ -29,13 +29,13 @@ input and output are both two-channel fields holding the $(u, v)$ velocity compo
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/fno_navier_stokes.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_navier_stokes.py)
-- **Jupyter Notebook**: [`examples/neural-operators/fno_navier_stokes.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_navier_stokes.ipynb)
+- **Python Script**: [`examples/neural_operators/fno_navier_stokes.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/fno_navier_stokes.py)
+- **Jupyter Notebook**: [`examples/neural_operators/fno_navier_stokes.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/fno_navier_stokes.ipynb)
 
 ## Quick Start
 
 ```bash
-source activate.sh && python examples/neural-operators/fno_navier_stokes.py
+source activate.sh && python examples/neural_operators/fno_navier_stokes.py
 ```
 
 ## Key Concepts

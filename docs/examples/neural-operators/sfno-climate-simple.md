@@ -48,21 +48,21 @@ a spherical neural operator.
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/sfno_climate_simple.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/sfno_climate_simple.py)
-- **Jupyter Notebook**: [`examples/neural-operators/sfno_climate_simple.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/sfno_climate_simple.ipynb)
+- **Python Script**: [`examples/neural_operators/sfno_climate_simple.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/sfno_climate_simple.py)
+- **Jupyter Notebook**: [`examples/neural_operators/sfno_climate_simple.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/sfno_climate_simple.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/sfno_climate_simple.py
+source activate.sh && python examples/neural_operators/sfno_climate_simple.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/sfno_climate_simple.ipynb
+jupyter lab examples/neural_operators/sfno_climate_simple.ipynb
 ```
 
 ## Core Concepts

@@ -58,21 +58,21 @@ If you are familiar with the neuraloperator library:
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/gno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/gno_darcy.py)
-- **Jupyter Notebook**: [`examples/neural-operators/gno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/gno_darcy.ipynb)
+- **Python Script**: [`examples/neural_operators/gno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/gno_darcy.py)
+- **Jupyter Notebook**: [`examples/neural_operators/gno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/gno_darcy.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/gno_darcy.py
+source activate.sh && python examples/neural_operators/gno_darcy.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/gno_darcy.ipynb
+jupyter lab examples/neural_operators/gno_darcy.ipynb
 ```
 
 ## Core Concepts

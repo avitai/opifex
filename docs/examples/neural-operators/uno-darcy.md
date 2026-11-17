@@ -56,21 +56,21 @@ compares:
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/uno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/uno_darcy.py)
-- **Jupyter Notebook**: [`examples/neural-operators/uno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/uno_darcy.ipynb)
+- **Python Script**: [`examples/neural_operators/uno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/uno_darcy.py)
+- **Jupyter Notebook**: [`examples/neural_operators/uno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/uno_darcy.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/uno_darcy.py
+source activate.sh && python examples/neural_operators/uno_darcy.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/uno_darcy.ipynb
+jupyter lab examples/neural_operators/uno_darcy.ipynb
 ```
 
 ## Core Concepts

@@ -56,21 +56,21 @@ spectral analysis of the velocity-magnitude field.
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/ufno_turbulence.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/ufno_turbulence.py)
-- **Jupyter Notebook**: [`examples/neural-operators/ufno_turbulence.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/ufno_turbulence.ipynb)
+- **Python Script**: [`examples/neural_operators/ufno_turbulence.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/ufno_turbulence.py)
+- **Jupyter Notebook**: [`examples/neural_operators/ufno_turbulence.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/ufno_turbulence.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/ufno_turbulence.py
+source activate.sh && python examples/neural_operators/ufno_turbulence.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/ufno_turbulence.ipynb
+jupyter lab examples/neural_operators/ufno_turbulence.ipynb
 ```
 
 ## Core Concepts

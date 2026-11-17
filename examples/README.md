@@ -15,14 +15,14 @@ python -c "import opifex; print('Opifex imported successfully')"
 
 | Directory | Count | Description |
 |-----------|-------|-------------|
-| [`getting-started/`](getting-started/) | 2 | Minimal first examples for FNO and PINNs |
-| [`neural-operators/`](neural-operators/) | 14 | FNO, DeepONet, SFNO, U-FNO, UNO, TFNO, GNO, PINO, and more |
+| [`getting_started/`](getting_started/) | 2 | Minimal first examples for FNO and PINNs |
+| [`neural_operators/`](neural_operators/) | 14 | FNO, DeepONet, SFNO, U-FNO, UNO, TFNO, GNO, PINO, and more |
 | [`pinns/`](pinns/) | 11 | Physics-informed neural networks for various PDEs |
-| [`domain-decomposition/`](domain-decomposition/) | 3 | FBPINN, XPINN, CPINN for parallel PDE solving |
-| [`advanced-training/`](advanced-training/) | 3 | NTK analysis, GradNorm, adaptive sampling |
+| [`domain_decomposition/`](domain_decomposition/) | 3 | FBPINN, XPINN, CPINN for parallel PDE solving |
+| [`advanced_training/`](advanced_training/) | 3 | NTK analysis, GradNorm, adaptive sampling |
 | [`optimization/`](optimization/) | 2 | Learn-to-optimize and meta-optimization (MAML/Reptile) |
 | [`uncertainty/`](uncertainty/) | 3 | Calibration, UQNO, Bayesian FNO |
-| [`quantum-chemistry/`](quantum-chemistry/) | 2 | Neural DFT and neural XC functionals |
+| [`quantum_chemistry/`](quantum_chemistry/) | 2 | Neural DFT and neural XC functionals |
 | [`layers/`](layers/) | 4 | DISCO convolutions, grid embeddings, Fourier continuation, spectral norm |
 | [`data/`](data/) | 3 | Darcy flow analysis, spectral analysis, PDEBench loading |
 | [`benchmarking/`](benchmarking/) | 2 | Operator benchmarks and GPU profiling |
@@ -41,13 +41,13 @@ Each `.py` file has a corresponding `.ipynb` notebook.
 source ./activate.sh
 
 # Getting started
-python getting-started/first_neural_operator.py
-python getting-started/first_pinn.py
+python getting_started/first_neural_operator.py
+python getting_started/first_pinn.py
 
 # Neural operators
-python neural-operators/fno_darcy.py
-python neural-operators/deeponet_darcy.py
-python neural-operators/operator_tour.py
+python neural_operators/fno_darcy.py
+python neural_operators/deeponet_darcy.py
+python neural_operators/operator_tour.py
 
 # PINNs
 python pinns/poisson.py

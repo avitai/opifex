@@ -46,21 +46,21 @@ If you are familiar with the neuraloperator library, here is how Opifex TFNO com
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/tfno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/tfno_darcy.py)
-- **Jupyter Notebook**: [`examples/neural-operators/tfno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/tfno_darcy.ipynb)
+- **Python Script**: [`examples/neural_operators/tfno_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/tfno_darcy.py)
+- **Jupyter Notebook**: [`examples/neural_operators/tfno_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/tfno_darcy.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/tfno_darcy.py
+source activate.sh && python examples/neural_operators/tfno_darcy.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/tfno_darcy.ipynb
+jupyter lab examples/neural_operators/tfno_darcy.ipynb
 ```
 
 ## Core Concepts

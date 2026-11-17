@@ -48,21 +48,21 @@ If you are familiar with the neuraloperator library's DeepONet implementation:
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/deeponet_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/deeponet_darcy.py)
-- **Jupyter Notebook**: [`examples/neural-operators/deeponet_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/deeponet_darcy.ipynb)
+- **Python Script**: [`examples/neural_operators/deeponet_darcy.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/deeponet_darcy.py)
+- **Jupyter Notebook**: [`examples/neural_operators/deeponet_darcy.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/deeponet_darcy.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/deeponet_darcy.py
+source activate.sh && python examples/neural_operators/deeponet_darcy.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/deeponet_darcy.ipynb
+jupyter lab examples/neural_operators/deeponet_darcy.ipynb
 ```
 
 ## Core Concepts

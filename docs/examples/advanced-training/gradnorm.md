@@ -40,21 +40,21 @@ which use loss ratios.
 
 ## Files
 
-- **Python script**: [`examples/advanced-training/gradnorm.py`](https://github.com/avitai/opifex/blob/main/examples/advanced-training/gradnorm.py)
-- **Jupyter notebook**: [`examples/advanced-training/gradnorm.ipynb`](https://github.com/avitai/opifex/blob/main/examples/advanced-training/gradnorm.ipynb)
+- **Python script**: [`examples/advanced_training/gradnorm.py`](https://github.com/avitai/opifex/blob/main/examples/advanced_training/gradnorm.py)
+- **Jupyter notebook**: [`examples/advanced_training/gradnorm.ipynb`](https://github.com/avitai/opifex/blob/main/examples/advanced_training/gradnorm.ipynb)
 
 ## Quick Start
 
 ### Run the script
 
 ```bash
-source activate.sh && python examples/advanced-training/gradnorm.py
+source activate.sh && python examples/advanced_training/gradnorm.py
 ```
 
 ### Run the notebook
 
 ```bash
-source activate.sh && jupyter lab examples/advanced-training/gradnorm.ipynb
+source activate.sh && jupyter lab examples/advanced_training/gradnorm.ipynb
 ```
 
 ## Core Concepts
