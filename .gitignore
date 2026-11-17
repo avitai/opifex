@@ -483,14 +483,6 @@ DOCUMENTATION_*.md
 *_REFACTORING_PLAN.md
 *_SUMMARY.md
 
-# Internal documentation and style guides (should not be in public docs nav)
-docs/GPU_TESTING_SOLUTION.md
-docs/STYLE_GUIDE.md
-docs/development-setup.md
-docs/development/breaking-changes.md
-docs/development/nnx-migration.md
-
-
 # Deployment infrastructure (auto-generated scaffolding)
 /deployment/
 /k8s-manifests/
