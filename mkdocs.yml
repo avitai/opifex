@@ -202,6 +202,7 @@ nav:
       - Architecture: development/architecture.md
       - Code Quality: development/code-quality.md
       - NequIP Symmetric Contraction: development/nequip-symmetric-contraction.md
+      - Censored Conformal Prediction: clean_room_specs/censored_conformal_prediction.md
       - Writing Examples: https://substrax.readthedocs.io/en/latest/guides/writing-examples/
   - Deployment:
       - Local Development: deployment/local-development.md

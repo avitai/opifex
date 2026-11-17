@@ -68,6 +68,8 @@ from opifex.uncertainty.conformal.fields import (
     FieldSplitConformalState,
 )
 from opifex.uncertainty.conformal.regression import (
+    CensoredConformalState,
+    CensoredSplitConformalRegressor,
     ConformalizedQuantileRegressor,
     CQRState,
     GroupedSplitConformalRegressor,
@@ -87,7 +89,10 @@ from opifex.uncertainty.conformal.scores import (
     absolute_residual_score,
     conformal_quantile,
     cqr_score,
+    effective_sample_size,
+    ipcw_conformal_quantile,
     minimum_calibration_size,
+    signed_lower_residual_score,
 )
 from opifex.uncertainty.conformal.time_series import (
     aci_metadata,
@@ -103,6 +108,8 @@ from opifex.uncertainty.types import PredictionInterval, PredictionSet
 __all__ = [
     "AdaptiveConformalState",
     "CQRState",
+    "CensoredConformalState",
+    "CensoredSplitConformalRegressor",
     "ConformalScore",
     "ConformalizedQuantileRegressor",
     "EnbPIState",
@@ -129,12 +136,14 @@ __all__ = [
     "conformal_quantile",
     "cqr_score",
     "cv_plus_intervals",
+    "effective_sample_size",
     "enbpi_predict",
     "enbpi_update",
     "field_h1_score",
     "field_l2_score",
     "field_linf_score",
     "hoeffding_upper_bound",
+    "ipcw_conformal_quantile",
     "jackknife_plus_intervals",
     "ks_two_sample_pvalue",
     "lac_score",
@@ -142,6 +151,7 @@ __all__ = [
     "raps_score",
     "rcps_threshold_kernel",
     "select_threshold_rcps",
+    "signed_lower_residual_score",
     "weighted_conformal_quantile",
     "weighted_split_conformal_intervals",
 ]
