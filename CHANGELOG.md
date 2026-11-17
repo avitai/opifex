@@ -78,6 +78,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `HyperbolicManifold.geodesic_distance` measures with calibrax's `poincare_distance`,
+  `2 asinh(sqrt(t))`, scaled by the radius, in place of its own `arccosh(1 + 2t)`: a pair
+  1e-5 apart read 0 in float32 and now reads 2.1e-5, and identical points have a zero gradient
+  where they had NaN. `parallel_transport` therefore rescales pairs 1e-7 or more apart that it
+  treated as one point. A point projected onto the disk's edge (norm `1 - 1e-6`) is 13.34 from
+  the origin, not 14.50, at calibrax's floor on `1 - |x|^2`.
 - `cakf_update` clamps `max_iter` to the observation dimension, where iterations beyond it lost
   their column, and stops once the residual norm is at most `max(abstol, reltol * ||y||)`, as the
   reference's `update` does.

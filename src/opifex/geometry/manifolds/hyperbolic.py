@@ -6,8 +6,11 @@ with gyrovector space formalism for scientific machine learning applications.
 
 from __future__ import annotations
 
+from functools import partial
+
 import jax
 import jax.numpy as jnp
+from calibrax.metrics.functional import poincare_distance
 from jaxtyping import Float  # noqa: TC002
 
 from opifex.geometry.manifolds.base import (  # noqa: TC001
@@ -159,32 +162,27 @@ class HyperbolicManifold:
     ) -> Float[jax.Array, ...]:
         """Compute geodesic distance between points in hyperbolic space.
 
+        The distance in the unit disk is calibrax's ``poincare_distance`` at curvature 1,
+        ``2 asinh(sqrt(t))``, scaled by the radius of curvature. A close pair keeps its
+        distance and identical points are exactly 0 with a zero gradient.
+
         Args:
-            point1: First point in Poincaré disk
-            point2: Second point in Poincaré disk
+            point1: First point in Poincaré disk, with any leading axes
+            point2: Second point in Poincaré disk, the same shape as ``point1``
 
         Returns:
-            Hyperbolic geodesic distance
+            Hyperbolic geodesic distance of each pair, of shape ``point1.shape[:-1]``
         """
         point1 = self._validate_point(point1)
         point2 = self._validate_point(point2)
 
-        # Poincaré distance formula
-        diff = point1 - point2
-        diff_norm_sq = jnp.sum(diff * diff, axis=-1)
-
-        p1_norm_sq = jnp.sum(point1 * point1, axis=-1)
-        p2_norm_sq = jnp.sum(point2 * point2, axis=-1)
-
-        # Avoid division by zero
-        denominator = (1 - p1_norm_sq) * (1 - p2_norm_sq)
-        safe_denominator = jnp.where(denominator > 1e-8, denominator, 1e-8)
-
-        # Hyperbolic distance formula
-        ratio = 1 + 2 * diff_norm_sq / safe_denominator
-        clamped_ratio = jnp.clip(ratio, 1.0, jnp.inf)
-
-        return self.radius * jnp.arccosh(clamped_ratio)
+        # poincare_distance returns the mean over the rows of 2-D input, so each pair is
+        # measured on its own over the flattened leading axes.
+        dim = point1.shape[-1]
+        pair_distances = jax.vmap(partial(poincare_distance, curvature=1.0))(
+            point1.reshape(-1, dim), point2.reshape(-1, dim)
+        )
+        return self.radius * pair_distances.reshape(point1.shape[:-1])
 
     def metric_tensor(self, point: ManifoldPoint) -> MetricTensor:
         """Hyperbolic metric tensor in Poincaré disk coordinates.
