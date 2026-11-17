@@ -206,7 +206,7 @@ def main() -> dict[str, float | int]:
     print()
     print("Generating initial training data...")
 
-    key = jax.random.PRNGKey(SEED)
+    key = jax.random.key(SEED)
     NU = 0.01  # moderate viscosity: a steep (but resolvable) travelling front
     X_MIN, X_MAX = 0.0, 2.0 * jnp.pi
     T_MAX = 0.5

@@ -318,7 +318,7 @@ def main() -> dict[str, float | int]:
         print(f"  Subdomain {i}: [{float(sd.bounds[0, 0]):.3f}, {float(sd.bounds[0, 1]):.3f}]")
 
     # Generate collocation points
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
 
     # Domain interior points (uniform random)
     t_domain = jax.random.uniform(key, (N_DOMAIN,), minval=T_MIN, maxval=T_MAX)

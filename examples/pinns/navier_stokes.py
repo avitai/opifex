@@ -304,7 +304,7 @@ def main() -> dict[str, float | int]:
     print(f"PINN parameters: {n_params:,}")
 
     print("Generating collocation points...")
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     keys = jax.random.split(key, 6)
 
     # Domain interior points (matching DeepXDE's num_domain=2601)

@@ -440,7 +440,7 @@ def main() -> dict[str, float | int]:
     start = time.time()
     base_losses: list[float] = []
     for epoch in range(BASE_EPOCHS):
-        epoch_key = jax.random.fold_in(jax.random.PRNGKey(SEED), epoch)
+        epoch_key = jax.random.fold_in(jax.random.key(SEED), epoch)
         xb, yb = _shuffle_batches(x_base_n, y_base_n, batch_size=BATCH_SIZE, key=epoch_key)
         epoch_loss = 0.0
         for i in range(xb.shape[0]):
@@ -470,7 +470,7 @@ def main() -> dict[str, float | int]:
     start = time.time()
     residual_losses: list[float] = []
     for epoch in range(RESIDUAL_EPOCHS):
-        epoch_key = jax.random.fold_in(jax.random.PRNGKey(SEED + 1), epoch)
+        epoch_key = jax.random.fold_in(jax.random.key(SEED + 1), epoch)
         xb, yb = _shuffle_batches(x_residual_n, y_residual_n, batch_size=BATCH_SIZE, key=epoch_key)
         epoch_loss = 0.0
         for i in range(xb.shape[0]):

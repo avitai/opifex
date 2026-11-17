@@ -305,7 +305,7 @@ def main() -> dict[str, float | int]:
     print(f"Number of interfaces: {len(interfaces)}")
 
     # Generate collocation points
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     keys = jax.random.split(key, 10)
 
     # Domain interior points for each subdomain

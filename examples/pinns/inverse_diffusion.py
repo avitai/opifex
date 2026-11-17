@@ -275,7 +275,7 @@ def main() -> dict[str, float | int]:
     print(f"True C:          {C_TRUE:.6f}")
 
     print("Generating collocation points and observations...")
-    key = jax.random.PRNGKey(42)
+    key = jax.random.key(42)
     keys = jax.random.split(key, 6)
 
     # Domain interior points

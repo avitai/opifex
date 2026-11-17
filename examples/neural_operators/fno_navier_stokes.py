@@ -203,7 +203,7 @@ def main() -> dict[str, float | int]:
     for epoch in range(num_epochs):
         epoch_loss = 0.0
 
-        perm = jax.random.permutation(jax.random.PRNGKey(epoch), n_samples)
+        perm = jax.random.permutation(jax.random.key(epoch), n_samples)
         x_shuffled = x_train_jnp[perm]
         y_shuffled = y_train_jnp[perm]
 

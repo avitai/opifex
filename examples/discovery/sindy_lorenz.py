@@ -204,7 +204,7 @@ def main() -> dict[str, float | int]:
         bagging_fraction=0.8,
     )
     ensemble = EnsembleSINDy(ensemble_config)
-    ensemble.fit(x_data, x_dot, key=jax.random.PRNGKey(42))
+    ensemble.fit(x_data, x_dot, key=jax.random.key(42))
 
     print("Ensemble equations (mean ± std):")
     for eq in ensemble.equations(["x", "y", "z"]):

@@ -159,7 +159,7 @@ def generate_trajectories(n_samples: int, seed: int) -> jax.Array:
 
     Args:
         n_samples: Number of trajectories to generate.
-        seed: Base seed; sample ``i`` uses ``PRNGKey(seed + i)``.
+        seed: Base seed; sample ``i`` uses ``jax.random.key(seed + i)``.
 
     Returns:
         Trajectories of shape ``(n_samples, NUM_TIME, NUM_SPACE)`` including the
@@ -177,7 +177,7 @@ def generate_trajectories(n_samples: int, seed: int) -> jax.Array:
             num_snapshots=NUM_TIME - 1,
         )
 
-    keys = jax.vmap(jax.random.PRNGKey)(seed + jnp.arange(n_samples))
+    keys = jax.vmap(jax.random.key)(seed + jnp.arange(n_samples))
     return jax.jit(jax.vmap(per_sample))(keys)
 
 
@@ -359,7 +359,7 @@ def main() -> dict[str, float | int]:
 
     start_time = time.time()
     for epoch in range(NUM_EPOCHS):
-        perm = jax.random.permutation(jax.random.PRNGKey(epoch), N_TRAIN)
+        perm = jax.random.permutation(jax.random.key(epoch), N_TRAIN)
         epoch_totals = {"total": 0.0, "data": 0.0, "ic": 0.0, "equation": 0.0}
 
         for i in range(n_batches):

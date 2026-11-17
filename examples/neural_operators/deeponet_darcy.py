@@ -282,7 +282,7 @@ def main() -> dict[str, float | int]:
     print(f"\nStarting training ({NUM_EPOCHS} epochs)...")
     t0 = time.time()
 
-    key = jax.random.PRNGKey(SEED)
+    key = jax.random.key(SEED)
     train_losses: list[float] = []
     val_losses: list[float] = []
 

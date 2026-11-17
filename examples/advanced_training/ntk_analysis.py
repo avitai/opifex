@@ -177,14 +177,13 @@ def main() -> dict[str, float | int]:
     print()
     print("Generating collocation points...")
 
-    key = jax.random.PRNGKey(seed)
+    ntk_key, train_key = jax.random.split(jax.random.key(seed))
 
     # Domain points for NTK computation
-    x_ntk = jax.random.uniform(key, (n_collocation, 1), minval=0.0, maxval=1.0)
+    x_ntk = jax.random.uniform(ntk_key, (n_collocation, 1), minval=0.0, maxval=1.0)
 
     # Training points (more for actual training)
-    key, subkey = jax.random.split(key)
-    x_train = jax.random.uniform(subkey, (500, 1), minval=0.0, maxval=1.0)
+    x_train = jax.random.uniform(train_key, (500, 1), minval=0.0, maxval=1.0)
 
     # Boundary points
     x_bc = jnp.array([[0.0], [1.0]])

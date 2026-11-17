@@ -287,7 +287,7 @@ def assembled_ao_wigner(atomic_numbers: jax.Array, rotation: jax.Array) -> jax.A
 
 def random_rotation(seed: int) -> jax.Array:
     """Return a uniformly random proper rotation matrix (det = +1)."""
-    key = jax.random.PRNGKey(seed)
+    key = jax.random.key(seed)
     gaussian = jax.random.normal(key, (3, 3), dtype=jnp.float64)
     orthogonal, _ = jnp.linalg.qr(gaussian)
     return orthogonal * jnp.sign(jnp.linalg.det(orthogonal))

@@ -133,7 +133,7 @@ def _train_map(
 # %%
 def main() -> dict[str, jax.Array | float | int]:
     """Train MAP, build diagonal Laplace, report ECE + ANEES."""
-    rng_key = jax.random.PRNGKey(0)
+    rng_key = jax.random.key(0)
     data_key, params_key = jax.random.split(rng_key)
     in_features, hidden, num_samples = 4, 8, 128
 
