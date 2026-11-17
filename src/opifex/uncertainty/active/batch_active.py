@@ -23,21 +23,23 @@ Implements:
   agree with it at ``M = 2``.
 """
 
-from __future__ import annotations
-
 import jax
 import jax.numpy as jnp
 from flax import nnx
+from jax.typing import DTypeLike
 from substrax.rng import key_from
 
 from opifex.uncertainty.active.acquisition import (
     AcquiredBatch,
     bald,
 )
-from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001
+from opifex.uncertainty.types import PredictiveDistribution
 
 
-_VARIANCE_FLOOR: float = 1e-12
+def _variance_floor(dtype: DTypeLike) -> jax.Array:
+    """Return a positive dtype-scaled variance floor avoiding underflow and division overflow."""
+    eps = jnp.asarray(jnp.finfo(dtype).eps, dtype=dtype)
+    return jnp.maximum(jnp.asarray(jnp.finfo(dtype).tiny, dtype=dtype), eps * eps)
 
 
 # ---------------------------------------------------------------------------
@@ -45,55 +47,52 @@ _VARIANCE_FLOOR: float = 1e-12
 # ---------------------------------------------------------------------------
 
 
-def _joint_mixture_entropy_mc(
-    member_means: jax.Array,
-    aleatoric_subset: jax.Array,
-    *,
-    key: jax.Array,
-    num_mc: int,
+def _single_candidate_log_prob(
+    cand_means: jax.Array,
+    cand_var: jax.Array,
+    member_idx: jax.Array,
+    eps_step: jax.Array,
 ) -> jax.Array:
-    r"""Monte-Carlo estimator of the joint predictive entropy ``H[E_theta p(y_S)]``.
+    """Evaluate 1-D Gaussian log-densities ``log p(y_c^(m) | theta_k)`` of shape ``(M, K)``."""
+    sampled_y = cand_means[member_idx] + jnp.sqrt(cand_var) * eps_step
+    diff = sampled_y[:, None] - cand_means[None, :]
+    return -0.5 * (jnp.log(2.0 * jnp.pi * cand_var) + (diff * diff) / cand_var)
 
-    For an ensemble of ``K`` members with per-member joint means
-    ``member_means`` of shape ``(K, d)`` and shared diagonal aleatoric
-    variance ``aleatoric_subset`` of shape ``(d,)``, the predictive
-    marginal over the candidate subset is the *Gaussian mixture*
 
-    .. math::
-        p(y_S) = \tfrac{1}{K} \sum_{k=1}^{K} \mathcal{N}(y_S; \mu_k, \mathrm{diag}(\sigma_a^2))
+def _validate_batch_bald_inputs(
+    predictive_dist: PredictiveDistribution,
+    *,
+    batch_size: int,
+    num_mc_samples: int,
+) -> jax.Array:
+    """Validate BatchBALD inputs and return the ``(K, C)`` ensemble sample array.
 
-    Its differential entropy has no closed form. Following the BatchBALD
-    paper (Kirsch et al. 2019, Algorithm 1), we estimate it by drawing
-    ``num_mc`` samples from the mixture and evaluating
+    Args:
+        predictive_dist: Ensemble predictive distribution.
+        batch_size: Requested batch acquisition count.
+        num_mc_samples: Monte-Carlo sample count.
 
-    .. math::
-        H[Y_S] \approx -\tfrac{1}{N} \sum_n
-        \log \!\left[\tfrac{1}{K} \sum_k p(y_n \mid \mu_k)\right].
+    Returns:
+        The ``(num_members, num_candidates)`` ensemble sample array.
 
-    This estimator correctly captures the BatchBALD redundancy
-    correction: when two candidates are perfectly correlated across
-    ensemble members, the mixture's modes collapse onto a 1-D manifold
-    and the joint entropy is no larger than the marginal entropy of
-    either candidate alone.
+    Raises:
+        ValueError: If ``batch_size``, ``num_mc_samples``, or ``samples`` are invalid.
     """
-    K, d = member_means.shape
-    # Draw N MC samples from the mixture: pick a member uniformly, then
-    # sample its Gaussian.
-    key_idx, key_eps = jax.random.split(key)
-    member_idx = jax.random.randint(key_idx, (num_mc,), 0, K)
-    eps = jax.random.normal(key_eps, (num_mc, d))
-    std = jnp.sqrt(aleatoric_subset)
-    sampled = member_means[member_idx] + std[None, :] * eps  # (num_mc, d)
-
-    # log p(y_n | mu_k) for all (n, k): shape (num_mc, K).
-    diff = sampled[:, None, :] - member_means[None, :, :]
-    log_per_member = -0.5 * (
-        d * jnp.log(2.0 * jnp.pi)
-        + jnp.sum(jnp.log(aleatoric_subset))
-        + jnp.sum((diff**2) / aleatoric_subset[None, None, :], axis=-1)
-    )  # (num_mc, K)
-    log_p = jax.scipy.special.logsumexp(log_per_member, axis=-1) - jnp.log(K)
-    return -jnp.mean(log_p)
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be positive; got {batch_size!r}")
+    if num_mc_samples <= 0:
+        raise ValueError(f"num_mc_samples must be positive; got {num_mc_samples!r}")
+    if predictive_dist.samples is None:
+        raise ValueError("batch_bald requires PredictiveDistribution.samples.")
+    samples = predictive_dist.samples
+    if samples.ndim != 2:
+        raise ValueError(
+            "batch_bald currently supports scalar-output ensembles; got "
+            f"samples.shape={samples.shape}"
+        )
+    if batch_size > samples.shape[1]:
+        raise ValueError(f"batch_size={batch_size} exceeds num_candidates={samples.shape[1]}")
+    return samples
 
 
 def batch_bald(
@@ -103,7 +102,7 @@ def batch_bald(
     rngs: nnx.Rngs | jax.Array,
     num_mc_samples: int = 1024,
 ) -> AcquiredBatch:
-    r"""Greedy BatchBALD acquisition.
+    r"""Greedy BatchBALD acquisition via traced incremental log-probability caching.
 
     Selects ``batch_size`` candidates by greedily maximising the joint
     mutual information
@@ -113,93 +112,95 @@ def batch_bald(
         - \sum_{i \in S} \mathbb{E}_\theta [H[p(y_i \mid \theta)]]
 
     Reference: Kirsch, van Amersfoort & Gal (2019), *BatchBALD: Efficient
-    and Diverse Batch Acquisition for Deep Bayesian Active Learning*
-    (Algorithm 1). The joint predictive entropy ``H[E_theta p(y_S)]`` is
-    a Gaussian-mixture entropy with no closed form; we use the Monte
-    Carlo estimator from the paper (sample from the mixture, evaluate
-    log-mean-likelihood). The conditional sum ``E_theta H[p|theta]``
-    has the trivial Gaussian closed form because the noise per
-    candidate is conditionally independent in the ensemble model.
+    and Diverse Batch Acquisition for Deep Bayesian Active Learning*,
+    NeurIPS, Section 3.2, Algorithm 1. Ancestral mixture draws share a
+    latent ensemble member index ``k^(m)`` across greedy steps while caching
+    ``log p(y_{S_t}^(m) | theta_k)`` of static shape ``(num_mc_samples, K)``
+    inside ``jax.lax.scan``, reducing complexity from
+    ``O(B^2 C M K)`` to ``O(B C M K)`` with static shapes under ``jit``
+    and ``vmap``.
 
-    The MC mixture-entropy estimator correctly handles BatchBALD's key
-    edge case: when two candidates have identical ensemble samples
-    (perfect redundancy), the joint entropy estimator returns the
-    marginal entropy of either point, so the MI gain for the second
-    redundant point collapses to zero and the greedy step picks a
-    diverse alternative.
+    Args:
+        predictive_dist: Ensemble predictive carrying ``samples`` of shape
+            ``(num_members, num_candidates)`` and optional ``aleatoric``
+            variance of shape ``(num_candidates,)``.
+        batch_size: Number of candidates to acquire.
+        rngs: Caller-owned ``nnx.Rngs`` or JAX PRNG key.
+        num_mc_samples: Monte-Carlo sample count ``M`` for the joint
+            Gaussian-mixture entropy estimator.
+
+    Returns:
+        :class:`AcquiredBatch` whose ``indices`` hold the ``(batch_size,)``
+        selected pool indices, ``scores`` hold each step's conditional
+        mutual-information increment, and ``auxiliary_scores`` hold the
+        per-candidate marginal BALD scores of shape ``(num_candidates,)``.
     """
-    if batch_size <= 0:
-        raise ValueError(f"batch_size must be positive; got {batch_size!r}")
-    if predictive_dist.samples is None:
-        raise ValueError("batch_bald requires PredictiveDistribution.samples.")
-
+    samples = _validate_batch_bald_inputs(
+        predictive_dist, batch_size=batch_size, num_mc_samples=num_mc_samples
+    )
     key = key_from(
         rngs,
         streams=("active_bald", "active_acquire", "default"),
         context="batch_bald",
     )
+    key_marginal, key_members, key_eps = jax.random.split(key, 3)
 
-    samples = predictive_dist.samples  # (num_members, num_candidates)
-    if samples.ndim != 2:
-        raise ValueError(
-            "batch_bald currently supports scalar-output ensembles; got "
-            f"samples.shape={samples.shape}"
-        )
-    num_candidates = samples.shape[1]
-    if batch_size > num_candidates:
-        raise ValueError(f"batch_size={batch_size} exceeds num_candidates={num_candidates}")
-
+    num_members, num_candidates = samples.shape
+    dtype = jnp.promote_types(samples.dtype, jnp.float32)
+    samples_f = samples.astype(dtype)
+    floor = _variance_floor(dtype)
     aleatoric = (
-        jnp.maximum(predictive_dist.aleatoric, _VARIANCE_FLOOR)
+        jnp.maximum(predictive_dist.aleatoric.astype(dtype), floor)
         if predictive_dist.aleatoric is not None
-        else jnp.full(num_candidates, _VARIANCE_FLOOR)
+        else jnp.full((num_candidates,), floor, dtype=dtype)
     )
 
-    # Per-candidate marginal BALD (rngs reset to avoid double-consumption).
-    marginal = bald(
-        predictive_dist,
-        rngs=nnx.Rngs(active_bald=0),
-    )
+    marginal = bald(predictive_dist, rngs=key_marginal)
+    h_cond = 0.5 * jnp.log(2.0 * jnp.pi * jnp.e * aleatoric)
+    log_k = jnp.log(jnp.asarray(num_members, dtype=dtype))
 
-    selected_list: list[int] = []
-    cumulative_conditional = jnp.asarray(0.0)
-    candidate_keys = jax.random.split(key, int(batch_size) * num_candidates)
-    flat_key_idx = 0
+    member_idx = jax.random.randint(key_members, (num_mc_samples,), 0, num_members)
+    step_eps = jax.random.normal(key_eps, (int(batch_size), num_mc_samples), dtype=dtype)
 
-    for _ in range(int(batch_size)):
-        best_idx = -1
-        best_gain = -jnp.inf
-        for c in range(num_candidates):
-            if c in selected_list:
-                flat_key_idx += 1
-                continue
-            indices_c = jnp.array([*selected_list, c], dtype=jnp.int32)
-            member_means = samples[:, indices_c]  # (K, d)
-            ale_subset = aleatoric[indices_c]
-            joint_h = _joint_mixture_entropy_mc(
-                member_means,
-                ale_subset,
-                key=candidate_keys[flat_key_idx],
-                num_mc=num_mc_samples,
-            )
-            h_c = 0.5 * jnp.log(2.0 * jnp.pi * jnp.e * aleatoric[c])
-            gain = joint_h - (cumulative_conditional + h_c)
-            flat_key_idx += 1
-            if float(gain) > float(best_gain):
-                best_gain = gain
-                best_idx = c
-        selected_list.append(best_idx)
-        cumulative_conditional = cumulative_conditional + 0.5 * jnp.log(
-            2.0 * jnp.pi * jnp.e * aleatoric[best_idx]
+    cand_lp_fn = jax.vmap(_single_candidate_log_prob, in_axes=(1, 0, None, None))
+
+    def scan_step(
+        carry: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
+        eps_t: jax.Array,
+    ) -> tuple[tuple[jax.Array, jax.Array, jax.Array, jax.Array], tuple[jax.Array, jax.Array]]:
+        """Select the highest conditional-MI candidate at one greedy step."""
+        selected_mask, cached_log_prob, cumulative_cond, prev_joint_mi = carry
+        cand_log_prob = cand_lp_fn(samples_f, aleatoric, member_idx, eps_t)
+        joint_log_prob = cached_log_prob[None, :, :] + cand_log_prob
+        log_mix = jax.scipy.special.logsumexp(joint_log_prob, axis=-1) - log_k
+        joint_entropy = -jnp.mean(log_mix, axis=-1)
+        joint_mi = joint_entropy - (cumulative_cond + h_cond)
+        masked_mi = jnp.where(selected_mask, -jnp.inf, joint_mi)
+        best_idx = jnp.argmax(masked_mi).astype(jnp.int32)
+        best_joint_mi = masked_mi[best_idx]
+        step_gain = best_joint_mi - prev_joint_mi
+        next_carry = (
+            selected_mask.at[best_idx].set(True),
+            cached_log_prob + cand_log_prob[best_idx],
+            cumulative_cond + h_cond[best_idx],
+            best_joint_mi,
         )
+        return next_carry, (best_idx, step_gain)
 
-    chosen = jnp.array(selected_list, dtype=jnp.int32)
-    chosen_scores = marginal[chosen]
+    init_carry = (
+        jnp.zeros((num_candidates,), dtype=bool),
+        jnp.zeros((num_mc_samples, num_members), dtype=dtype),
+        jnp.asarray(0.0, dtype=dtype),
+        jnp.asarray(0.0, dtype=dtype),
+    )
+    _, (chosen, step_gains) = jax.lax.scan(scan_step, init_carry, step_eps)
+
     return AcquiredBatch(
         indices=chosen,
-        scores=chosen_scores,
+        scores=step_gains,
         strategy="batch_bald",
-        metadata=(("marginal_bald", tuple(float(m) for m in marginal)),),
+        metadata=(),
+        auxiliary_scores=marginal,
     )
 
 

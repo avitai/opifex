@@ -99,6 +99,7 @@ class AcquiredBatch:
     scores: jax.Array
     strategy: str = struct.field(pytree_node=False)
     metadata: MetadataItems = struct.field(pytree_node=False, default=())
+    auxiliary_scores: jax.Array | None = None
 
     def metadata_dict(self) -> dict[str, Any]:
         """Return a fresh ``dict`` view of the immutable metadata tuple."""
