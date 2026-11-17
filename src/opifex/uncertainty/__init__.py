@@ -67,8 +67,10 @@ from opifex.uncertainty.curvature import (
 )
 from opifex.uncertainty.distributions import (
     ArtifexDistributionAdapter,
+    correlated_difference_predictive,
     DistrAxAdapter,
     from_distribution,
+    linear_contrast_predictive,
 )
 from opifex.uncertainty.evidential import (
     aleatoric_variance,
@@ -101,12 +103,17 @@ from opifex.uncertainty.layers.bayesian import (
     BayesianSpectralConvolution,
 )
 from opifex.uncertainty.likelihoods import (
+    censored_gaussian_log_likelihood,
     gaussian_log_likelihood,
     heteroscedastic_gaussian_log_likelihood,
     laplace_log_likelihood,
+    LIKELIHOOD_CAPABILITIES,
     LikelihoodSpec,
     mixture_log_likelihood,
+    satisficing_censored_deficit,
+    satisficing_censored_loss,
     student_t_log_likelihood,
+    tobit_nll,
 )
 from opifex.uncertainty.objectives import (
     ObjectiveConfig,
@@ -139,6 +146,7 @@ from opifex.uncertainty.types import (
 __all__ = [
     "ARTIFEX_FLOW_SPECS",
     "DISTRIBUTION_SPECS",
+    "LIKELIHOOD_CAPABILITIES",
     "OPTIONAL_FLOW_SPECS",
     "OPTIONAL_SAMPLER_SPECS",
     "ArtifexDistributionAdapter",
@@ -204,6 +212,8 @@ __all__ = [
     "VBLLState",
     "VariationalModule",
     "aleatoric_variance",
+    "censored_gaussian_log_likelihood",
+    "correlated_difference_predictive",
     "diagonal_gaussian_kl",
     "diagonal_gaussian_log_prior",
     "epistemic_variance",
@@ -212,10 +222,14 @@ __all__ = [
     "gaussian_log_likelihood",
     "heteroscedastic_gaussian_log_likelihood",
     "laplace_log_likelihood",
+    "linear_contrast_predictive",
     "mixture_log_likelihood",
     "nig_to_predictive_distribution",
     "positive_evidential_params",
     "sample_diagonal_gaussian",
+    "satisficing_censored_deficit",
+    "satisficing_censored_loss",
     "scale_kl",
     "student_t_log_likelihood",
+    "tobit_nll",
 ]

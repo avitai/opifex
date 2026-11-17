@@ -259,7 +259,14 @@ class PredictiveDistribution:
             ) from e
 
     def std(self) -> jax.Array:
-        """Return ``sqrt(variance)`` when variance is supplied.
+        """Return ``sqrt(variance)`` when variance is supplied, with zero-safe gradient at 0.
+
+        Uses an inner-``jnp.where`` mask before ``jnp.sqrt`` so reverse-mode differentiation
+        at ``variance == 0`` (e.g. identical correlated targets) yields ``0.0`` rather than
+        ``NaN`` or ``inf``.
+
+        Returns:
+            Standard deviation array matching :attr:`variance` shape.
 
         Raises:
             ValueError: when :attr:`variance` is ``None``.
@@ -267,7 +274,9 @@ class PredictiveDistribution:
         """
         if self.variance is None:
             raise ValueError("PredictiveDistribution.std() requires variance to be set.")
-        return jnp.sqrt(self.variance)
+        is_positive = self.variance > 0
+        safe_variance = jnp.where(is_positive, self.variance, jnp.ones_like(self.variance))
+        return jnp.where(is_positive, jnp.sqrt(safe_variance), jnp.zeros_like(self.variance))
 
     def validate(self) -> None:
         """Eager-validate field-shape and variance-additivity invariants.
