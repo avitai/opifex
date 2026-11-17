@@ -29,21 +29,21 @@ This example demonstrates:
 
 ## Files
 
-- **Python Script**: [`examples/getting-started/first_neural_operator.py`](https://github.com/avitai/opifex/blob/main/examples/getting-started/first_neural_operator.py)
-- **Jupyter Notebook**: [`examples/getting-started/first_neural_operator.ipynb`](https://github.com/avitai/opifex/blob/main/examples/getting-started/first_neural_operator.ipynb)
+- **Python Script**: [`examples/getting_started/first_neural_operator.py`](https://github.com/avitai/opifex/blob/main/examples/getting_started/first_neural_operator.py)
+- **Jupyter Notebook**: [`examples/getting_started/first_neural_operator.ipynb`](https://github.com/avitai/opifex/blob/main/examples/getting_started/first_neural_operator.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/getting-started/first_neural_operator.py
+source activate.sh && python examples/getting_started/first_neural_operator.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/getting-started/first_neural_operator.ipynb
+jupyter lab examples/getting_started/first_neural_operator.ipynb
 ```
 
 ## Implementation

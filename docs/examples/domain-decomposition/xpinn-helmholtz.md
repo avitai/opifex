@@ -47,21 +47,21 @@ interfaces or discontinuities need to be captured.
 
 ## Files
 
-- **Python Script**: [`examples/domain-decomposition/xpinn_helmholtz.py`](https://github.com/avitai/opifex/blob/main/examples/domain-decomposition/xpinn_helmholtz.py)
-- **Jupyter Notebook**: [`examples/domain-decomposition/xpinn_helmholtz.ipynb`](https://github.com/avitai/opifex/blob/main/examples/domain-decomposition/xpinn_helmholtz.ipynb)
+- **Python Script**: [`examples/domain_decomposition/xpinn_helmholtz.py`](https://github.com/avitai/opifex/blob/main/examples/domain_decomposition/xpinn_helmholtz.py)
+- **Jupyter Notebook**: [`examples/domain_decomposition/xpinn_helmholtz.ipynb`](https://github.com/avitai/opifex/blob/main/examples/domain_decomposition/xpinn_helmholtz.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/domain-decomposition/xpinn_helmholtz.py
+source activate.sh && python examples/domain_decomposition/xpinn_helmholtz.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/domain-decomposition/xpinn_helmholtz.ipynb
+jupyter lab examples/domain_decomposition/xpinn_helmholtz.ipynb
 ```
 
 ## Core Concepts

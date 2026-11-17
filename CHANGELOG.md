@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The example directories `neural-operators`, `quantum-chemistry`, `domain-decomposition`,
+  `advanced-training` and `getting-started` are `neural_operators`, `quantum_chemistry`,
+  `domain_decomposition`, `advanced_training` and `getting_started`, as substrax's example guide
+  names a path below `examples/` in snake_case; every reference to an example's source moves with
+  them, and the compute jobs and budgets name the new paths. The hand-written pages under
+  `docs/examples/` keep their paths until generated pages replace them.
 - Require `calibrax>=0.1.20` and `substrax>=0.1.28`; the `test` extra installs
   `substrax[notebooks,testing]`, which brings the notebook kernel and converter, so `ipykernel`
   and `jupytext` leave `dev`.

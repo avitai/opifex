@@ -202,10 +202,10 @@ Source: [`src/opifex/deployment/monitoring/health.py`](https://github.com/avitai
 source activate.sh
 
 # Run a neural operator example
-python examples/neural-operators/operator_tour.py
+python examples/neural_operators/operator_tour.py
 
 # Run with specific backend
-JAX_PLATFORMS=cpu python examples/neural-operators/operator_tour.py
+JAX_PLATFORMS=cpu python examples/neural_operators/operator_tour.py
 ```
 
 ### Code Quality

@@ -168,7 +168,7 @@ print(f"FNO: {x.shape} -> {output.shape}")  # (4, 1, 64, 64) -> (4, 1, 64, 64)
 
 For a full real-world implementation of FNO applied to the Darcy flow equation:
 
-**`examples/neural-operators/fno_darcy.py`** - Complete production-ready example demonstrating:
+**`examples/neural_operators/fno_darcy.py`** - Complete production-ready example demonstrating:
 
 - **Automated Dataset Generation**: Realistic permeability fields using Fourier modes
 - **PDE Solving**: Vectorized finite difference solver for Darcy's equation: ∇·(a(x)∇u(x)) = f(x)
@@ -181,7 +181,7 @@ For a full real-world implementation of FNO applied to the Darcy flow equation:
 source ./activate.sh
 
 # Run the complete FNO example
-python examples/neural-operators/fno_darcy.py
+python examples/neural_operators/fno_darcy.py
 
 # Expected output:
 # ============================================================

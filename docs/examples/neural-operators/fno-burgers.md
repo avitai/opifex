@@ -51,21 +51,21 @@ this workflow:
 
 ## Files
 
-- **Python Script**: [`examples/neural-operators/fno_burgers.py`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_burgers.py)
-- **Jupyter Notebook**: [`examples/neural-operators/fno_burgers.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural-operators/fno_burgers.ipynb)
+- **Python Script**: [`examples/neural_operators/fno_burgers.py`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/fno_burgers.py)
+- **Jupyter Notebook**: [`examples/neural_operators/fno_burgers.ipynb`](https://github.com/avitai/opifex/blob/main/examples/neural_operators/fno_burgers.ipynb)
 
 ## Quick Start
 
 ### Run the Python Script
 
 ```bash
-source activate.sh && python examples/neural-operators/fno_burgers.py
+source activate.sh && python examples/neural_operators/fno_burgers.py
 ```
 
 ### Run the Jupyter Notebook
 
 ```bash
-jupyter lab examples/neural-operators/fno_burgers.ipynb
+jupyter lab examples/neural_operators/fno_burgers.ipynb
 ```
 
 ## Core Concepts
