@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `censored_gaussian_log_likelihood`, `tobit_nll`, `satisficing_censored_deficit`, `satisficing_censored_loss`, and `LIKELIHOOD_CAPABILITIES` in `opifex.uncertainty.likelihoods` for exact, left-censored, right-censored, and two-sided interval observations with cancellation-free Gauss-Legendre narrow-interval quadrature and `log_ndtr` + `log1mexp` tail symmetry.
+- `correlated_difference_predictive` and `linear_contrast_predictive` in `opifex.uncertainty.distributions` for cross-covariance-aware pairwise differences and multi-output linear contrasts, with zero-safe `PredictiveDistribution.std()` gradients at zero variance.
 - `AcquiredBatch.auxiliary_scores` (`jax.Array | None = None`) on `opifex.uncertainty.active.AcquiredBatch` so traced batch acquisitions can return per-candidate pool scores without concrete Python metadata conversions.
 - `opifex.uncertainty.statespace.cakf_filter` and `cakf_truncate`: the computation-aware Kalman
   filter loop (predict, update, truncate, carrying the mean and the low-rank factor) and the

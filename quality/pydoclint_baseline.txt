@@ -813,7 +813,6 @@ src/opifex/uncertainty/types.py
     DOC101: Method `PredictiveDistribution.quantile`: Docstring contains fewer arguments than in function signature.
     DOC103: Method `PredictiveDistribution.quantile`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [alpha: float].
     DOC201: Method `PredictiveDistribution.quantile` does not have a return section in docstring
-    DOC201: Method `PredictiveDistribution.std` does not have a return section in docstring
 --------------------
 src/opifex/visualization/field_plotting.py
     DOC501: Function `plot_2d_field` has raise statements, but the docstring does not have a "Raises" section
