@@ -301,17 +301,18 @@ def main() -> dict[str, float | int]:
     print("  - PINNSolver.solve (generic solver)")
     print("  - PINNConfig (solver configuration)")
 
-    return {
+    summary = {
         "param_count": int(n_params),
         "final_loss": float(result.final_loss),
         "l2_relative_error": float(l2_relative),
         "max_error": float(max_error),
         "training_time_s": float(result.training_time),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

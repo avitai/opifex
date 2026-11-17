@@ -449,12 +449,15 @@ def main() -> dict[str, float | int]:
     print(f"Saved plots to {OUTPUT_DIR}/")
     print("  fock_heatmap.png, equivariance_error.png")
 
-    return {
+    summary = {
         "equivariance_error": max_equivariance_error,
         "diagonal_block_asymmetry": diag_symmetry,
         "matrix_symmetry": matrix_symmetry,
         "num_params": num_params,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -486,6 +489,4 @@ the QH9 benchmark are documented in
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

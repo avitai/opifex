@@ -340,17 +340,18 @@ def main() -> dict[str, float | int]:
     print(f"Results saved to: {output_dir}")
     print("=" * 70)
 
-    return {
+    summary = {
         "final_loss": final_loss,
         "l2_relative_error": l2_error,
         "max_error": max_error,
         "mean_error": mean_error,
         "param_count": int(n_params),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

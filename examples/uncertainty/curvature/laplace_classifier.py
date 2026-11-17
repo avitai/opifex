@@ -183,17 +183,18 @@ def main() -> dict[str, jax.Array | float | int]:
     )
     anees_value = anees(final_logits, predicted_covariances, true_logits)
 
-    return {
+    summary = {
         "num_parameters": int(flat_params.shape[0]),
         "posterior_precision_mean": jnp.mean(posterior.precision_diagonal),
         "posterior_precision_min": jnp.min(posterior.precision_diagonal),
         "ece": ece,
         "anees": anees_value,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for label, value in summary.items():
-        print(f"{label}: {value}")
+    main()

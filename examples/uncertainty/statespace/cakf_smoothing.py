@@ -163,7 +163,7 @@ def main() -> dict[str, jax.Array | float | int]:
     cakf_vs_truth = jnp.mean(jnp.linalg.norm(cakf_means - states, axis=-1))
     exact_vs_truth = jnp.mean(jnp.linalg.norm(exact_means - states, axis=-1))
 
-    return {
+    summary = {
         "num_steps": int(num_steps),
         "observed_fraction": float(jnp.mean(observation_mask.astype(jnp.float32))),
         "max_iter": 1,
@@ -173,10 +173,11 @@ def main() -> dict[str, jax.Array | float | int]:
         "exact_vs_truth_mean_l2": exact_vs_truth,
         "exact_final_trace": jnp.trace(exact_covs[-1]),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for label, value in summary.items():
-        print(f"{label}: {value}")
+    main()

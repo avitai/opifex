@@ -190,16 +190,17 @@ def main() -> dict[str, float | int]:
     plt.show()
     print(f"Saved: {output_dir}/disco-continuous-kernel.png")
 
-    return {
+    summary = {
         "num_basis": num_basis,
         "rel_change_24_to_96": rel_24_96,
         "rel_change_48_to_96": rel_48_96,
         "irregular_vs_grid_rel_diff": rel_irregular,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

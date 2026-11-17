@@ -146,15 +146,16 @@ def main() -> dict[str, jax.Array | float | int]:
         key=trace_key,
     )
 
-    return {
+    summary = {
         "dim": int(dim),
         "log_det_estimate": log_det_estimate,
         "fisher_trace_estimate": fisher_trace_estimate,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for label, value in summary.items():
-        print(f"{label}: {value}")
+    main()

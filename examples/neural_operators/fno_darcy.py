@@ -449,7 +449,7 @@ def main() -> dict[str, float | int]:
     print(f"Results saved to: {output_dir}")
     print("=" * 70)
 
-    return {
+    summary = {
         "param_count": param_count,
         "final_loss": final_train_loss,
         "final_val_loss": final_val_loss,
@@ -457,6 +457,9 @@ def main() -> dict[str, float | int]:
         "rel_l2": mean_rel_l2,
         "train_rel_l2": train_rel_l2,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -482,6 +485,4 @@ After running this example you should observe:
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()
