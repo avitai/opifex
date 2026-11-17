@@ -13,11 +13,13 @@
 # ---
 
 # %% [markdown]
-# # Poisson Equation PINN
-#
-# This example demonstrates solving the 2D Poisson equation using a
-# Physics-Informed Neural Network (PINN). The Poisson equation is
-# fundamental to electrostatics, heat conduction, and potential flow.
+"""
+# Poisson Equation PINN
+
+This example demonstrates solving the 2D Poisson equation using a
+Physics-Informed Neural Network (PINN). The Poisson equation is
+fundamental to electrostatics, heat conduction, and potential flow.
+"""
 
 # %%
 
@@ -44,17 +46,19 @@ LEARNING_RATE = 1e-3
 HIDDEN_DIMS = [64, 64, 64]
 
 # %% [markdown]
-# ## Problem Definition
-#
-# We solve the Poisson equation on the unit square $[0, 1]^2$:
-#
-# $$-\nabla^2 u = f(x, y)$$
-#
-# where $f(x, y) = 2\pi^2 \sin(\pi x) \sin(\pi y)$
-#
-# with homogeneous Dirichlet boundary conditions: $u = 0$ on $\partial\Omega$.
-#
-# **Analytical solution**: $u(x, y) = \sin(\pi x) \sin(\pi y)$
+r"""
+## Problem Definition
+
+We solve the Poisson equation on the unit square $[0, 1]^2$:
+
+$$-\nabla^2 u = f(x, y)$$
+
+where $f(x, y) = 2\pi^2 \sin(\pi x) \sin(\pi y)$
+
+with homogeneous Dirichlet boundary conditions: $u = 0$ on $\partial\Omega$.
+
+**Analytical solution**: $u(x, y) = \sin(\pi x) \sin(\pi y)$
+"""
 
 
 # %%
@@ -70,9 +74,11 @@ def analytical_solution(x, y):
 
 
 # %% [markdown]
-# ## PINN Architecture
-#
-# Create a simple MLP that takes (x, y) coordinates and outputs u(x, y).
+"""
+## PINN Architecture
+
+Create a simple MLP that takes (x, y) coordinates and outputs u(x, y).
+"""
 
 
 # %%
@@ -117,16 +123,20 @@ class PoissonPINN(nnx.Module):
 
 
 # %% [markdown]
-# ## Collocation Points
-#
-# Sample interior points for PDE residual and boundary points for BC enforcement.
+"""
+## Collocation Points
+
+Sample interior points for PDE residual and boundary points for BC enforcement.
+"""
 
 # %% [markdown]
-# ## Physics-Informed Loss
-#
-# The loss function combines:
-# 1. **PDE residual**: $\mathcal{L}_{pde} = \frac{1}{N}\sum_i |{-\nabla^2 u(x_i) - f(x_i)}|^2$
-# 2. **Boundary loss**: $\mathcal{L}_{bc} = \frac{1}{M}\sum_j |u(x_j)|^2$
+r"""
+## Physics-Informed Loss
+
+The loss function combines:
+1. **PDE residual**: $\mathcal{L}_{pde} = \frac{1}{N}\sum_i |{-\nabla^2 u(x_i) - f(x_i)}|^2$
+2. **Boundary loss**: $\mathcal{L}_{bc} = \frac{1}{M}\sum_j |u(x_j)|^2$
+"""
 
 
 # %%
@@ -176,7 +186,9 @@ def total_loss(pinn, x_int, x_bc, lambda_bc=10.0):
 
 
 # %% [markdown]
-# ## Training
+"""
+## Training
+"""
 
 
 # %%
@@ -193,10 +205,12 @@ def train_step(pinn, opt, x_int, x_bc):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# Sets up collocation points, trains the PINN, evaluates against the
-# analytical solution, and saves the visualizations.
+"""
+## Run the example
+
+Sets up collocation points, trains the PINN, evaluates against the
+analytical solution, and saves the visualizations.
+"""
 
 
 # %%

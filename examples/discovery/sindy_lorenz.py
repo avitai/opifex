@@ -9,13 +9,15 @@
 # ---
 
 # %% [markdown]
-# # Equation Discovery with SINDy on the Lorenz System
-#
-# This example demonstrates how to use Opifex's JAX-native SINDy
-# (Sparse Identification of Nonlinear Dynamics) to automatically
-# discover governing equations from time-series data.
-#
-# We recover the Lorenz attractor equations from a simulated trajectory.
+"""
+# Equation Discovery with SINDy on the Lorenz System
+
+This example demonstrates how to use Opifex's JAX-native SINDy
+(Sparse Identification of Nonlinear Dynamics) to automatically
+discover governing equations from time-series data.
+
+We recover the Lorenz attractor equations from a simulated trajectory.
+"""
 
 # %%
 import time
@@ -36,39 +38,53 @@ from opifex.discovery.sindy.utils import finite_difference
 
 
 # %% [markdown]
-# ## 1. Generate Lorenz Attractor Data
-#
-# The Lorenz system is defined by:
-#
-# $$\frac{dx}{dt} = \sigma(y - x)$$
-# $$\frac{dy}{dt} = x(\rho - z) - y$$
-# $$\frac{dz}{dt} = xy - \beta z$$
-#
-# Standard parameters: $\sigma = 10$, $\rho = 28$, $\beta = 8/3$.
+r"""
+## 1. Generate Lorenz Attractor Data
+
+The Lorenz system is defined by:
+
+$$\frac{dx}{dt} = \sigma(y - x)$$
+$$\frac{dy}{dt} = x(\rho - z) - y$$
+$$\frac{dz}{dt} = xy - \beta z$$
+
+Standard parameters: $\sigma = 10$, $\rho = 28$, $\beta = 8/3$.
+"""
 
 # %% [markdown]
-# ## 2. Discover Equations with SINDy
+"""
+## 2. Discover Equations with SINDy
+"""
 
 # %% [markdown]
-# ## 3. Coefficient Sparsity Analysis
+"""
+## 3. Coefficient Sparsity Analysis
+"""
 
 # %% [markdown]
-# ## 4. Ensemble SINDy for Uncertainty Quantification
+"""
+## 4. Ensemble SINDy for Uncertainty Quantification
+"""
 
 # %% [markdown]
-# ## 5. Comparison with PySINDy Reference Implementation
+"""
+## 5. Comparison with PySINDy Reference Implementation
+"""
 
 # %% [markdown]
-# ## 6. Numerical Differentiation (When Derivatives Unknown)
+"""
+## 6. Numerical Differentiation (When Derivatives Unknown)
+"""
 
 # %% [markdown]
-# ## Summary
-#
-# | Method | R² Score | Nonzero Terms |
-# |--------|----------|---------------|
-# | SINDy (clean derivatives) | >0.999 | 7 |
-# | SINDy (numerical derivatives) | >0.99 | ~7 |
-# | EnsembleSINDy | >0.999 | 7 (with uncertainty) |
+"""
+## Summary
+
+| Method | R² Score | Nonzero Terms |
+|--------|----------|---------------|
+| SINDy (clean derivatives) | >0.999 | 7 |
+| SINDy (numerical derivatives) | >0.99 | ~7 |
+| EnsembleSINDy | >0.999 | 7 (with uncertainty) |
+"""
 
 
 # %%

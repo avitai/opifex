@@ -13,14 +13,16 @@
 # ---
 
 # %% [markdown]
-# # Helmholtz Equation PINN
-#
-# This example demonstrates solving the 2D Helmholtz equation using a
-# Physics-Informed Neural Network (PINN). The Helmholtz equation arises
-# in acoustics, electromagnetics, and quantum mechanics (time-independent
-# Schrodinger equation).
-#
-# Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
+# Helmholtz Equation PINN
+
+This example demonstrates solving the 2D Helmholtz equation using a
+Physics-Informed Neural Network (PINN). The Helmholtz equation arises
+in acoustics, electromagnetics, and quantum mechanics (time-independent
+Schrodinger equation).
+
+Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
 
 # %%
 
@@ -61,17 +63,19 @@ LEARNING_RATE = 1e-3
 USE_HARD_CONSTRAINT = True
 
 # %% [markdown]
-# ## Problem Definition
-#
-# The Helmholtz equation:
-#
-# $$-\nabla^2 u - k_0^2 u = f(x, y)$$
-#
-# with:
-# - **Domain**: $[0, 1] \times [0, 1]$
-# - **Source term**: $f(x, y) = k_0^2 \sin(k_0 x) \sin(k_0 y)$
-# - **Boundary conditions**: $u = 0$ on $\partial\Omega$ (Dirichlet)
-# - **Analytical solution**: $u(x, y) = \sin(k_0 x) \sin(k_0 y)$
+r"""
+## Problem Definition
+
+The Helmholtz equation:
+
+$$-\nabla^2 u - k_0^2 u = f(x, y)$$
+
+with:
+- **Domain**: $[0, 1] \times [0, 1]$
+- **Source term**: $f(x, y) = k_0^2 \sin(k_0 x) \sin(k_0 y)$
+- **Boundary conditions**: $u = 0$ on $\partial\Omega$ (Dirichlet)
+- **Analytical solution**: $u(x, y) = \sin(k_0 x) \sin(k_0 y)$
+"""
 
 
 # %%
@@ -89,13 +93,15 @@ def source_term(xy):
 
 
 # %% [markdown]
-# ## PINN Architecture with Hard Constraint
-#
-# To exactly satisfy homogeneous Dirichlet BCs, we use a hard constraint:
-#
-# $$u_{net}(x, y) = x(1-x) \cdot y(1-y) \cdot \hat{u}(x, y)$$
-#
-# This ensures $u = 0$ on all boundaries automatically.
+r"""
+## PINN Architecture with Hard Constraint
+
+To exactly satisfy homogeneous Dirichlet BCs, we use a hard constraint:
+
+$$u_{net}(x, y) = x(1-x) \cdot y(1-y) \cdot \hat{u}(x, y)$$
+
+This ensures $u = 0$ on all boundaries automatically.
+"""
 
 
 # %%
@@ -150,15 +156,19 @@ class HelmholtzPINN(nnx.Module):
 
 
 # %% [markdown]
-# ## Collocation Points
+"""
+## Collocation Points
+"""
 
 # %% [markdown]
-# ## Physics-Informed Loss
-#
-# The Helmholtz equation residual:
-# $$\mathcal{L} = |-\nabla^2 u - k_0^2 u - f|^2$$
-#
-# With hard constraint, no boundary loss is needed!
+r"""
+## Physics-Informed Loss
+
+The Helmholtz equation residual:
+$$\mathcal{L} = |-\nabla^2 u - k_0^2 u - f|^2$$
+
+With hard constraint, no boundary loss is needed!
+"""
 
 
 # %%
@@ -220,7 +230,9 @@ def total_loss(pinn, xy_dom, xy_bc, lambda_bc=100.0):
 
 
 # %% [markdown]
-# ## Training
+"""
+## Training
+"""
 
 
 # %%
@@ -237,10 +249,12 @@ def train_step(pinn, opt, xy_dom, xy_bc):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# Builds collocation points, trains the PINN, evaluates against the exact
-# solution, and saves the visualizations.
+"""
+## Run the example
+
+Builds collocation points, trains the PINN, evaluates against the exact
+solution, and saves the visualizations.
+"""
 
 
 # %%

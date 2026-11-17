@@ -9,42 +9,46 @@
 # ---
 
 # %% [markdown]
-# # TFNO on Darcy Flow
-#
-# | Property      | Value                                    |
-# |---------------|------------------------------------------|
-# | Level         | Intermediate                             |
-# | Runtime       | ~5 min (CPU), ~1 min (GPU)               |
-# | Memory        | ~2 GB                                    |
-# | Prerequisites | JAX, Flax NNX, Neural Operators basics   |
-#
-# ## Overview
-#
-# Train a Tensorized Fourier Neural Operator (TFNO) on the Darcy flow problem.
-# A TFNO is an ordinary FNO whose spectral-convolution weights are stored as a
-# low-rank **tensor factorization** (CP / Tucker / Tensor-Train). At low rank this
-# uses a small fraction of the dense weight's parameters while retaining accuracy.
-#
-# This example demonstrates:
-#
-# - **`create_tucker_fno()`** factory for a Tucker-factorized FNO
-# - **Genuine low-rank compression** of the spectral weights (parameter count
-#   ``<<`` the dense FNO) measured with `get_compression_stats()`
-# - **Grid positional embedding** + **relative-L2 loss**, the standard recipe for
-#   operator learning on boundary-value problems
-# - **Comparison** with the dense FNO parameter count
-#
-# Tucker-factorized FNO after Kossaifi et al. 2023 (arXiv:2310.00120), implemented with Opifex.
-#
-# ## Learning Goals
-#
-# 1. Use `create_tucker_fno()` for a parameter-efficient FNO
-# 2. Understand Tucker compression of spectral weights
-# 3. Train with the relative-L2 loss and Gaussian input/output normalization
-# 4. Compare TFNO vs dense FNO parameter counts and read the accuracy
+"""
+# TFNO on Darcy Flow
+
+| Property      | Value                                    |
+|---------------|------------------------------------------|
+| Level         | Intermediate                             |
+| Runtime       | ~5 min (CPU), ~1 min (GPU)               |
+| Memory        | ~2 GB                                    |
+| Prerequisites | JAX, Flax NNX, Neural Operators basics   |
+
+## Overview
+
+Train a Tensorized Fourier Neural Operator (TFNO) on the Darcy flow problem.
+A TFNO is an ordinary FNO whose spectral-convolution weights are stored as a
+low-rank **tensor factorization** (CP / Tucker / Tensor-Train). At low rank this
+uses a small fraction of the dense weight's parameters while retaining accuracy.
+
+This example demonstrates:
+
+- **`create_tucker_fno()`** factory for a Tucker-factorized FNO
+- **Genuine low-rank compression** of the spectral weights (parameter count
+  ``<<`` the dense FNO) measured with `get_compression_stats()`
+- **Grid positional embedding** + **relative-L2 loss**, the standard recipe for
+  operator learning on boundary-value problems
+- **Comparison** with the dense FNO parameter count
+
+Tucker-factorized FNO after Kossaifi et al. 2023 (arXiv:2310.00120), implemented with Opifex.
+
+## Learning Goals
+
+1. Use `create_tucker_fno()` for a parameter-efficient FNO
+2. Understand Tucker compression of spectral weights
+3. Train with the relative-L2 loss and Gaussian input/output normalization
+4. Compare TFNO vs dense FNO parameter counts and read the accuracy
+"""
 
 # %% [markdown]
-# ## Imports and Setup
+"""
+## Imports and Setup
+"""
 
 # %%
 import time
@@ -74,11 +78,13 @@ from opifex.neural.operators.fno.tensorized import create_tucker_fno
 
 
 # %% [markdown]
-# ## Configuration
-#
-# The rank parameter controls compression: `rank=0.5` keeps each Tucker mode at
-# half its dense size, giving a large parameter reduction while preserving the
-# accuracy needed to resolve the Darcy solution.
+"""
+## Configuration
+
+The rank parameter controls compression: `rank=0.5` keeps each Tucker mode at
+half its dense size, giving a large parameter reduction while preserving the
+accuracy needed to resolve the Darcy solution.
+"""
 
 # %%
 RESOLUTION = 64
@@ -96,11 +102,13 @@ SEED = 42
 
 
 # %% [markdown]
-# ## Run the Example
-#
-# `main()` loads the binary Darcy data, builds the Tucker TFNO and a dense FNO
-# baseline, trains with the relative-L2 loss, evaluates, saves the figures, and
-# returns a small dict of finite metrics.
+"""
+## Run the Example
+
+`main()` loads the binary Darcy data, builds the Tucker TFNO and a dense FNO
+baseline, trains with the relative-L2 loss, evaluates, saves the figures, and
+returns a small dict of finite metrics.
+"""
 
 
 # %%
@@ -327,23 +335,25 @@ def main() -> dict[str, float | int]:
 
 
 # %% [markdown]
-# ## Results Summary
-#
-# The TFNO reaches a low relative L2 error on Darcy flow while using a small
-# fraction of the dense FNO's spectral parameters — the Tucker factorization
-# compresses the spectral weights without sacrificing accuracy.
-#
-# ## Next Steps
-#
-# - Try different rank values (0.25, 0.75) to explore the accuracy-compression tradeoff
-# - Compare with CP (`create_cp_fno()`) and Tensor Train (`create_tt_fno()`) factorizations
-# - Apply TFNO to larger problems where the memory savings are most significant
-#
-# ### Related Examples
-#
-# - [FNO on Darcy Flow](fno-darcy.md) — Standard FNO baseline
-# - [FNO on Burgers Equation](fno-burgers.md) — 1D temporal evolution
-# - [Operator Comparison Tour](operator-tour.md) — Compare all operators
+"""
+## Results Summary
+
+The TFNO reaches a low relative L2 error on Darcy flow while using a small
+fraction of the dense FNO's spectral parameters — the Tucker factorization
+compresses the spectral weights without sacrificing accuracy.
+
+## Next Steps
+
+- Try different rank values (0.25, 0.75) to explore the accuracy-compression tradeoff
+- Compare with CP (`create_cp_fno()`) and Tensor Train (`create_tt_fno()`) factorizations
+- Apply TFNO to larger problems where the memory savings are most significant
+
+### Related Examples
+
+- [FNO on Darcy Flow](fno-darcy.md) — Standard FNO baseline
+- [FNO on Burgers Equation](fno-burgers.md) — 1D temporal evolution
+- [Operator Comparison Tour](operator-tour.md) — Compare all operators
+"""
 
 # %%
 if __name__ == "__main__":

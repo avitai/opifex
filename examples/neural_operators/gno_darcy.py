@@ -13,23 +13,27 @@
 # ---
 
 # %% [markdown]
-# # GNO on Darcy Flow
-#
-# This example demonstrates training a Graph Neural Operator (GNO) on the
-# Darcy flow problem. GNO uses message passing neural networks to learn
-# operators on irregular domains, making it suitable for problems with
-# complex geometries or unstructured meshes.
-#
-# Unlike spectral operators (FNO, UNO), GNO samples local neighborhoods and is
-# genuinely harder to train on a regular Darcy grid. We therefore follow the
-# standard operator-learning recipe that makes it converge: ~1000 training
-# samples, **Gaussian normalization** of the input/output fields, the
-# scale-invariant **relative-L2 loss**, and mini-batched optimization. The raw
-# Darcy pressure is tiny (~0.05 scale), so without normalization the loss
-# gradients are negligible and the model never learns.
+"""
+# GNO on Darcy Flow
+
+This example demonstrates training a Graph Neural Operator (GNO) on the
+Darcy flow problem. GNO uses message passing neural networks to learn
+operators on irregular domains, making it suitable for problems with
+complex geometries or unstructured meshes.
+
+Unlike spectral operators (FNO, UNO), GNO samples local neighborhoods and is
+genuinely harder to train on a regular Darcy grid. We therefore follow the
+standard operator-learning recipe that makes it converge: ~1000 training
+samples, **Gaussian normalization** of the input/output fields, the
+scale-invariant **relative-L2 loss**, and mini-batched optimization. The raw
+Darcy pressure is tiny (~0.05 scale), so without normalization the loss
+gradients are negligible and the model never learns.
+"""
 
 # %% [markdown]
-# ## Imports and Setup
+"""
+## Imports and Setup
+"""
 
 # %%
 
@@ -54,7 +58,9 @@ from opifex.neural.operators.graph import (
 
 
 # %% [markdown]
-# ## Configuration
+"""
+## Configuration
+"""
 
 # %%
 # Problem configuration
@@ -73,11 +79,13 @@ CONNECTIVITY = 8  # 8-neighbor connectivity includes diagonals
 
 
 # %% [markdown]
-# ## Data, Loss, and Inference Helpers
-#
-# These pure helpers are parameterized so they can be reused by `main()`:
-# loader draining, the relative-L2 loss, the mini-batched training loop, and
-# batched grid prediction / evaluation.
+"""
+## Data, Loss, and Inference Helpers
+
+These pure helpers are parameterized so they can be reused by `main()`:
+loader draining, the relative-L2 loss, the mini-batched training loop, and
+batched grid prediction / evaluation.
+"""
 
 
 # %%
@@ -228,11 +236,13 @@ def evaluate_model(
 
 
 # %% [markdown]
-# ## Run the Example
-#
-# `main()` loads and normalizes the Darcy data, converts the grids to graphs,
-# trains the GNO with the relative-L2 loss, evaluates on the physical-space test
-# set, saves the figures, and returns a small dict of finite metrics.
+"""
+## Run the Example
+
+`main()` loads and normalizes the Darcy data, converts the grids to graphs,
+trains the GNO with the relative-L2 loss, evaluates on the physical-space test
+set, saves the figures, and returns a small dict of finite metrics.
+"""
 
 
 # %%

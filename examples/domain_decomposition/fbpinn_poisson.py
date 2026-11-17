@@ -13,19 +13,23 @@
 # ---
 
 # %% [markdown]
-# # FBPINN: Finite Basis PINN on Damped Harmonic Oscillator
-#
-# This example demonstrates solving the damped harmonic oscillator ODE using FBPINN
-# (Finite Basis Physics-Informed Neural Network).
-#
-# **Reference:** Ben Moseley, Andrew Markham, Tarje Nissen-Meyer.
-# "Finite Basis Physics-Informed Neural Networks (FBPINNs): a scalable domain decomposition
-# approach for solving differential equations" (2023), arXiv:2107.07871
-#
-# **Problem:** damped harmonic oscillator with a hard initial-condition constraint
+"""
+# FBPINN: Finite Basis PINN on Damped Harmonic Oscillator
+
+This example demonstrates solving the damped harmonic oscillator ODE using FBPINN
+(Finite Basis Physics-Informed Neural Network).
+
+**Reference:** Ben Moseley, Andrew Markham, Tarje Nissen-Meyer.
+"Finite Basis Physics-Informed Neural Networks (FBPINNs): a scalable domain decomposition
+approach for solving differential equations" (2023), arXiv:2107.07871
+
+**Problem:** damped harmonic oscillator with a hard initial-condition constraint
+"""
 
 # %% [markdown]
-# ## Setup and Imports
+"""
+## Setup and Imports
+"""
 
 # %%
 import jax
@@ -43,14 +47,16 @@ from opifex.neural.pinns.domain_decomposition import (
 
 
 # %% [markdown]
-# ## Configuration
-#
-# Problem setup:
-# - Domain: t in [0, 1]
-# - Damped harmonic oscillator: m*u'' + mu*u' + k*u = 0
-# - Parameters: d=2, w0=20 (gives mu=4, k=400)
-# - Hard BC: u = 1 + tanh(t/sd)^2 * u_network (enforces u(0)=1, u'(0)=0)
-# - sd=0.1 for the hard constraint smoothness
+"""
+## Configuration
+
+Problem setup:
+- Domain: t in [0, 1]
+- Damped harmonic oscillator: m*u'' + mu*u' + k*u = 0
+- Parameters: d=2, w0=20 (gives mu=4, k=400)
+- Hard BC: u = 1 + tanh(t/sd)^2 * u_network (enforces u(0)=1, u'(0)=0)
+- sd=0.1 for the hard constraint smoothness
+"""
 
 # %%
 # Problem configuration. These physics constants are
@@ -73,16 +79,18 @@ NUM_SUBDOMAINS = 4
 HIDDEN_DIMS = [32, 32]
 
 # %% [markdown]
-# ## Define the Problem
-#
-# The damped harmonic oscillator ODE:
-# $$m \frac{d^2 u}{dt^2} + \mu \frac{du}{dt} + k u = 0$$
-#
-# With hard boundary constraint following FBPINNs:
-# $$u = 1 + \tanh^2(t/\sigma) \cdot u_{network}$$
-#
-# At $t=0$: $\tanh(0)=0$, so $u=1$ (satisfies $u(0)=1$)
-# The derivative also satisfies $u'(0)=0$ by construction.
+r"""
+## Define the Problem
+
+The damped harmonic oscillator ODE:
+$$m \frac{d^2 u}{dt^2} + \mu \frac{du}{dt} + k u = 0$$
+
+With hard boundary constraint following FBPINNs:
+$$u = 1 + \tanh^2(t/\sigma) \cdot u_{network}$$
+
+At $t=0$: $\tanh(0)=0$, so $u=1$ (satisfies $u(0)=1$)
+The derivative also satisfies $u'(0)=0$ by construction.
+"""
 
 
 # %%
@@ -110,10 +118,12 @@ def hard_bc_constraint(t, u_network, sd=SD):
 
 
 # %% [markdown]
-# ## Create Custom FBPINN with Hard BC
-#
-# We subclass FBPINN to apply the hard boundary constraint directly in the forward pass.
-# This follows the standard Opifex pattern for implementing hard constraints (see AllenCahnPINN).
+"""
+## Create Custom FBPINN with Hard BC
+
+We subclass FBPINN to apply the hard boundary constraint directly in the forward pass.
+This follows the standard Opifex pattern for implementing hard constraints (see AllenCahnPINN).
+"""
 
 
 # %%
@@ -183,13 +193,17 @@ def count_params(m):
 
 
 # %% [markdown]
-# ## Generate Collocation Points
+"""
+## Generate Collocation Points
+"""
 
 # %% [markdown]
-# ## Define Physics-Informed Loss
-#
-# With hard BC constraint, we only need the PDE residual loss.
-# The boundary conditions are automatically satisfied.
+"""
+## Define Physics-Informed Loss
+
+With hard BC constraint, we only need the PDE residual loss.
+The boundary conditions are automatically satisfied.
+"""
 
 
 # %%
@@ -224,10 +238,12 @@ def pde_loss(model, t):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# All executable run logic (model construction, training, evaluation, and the
-# figure blocks) lives in `main()` so nothing heavy runs at import time.
+"""
+## Run the example
+
+All executable run logic (model construction, training, evaluation, and the
+figure blocks) lives in `main()` so nothing heavy runs at import time.
+"""
 
 
 # %%

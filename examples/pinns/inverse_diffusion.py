@@ -13,14 +13,16 @@
 # ---
 
 # %% [markdown]
-# # Inverse Diffusion Equation PINN
-#
-# This example demonstrates solving an inverse problem: discovering the unknown
-# diffusion coefficient in the heat/diffusion equation from sparse observations.
-#
-# **Reference**: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
-#
-# This is a fundamental inverse problem in PDE parameter identification.
+"""
+# Inverse Diffusion Equation PINN
+
+This example demonstrates solving an inverse problem: discovering the unknown
+diffusion coefficient in the heat/diffusion equation from sparse observations.
+
+**Reference**: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+
+This is a fundamental inverse problem in PDE parameter identification.
+"""
 
 # %%
 
@@ -62,21 +64,23 @@ LEARNING_RATE = 1e-3
 C_INIT = 2.0
 
 # %% [markdown]
-# ## Problem Definition
-#
-# **PDE**: Diffusion equation with source term
-#
-# $$\frac{\partial u}{\partial t} - C \frac{\partial^2 u}{\partial x^2} = f(x, t)$$
-#
-# where the source term is chosen so the exact solution is:
-#
-# $$u(x, t) = \sin(\pi x) \cdot e^{-t}$$
-#
-# Substituting this into the PDE gives us:
-#
-# $$f(x, t) = e^{-t}(\sin(\pi x) - C \cdot \pi^2 \sin(\pi x))$$
-#
-# **Inverse Problem**: Given observations of u(x,t), discover the unknown C.
+r"""
+## Problem Definition
+
+**PDE**: Diffusion equation with source term
+
+$$\frac{\partial u}{\partial t} - C \frac{\partial^2 u}{\partial x^2} = f(x, t)$$
+
+where the source term is chosen so the exact solution is:
+
+$$u(x, t) = \sin(\pi x) \cdot e^{-t}$$
+
+Substituting this into the PDE gives us:
+
+$$f(x, t) = e^{-t}(\sin(\pi x) - C \cdot \pi^2 \sin(\pi x))$$
+
+**Inverse Problem**: Given observations of u(x,t), discover the unknown C.
+"""
 
 
 # %%
@@ -102,7 +106,9 @@ def source_term(x, t):
 
 
 # %% [markdown]
-# ## PINN with Trainable Parameter
+"""
+## PINN with Trainable Parameter
+"""
 
 
 # %%
@@ -140,10 +146,14 @@ class InverseDiffusionPINN(nnx.Module):
 
 
 # %% [markdown]
-# ## Collocation Points and Observation Data
+"""
+## Collocation Points and Observation Data
+"""
 
 # %% [markdown]
-# ## Physics-Informed Loss with Parameter Discovery
+"""
+## Physics-Informed Loss with Parameter Discovery
+"""
 
 
 # %%
@@ -214,7 +224,9 @@ def total_loss(pinn, xt_dom, xt_bc, u_bc, xt_ic, u_ic, xt_obs, u_obs):
 
 
 # %% [markdown]
-# ## Training
+"""
+## Training
+"""
 
 
 # %%
@@ -231,11 +243,13 @@ def train_step(pinn, opt, xt_dom, xt_bc, u_bc, xt_ic, u_ic, xt_obs, u_obs):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# Builds collocation points and observations, trains the PINN while
-# discovering the diffusion coefficient, evaluates against the exact
-# solution, and saves the visualizations.
+"""
+## Run the example
+
+Builds collocation points and observations, trains the PINN while
+discovering the diffusion coefficient, evaluates against the exact
+solution, and saves the visualizations.
+"""
 
 
 # %%

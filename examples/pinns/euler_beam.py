@@ -13,12 +13,14 @@
 # ---
 
 # %% [markdown]
-# # Euler-Bernoulli Beam PINN
-#
-# This example demonstrates solving the Euler-Bernoulli beam equation using a PINN.
-# This is a fourth-order ODE from structural mechanics describing beam deflection.
-#
-# **Reference**: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
+# Euler-Bernoulli Beam PINN
+
+This example demonstrates solving the Euler-Bernoulli beam equation using a PINN.
+This is a fourth-order ODE from structural mechanics describing beam deflection.
+
+**Reference**: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
 
 # %%
 
@@ -54,23 +56,25 @@ EPOCHS = 15000
 LEARNING_RATE = 1e-3
 
 # %% [markdown]
-# ## Problem Definition
-#
-# **Euler-Bernoulli Beam Equation (4th order ODE):**
-#
-# $$EI \frac{d^4 w}{dx^4} = q(x)$$
-#
-# where:
-# - $w(x)$ = deflection
-# - $EI$ = flexural rigidity (set to 1)
-# - $q(x)$ = distributed load (set to -1)
-#
-# **Cantilever Beam Boundary Conditions:**
-# - Fixed end (x=0): $w(0) = 0$, $w'(0) = 0$
-# - Free end (x=1): $w''(1) = 0$ (moment), $w'''(1) = 0$ (shear)
-#
-# **Exact Solution:**
-# $$w(x) = -\frac{x^4}{24} + \frac{x^3}{6} - \frac{x^2}{4}$$
+r"""
+## Problem Definition
+
+**Euler-Bernoulli Beam Equation (4th order ODE):**
+
+$$EI \frac{d^4 w}{dx^4} = q(x)$$
+
+where:
+- $w(x)$ = deflection
+- $EI$ = flexural rigidity (set to 1)
+- $q(x)$ = distributed load (set to -1)
+
+**Cantilever Beam Boundary Conditions:**
+- Fixed end (x=0): $w(0) = 0$, $w'(0) = 0$
+- Free end (x=1): $w''(1) = 0$ (moment), $w'''(1) = 0$ (shear)
+
+**Exact Solution:**
+$$w(x) = -\frac{x^4}{24} + \frac{x^3}{6} - \frac{x^2}{4}$$
+"""
 
 
 # %%
@@ -95,7 +99,9 @@ def exact_third_derivative(x):
 
 
 # %% [markdown]
-# ## PINN Architecture
+"""
+## PINN Architecture
+"""
 
 
 # %%
@@ -125,9 +131,11 @@ class EulerBeamPINN(nnx.Module):
 
 
 # %% [markdown]
-# ## Physics-Informed Loss
-#
-# For 4th-order derivatives, we need to compute $w''''$ using nested differentiation.
+"""
+## Physics-Informed Loss
+
+For 4th-order derivatives, we need to compute $w''''$ using nested differentiation.
+"""
 
 
 # %%
@@ -209,7 +217,9 @@ def total_loss(pinn, x_dom, x_left, x_right, lambda_bc=100.0):
 
 
 # %% [markdown]
-# ## Training
+"""
+## Training
+"""
 
 
 # %%
@@ -226,10 +236,12 @@ def train_step(pinn, opt, x_dom, x_left, x_right):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# Builds collocation points, trains the beam PINN, evaluates against the exact
-# solution and boundary conditions, and saves the visualizations.
+"""
+## Run the example
+
+Builds collocation points, trains the beam PINN, evaluates against the exact
+solution and boundary conditions, and saves the visualizations.
+"""
 
 
 # %%

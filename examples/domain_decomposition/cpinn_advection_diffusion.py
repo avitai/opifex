@@ -13,14 +13,18 @@
 # ---
 
 # %% [markdown]
-# # CPINN: Conservative PINN on Advection-Diffusion Equation
-#
-# This example demonstrates solving the 1D advection-diffusion equation using CPINN
-# (Conservative Physics-Informed Neural Network). CPINNs enforce strong flux
-# conservation at subdomain interfaces, critical for conservation laws.
+"""
+# CPINN: Conservative PINN on Advection-Diffusion Equation
+
+This example demonstrates solving the 1D advection-diffusion equation using CPINN
+(Conservative Physics-Informed Neural Network). CPINNs enforce strong flux
+conservation at subdomain interfaces, critical for conservation laws.
+"""
 
 # %% [markdown]
-# ## Setup and Imports
+"""
+## Setup and Imports
+"""
 
 # %%
 import jax
@@ -39,7 +43,9 @@ from opifex.neural.pinns.domain_decomposition import (
 
 
 # %% [markdown]
-# ## Configuration
+"""
+## Configuration
+"""
 
 # %%
 # Problem configuration
@@ -61,14 +67,16 @@ NUM_SUBDOMAINS = 3
 HIDDEN_DIMS = [32, 32]
 
 # %% [markdown]
-# ## Define the Advection-Diffusion Problem
-#
-# We solve the 1D advection-diffusion equation:
-# $$\frac{\partial u}{\partial t} + c \frac{\partial u}{\partial x} = D \frac{\partial^2 u}{\partial x^2}$$
-#
-# With initial condition $u(x, 0) = \sin(\pi x)$ and Dirichlet BCs taken from the exact
-# solution's boundary trace (method of manufactured solutions), so the problem is well-posed and
-# the analytic ``exact_solution`` is the true reference.
+r"""
+## Define the Advection-Diffusion Problem
+
+We solve the 1D advection-diffusion equation:
+$$\frac{\partial u}{\partial t} + c \frac{\partial u}{\partial x} = D \frac{\partial^2 u}{\partial x^2}$$
+
+With initial condition $u(x, 0) = \sin(\pi x)$ and Dirichlet BCs taken from the exact
+solution's boundary trace (method of manufactured solutions), so the problem is well-posed and
+the analytic ``exact_solution`` is the true reference.
+"""
 
 
 # %%
@@ -86,10 +94,12 @@ def initial_condition(x):
 
 
 # %% [markdown]
-# ## Create CPINN Model with 3 Subdomains
-#
-# We decompose the domain into 3 subdomains along x:
-# [0, 1/3], [1/3, 2/3], [2/3, 1]
+"""
+## Create CPINN Model with 3 Subdomains
+
+We decompose the domain into 3 subdomains along x:
+[0, 1/3], [1/3, 2/3], [2/3, 1]
+"""
 
 
 # %%
@@ -99,7 +109,9 @@ def count_params(m):
 
 
 # %% [markdown]
-# ## Define Physics-Informed Loss
+"""
+## Define Physics-Informed Loss
+"""
 
 
 # %%
@@ -199,7 +211,9 @@ def total_loss(model, collocation_points, xt_bc, u_bc, xt_ic, u_ic, config):
 
 
 # %% [markdown]
-# ## Run the Example
+"""
+## Run the Example
+"""
 
 
 # %%
