@@ -265,16 +265,17 @@ def main() -> dict[str, float | int]:
     plt.show()
     print(f"Saved: {output_dir}/grid-embedding-channels.png")
 
-    return {
+    summary = {
         "resolution": resolution,
         "plain_relative_l2": plain_l2,
         "embedded_relative_l2": embedded_l2,
         "error_reduction_percent": (1 - embedded_l2 / plain_l2) * 100,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

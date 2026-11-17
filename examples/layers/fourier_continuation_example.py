@@ -158,16 +158,17 @@ def main() -> dict[str, float | int]:
     plt.show()
     print(f"Saved: {output_dir}/fourier-continuation-derivative.png")
 
-    return {
+    summary = {
         "grid_points": n,
         "naive_relative_l2": naive_err,
         "continued_relative_l2": continued_err,
         "error_reduction_factor": naive_err / continued_err,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

@@ -357,17 +357,18 @@ def main() -> dict[str, float | int]:
     print()
     print("Distributed operator-learning complete!")
 
-    return {
+    summary = {
         "num_devices": int(num_devices),
         "model_parameters": param_count,
         "initial_train_loss": initial_train_loss,
         "final_train_loss": final_train_loss,
         "test_rel_l2": test_rel_l2,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

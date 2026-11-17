@@ -535,13 +535,16 @@ def main() -> dict[str, float | int]:
     print("=" * 70)
 
     best = results[best_name]
-    return {
+    summary = {
         "num_operators": len(results),
         "best_rel_l2": best["mean_rel_l2"],
         "best_mse": best["mse"],
         "best_parameters": int(best["params"]),
         "mean_baseline_rel_l2": mean_baseline_rel_l2,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -573,6 +576,4 @@ After running this tour you will have:
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

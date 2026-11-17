@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `advanced_training/ntk_analysis.py` sampled a key it then split.
   `data/darcy_flow_spectral_analysis.py` generated its data with seed 0 whatever key it was given,
   the first word of a raw key below 2**32; it now takes the seed itself, 42.
+- Each example's `main()` prints its summary and returns it, and its last cell ends with a bare
+  `if __name__ == "__main__": main()` (56 examples), so a notebook run keeps the value
+  `main()` returns: the five uncertainty result tests read it rather than `None`.
 - Require `calibrax>=0.1.20` and `substrax>=0.1.28`; the `test` extra installs
   `substrax[notebooks,testing]`, which brings the notebook kernel and converter, so `ipykernel`
   and `jupytext` leave `dev`.

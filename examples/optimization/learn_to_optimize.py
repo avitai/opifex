@@ -315,7 +315,7 @@ def main() -> dict[str, float | int]:
     print("reaching the target loss faster. The claim is scoped to held-out tasks from the")
     print("meta-training family — not an out-of-distribution result (cf. arXiv:2310.18191).")
 
-    return {
+    summary = {
         "input_dim": INPUT_DIM,
         "hidden_dim": HIDDEN_DIM,
         "num_outer_steps": NUM_OUTER_STEPS,
@@ -327,10 +327,11 @@ def main() -> dict[str, float | int]:
         "speedup_vs_adam": adam_speedup,
         "speedup_vs_sgd": sgd_speedup,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for name, value in summary.items():
-        print(f"{name}: {value}")
+    main()

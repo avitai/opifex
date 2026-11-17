@@ -399,6 +399,8 @@ def main() -> dict[str, float | int]:
     final_train_loss = metrics.get("final_train_loss", "N/A")
     if isinstance(final_train_loss, int | float) and np.isfinite(final_train_loss):
         summary["final_train_loss"] = float(final_train_loss)
+    for name, value in summary.items():
+        print(f"{name}: {value}")
     return summary
 
 
@@ -421,6 +423,4 @@ After running this example you should observe:
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

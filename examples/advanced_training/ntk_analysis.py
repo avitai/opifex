@@ -439,7 +439,7 @@ def main() -> dict[str, float | int]:
     print("NTK analysis example completed successfully!")
     print(f"Results saved to: {output_dir}")
 
-    return {
+    summary = {
         "param_count": int(n_params),
         "final_loss": float(losses[-1]),
         "l2_error": float(l2_error),
@@ -447,10 +447,11 @@ def main() -> dict[str, float | int]:
         "initial_condition_number": float(ntk_history["condition_number"][0]),
         "final_condition_number": float(ntk_history["condition_number"][-1]),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

@@ -601,13 +601,16 @@ def main() -> dict[str, float | int]:
     print(f"Saved plots to {OUTPUT_DIR}/")
     print("  parity.png, loss_curve.png")
 
-    return {
+    summary = {
         "energy_mae_meV": final_metrics["energy_mae"],
         "energy_rmse_meV": final_metrics["energy_rmse"],
         "force_mae_meV_per_ang": final_metrics["force_mae"],
         "force_rmse_meV_per_ang": final_metrics["force_rmse"],
         "num_params": num_params,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -633,6 +636,4 @@ precision and the conditioning were each verified not to move it. See
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

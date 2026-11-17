@@ -627,11 +627,14 @@ def main() -> dict[str, float | int]:
     plt.close()
     print(f"  Saved: {OUTPUT_DIR / 'analysis.png'}")
 
-    return {
+    summary = {
         "rel_l2": mean_rel_l2,
         "coverage": pointwise_coverage,
         "param_count": int(base_param_count),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -663,6 +666,4 @@ uses ~1000 / ~500 / ~500 samples with several hundred epochs per stage.
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

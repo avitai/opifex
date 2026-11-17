@@ -567,12 +567,15 @@ def main() -> dict[str, float | int]:
     plt.close()
     print(f"  Saved: {OUTPUT_DIR / 'analysis.png'}")
 
-    return {
+    summary = {
         "rel_l2": mean_rel_l2,
         "empirical_coverage": coverage_target,
         "mean_interval_width": float(jnp.mean(2.0 * COVERAGE_Z * test_std)),
         "param_count": int(member_params * NUM_MEMBERS),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -600,6 +603,4 @@ def main() -> dict[str, float | int]:
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

@@ -263,16 +263,17 @@ def main() -> dict[str, float | int]:
     r2_numerical = model_numerical.score(x_data, x_dot)
     print(f"R² with numerical derivatives: {r2_numerical:.6f}")
 
-    return {
+    summary = {
         "r2_clean": float(r2),
         "r2_numerical": float(r2_numerical),
         "nonzero_terms": nonzero_terms,
         "ensemble_mean_uncertainty": ensemble_mean_uncertainty,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

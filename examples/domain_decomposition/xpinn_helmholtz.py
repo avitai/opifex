@@ -498,7 +498,7 @@ def main() -> dict[str, float | int]:
     print(f"Training Epochs:     {EPOCHS}")
     print(f"Number of Subdomains:{len(subdomains)}")
 
-    return {
+    summary = {
         "total_params": int(total_params),
         "final_loss": float(losses[-1]),
         "ic_error": float(ic_error),
@@ -507,10 +507,11 @@ def main() -> dict[str, float | int]:
         "num_subdomains": len(subdomains),
         "epochs": int(EPOCHS),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

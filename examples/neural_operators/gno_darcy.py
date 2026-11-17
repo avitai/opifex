@@ -429,7 +429,7 @@ def main() -> dict[str, float | int]:
     print(f"Results saved to: {OUTPUT_DIR}")
     print("=" * 70)
 
-    return {
+    summary = {
         "test_mse": gno_mse,
         "test_rel_l2": gno_rel_l2,
         "test_rel_l2_min": gno_rel_l2_min,
@@ -437,10 +437,11 @@ def main() -> dict[str, float | int]:
         "final_train_loss": gno_losses[-1],
         "num_parameters": int(gno_params),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()
