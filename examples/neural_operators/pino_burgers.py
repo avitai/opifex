@@ -9,64 +9,68 @@
 # ---
 
 # %% [markdown]
-# # Physics-Informed Neural Operator (PINO) on Burgers Equation
-#
-# | Property      | Value                                    |
-# |---------------|------------------------------------------|
-# | Level         | Advanced                                 |
-# | Runtime       | ~3 min (CPU) / ~1-2 min (GPU)           |
-# | Memory        | ~2 GB                                    |
-# | Prerequisites | JAX, Flax NNX, FNO, PDEs basics          |
-#
-# ## Overview
-#
-# Train a Physics-Informed Neural Operator (PINO) on the 1D viscous Burgers
-# equation. PINO pairs the FNO architecture with a physics-informed loss so that
-# the learned operator both fits the data *and* satisfies the governing PDE.
-#
-# The Burgers equation is
-#
-#     u_t + u * u_x = nu * u_xx ,
-#
-# where ``u`` is velocity, ``nu`` is viscosity, and subscripts denote partial
-# derivatives. The spatial domain is the periodic interval ``[0, 1)``.
-#
-# ## The genuine PINO setup
-#
-# Following Li et al. (2021), *Physics-Informed Neural Operator for Learning
-# Partial Differential Equations* (arXiv:2111.03794), the operator maps the
-# initial condition ``u(x, 0)`` — broadcast/repeated across the time axis — to
-# the **full space-time solution** ``u(t, x)``, a 2D field over ``(time, space)``.
-#
-# Training minimises three terms:
-#
-# - **data loss**: mean relative L2 between the predicted and the
-#   ground-truth space-time trajectory,
-# - **IC loss**: MSE between the predicted ``t = 0`` slice and the true initial
-#   condition,
-# - **equation loss**: the mean-squared Burgers PDE residual
-#   ``u_t + u * u_x - nu * u_xx`` evaluated by finite differences over the whole
-#   predicted field.
-#
-# The viscosity ``nu = 0.01`` is shared between the data-generating solver and
-# the equation loss, so the supervised physics is self-consistent.
-#
-# This example demonstrates:
-#
-# - **2D FNO backbone** over the ``(time, space)`` grid for operator learning
-# - **Physics loss** via a finite-difference Burgers residual
-# - **Multi-objective training** balancing data, IC, and equation losses
-# - **On-device data generation** with the pseudo-spectral ETDRK4 solver
-#
-# ## Learning Goals
-#
-# 1. Understand the PINO operator: IC tiled over time -> full ``u(t, x)`` field
-# 2. Implement the Burgers PDE residual with finite differences
-# 3. Combine data + IC + equation losses with fixed weights
-# 4. Generate self-consistent Burgers trajectories with the spectral solver
+"""
+# Physics-Informed Neural Operator (PINO) on Burgers Equation
+
+| Property      | Value                                    |
+|---------------|------------------------------------------|
+| Level         | Advanced                                 |
+| Runtime       | ~3 min (CPU) / ~1-2 min (GPU)           |
+| Memory        | ~2 GB                                    |
+| Prerequisites | JAX, Flax NNX, FNO, PDEs basics          |
+
+## Overview
+
+Train a Physics-Informed Neural Operator (PINO) on the 1D viscous Burgers
+equation. PINO pairs the FNO architecture with a physics-informed loss so that
+the learned operator both fits the data *and* satisfies the governing PDE.
+
+The Burgers equation is
+
+    u_t + u * u_x = nu * u_xx ,
+
+where ``u`` is velocity, ``nu`` is viscosity, and subscripts denote partial
+derivatives. The spatial domain is the periodic interval ``[0, 1)``.
+
+## The genuine PINO setup
+
+Following Li et al. (2021), *Physics-Informed Neural Operator for Learning
+Partial Differential Equations* (arXiv:2111.03794), the operator maps the
+initial condition ``u(x, 0)`` — broadcast/repeated across the time axis — to
+the **full space-time solution** ``u(t, x)``, a 2D field over ``(time, space)``.
+
+Training minimises three terms:
+
+- **data loss**: mean relative L2 between the predicted and the
+  ground-truth space-time trajectory,
+- **IC loss**: MSE between the predicted ``t = 0`` slice and the true initial
+  condition,
+- **equation loss**: the mean-squared Burgers PDE residual
+  ``u_t + u * u_x - nu * u_xx`` evaluated by finite differences over the whole
+  predicted field.
+
+The viscosity ``nu = 0.01`` is shared between the data-generating solver and
+the equation loss, so the supervised physics is self-consistent.
+
+This example demonstrates:
+
+- **2D FNO backbone** over the ``(time, space)`` grid for operator learning
+- **Physics loss** via a finite-difference Burgers residual
+- **Multi-objective training** balancing data, IC, and equation losses
+- **On-device data generation** with the pseudo-spectral ETDRK4 solver
+
+## Learning Goals
+
+1. Understand the PINO operator: IC tiled over time -> full ``u(t, x)`` field
+2. Implement the Burgers PDE residual with finite differences
+3. Combine data + IC + equation losses with fixed weights
+4. Generate self-consistent Burgers trajectories with the spectral solver
+"""
 
 # %% [markdown]
-# ## Imports and Setup
+"""
+## Imports and Setup
+"""
 
 # %%
 import time
@@ -94,12 +98,14 @@ from opifex.physics.spectral.steppers import solve_burgers_spectral
 
 
 # %% [markdown]
-# ## Configuration
-#
-# The model maps the IC, tiled over ``NUM_TIME`` frames, to the full space-time
-# field. ``VISCOSITY`` is used both by the solver and by the equation loss so the
-# physics is self-consistent. The loss weights are ordered (data, IC, equation);
-# fixed weights are used here for a clean, reproducible result.
+"""
+## Configuration
+
+The model maps the IC, tiled over ``NUM_TIME`` frames, to the full space-time
+field. ``VISCOSITY`` is used both by the solver and by the equation loss so the
+physics is self-consistent. The loss weights are ordered (data, IC, equation);
+fixed weights are used here for a clean, reproducible result.
+"""
 
 # %%
 NUM_SPACE = 128  # spatial resolution (nx)
@@ -130,15 +136,17 @@ DT = TIME_FINAL / (NUM_TIME - 1)
 
 
 # %% [markdown]
-# ## Data Generation
-#
-# Initial conditions are opifex's canonical periodic spectral Gaussian-random-field
-# Burgers ICs (``opifex.data.sources.pde_generation._burgers_ic`` — the same
-# generator behind ``create_burgers_loader``, reused here rather than reimplemented).
-# Each IC is evolved to the full trajectory ``u(t, x)`` with opifex's pseudo-spectral
-# ETDRK4 Burgers solver, vmapped over the batch on device.
-# ``solve_burgers_spectral`` returns ``(num_snapshots + 1, nx)`` real snapshots
-# including the initial condition, i.e. exactly the ``nt = NUM_TIME`` time frames.
+"""
+## Data Generation
+
+Initial conditions are opifex's canonical periodic spectral Gaussian-random-field
+Burgers ICs (``opifex.data.sources.pde_generation._burgers_ic`` — the same
+generator behind ``create_burgers_loader``, reused here rather than reimplemented).
+Each IC is evolved to the full trajectory ``u(t, x)`` with opifex's pseudo-spectral
+ETDRK4 Burgers solver, vmapped over the batch on device.
+``solve_burgers_spectral`` returns ``(num_snapshots + 1, nx)`` real snapshots
+including the initial condition, i.e. exactly the ``nt = NUM_TIME`` time frames.
+"""
 
 
 # %%
@@ -174,12 +182,14 @@ def generate_trajectories(n_samples: int, seed: int) -> jax.Array:
 
 
 # %% [markdown]
-# ## Physics Loss: Burgers Equation Residual
-#
-# The residual is computed by finite differences over the predicted field of
-# shape ``(batch, nt, nx)``: a forward difference in time, central differences in
-# space with periodic wrap-around. A perfect solution has zero residual of the
-# Burgers equation ``u_t + u*u_x - nu*u_xx = 0``.
+"""
+## Physics Loss: Burgers Equation Residual
+
+The residual is computed by finite differences over the predicted field of
+shape ``(batch, nt, nx)``: a forward difference in time, central differences in
+space with periodic wrap-around. A perfect solution has zero residual of the
+Burgers equation ``u_t + u*u_x - nu*u_xx = 0``.
+"""
 
 
 # %%
@@ -250,11 +260,13 @@ def pino_loss_fn(
 
 
 # %% [markdown]
-# ## Run the Example
-#
-# ``main()`` generates the Burgers trajectories, builds the 2D FNO backbone,
-# trains with the combined data + IC + equation loss, evaluates on the held-out
-# test trajectories, saves figures, and returns a small dict of finite metrics.
+"""
+## Run the Example
+
+``main()`` generates the Burgers trajectories, builds the 2D FNO backbone,
+trains with the combined data + IC + equation loss, evaluates on the held-out
+test trajectories, saves figures, and returns a small dict of finite metrics.
+"""
 
 
 # %%
@@ -469,28 +481,30 @@ def main() -> dict[str, float | int]:
 
 
 # %% [markdown]
-# ## Results Summary
-#
-# The PINO learns the full space-time Burgers solution operator from the tiled
-# initial condition. The data term drives accuracy, the IC term pins the
-# ``t = 0`` slice to the true initial condition, and the equation term keeps the
-# predicted field consistent with the Burgers PDE — the mean PDE residual is
-# reported on the held-out test set.
-#
-# ## Next Steps
-#
-# - Vary the loss weights (data / IC / equation) and study the trade-off
-# - Swap fixed weights for an adaptive aggregator (SoftAdapt, ReLoBRaLo)
-# - Increase ``NUM_TIME`` for a denser temporal grid
-# - Use spectral differentiation instead of finite differences for the residual
-# - Extend the operator to varying viscosity (add ``nu`` as an input channel)
-#
-# ### Related Examples
-#
-# - [FNO on Burgers Equation](fno-burgers.md) — Data-only FNO baseline
-# - [FNO on Darcy Flow](fno-darcy.md) — 2D elliptic PDE
-# - [Burgers PINN](../pinns/burgers.md) — Physics-only neural network
-# - [TFNO on Darcy Flow](tfno-darcy.md) — Tensorized FNO with compression
+"""
+## Results Summary
+
+The PINO learns the full space-time Burgers solution operator from the tiled
+initial condition. The data term drives accuracy, the IC term pins the
+``t = 0`` slice to the true initial condition, and the equation term keeps the
+predicted field consistent with the Burgers PDE — the mean PDE residual is
+reported on the held-out test set.
+
+## Next Steps
+
+- Vary the loss weights (data / IC / equation) and study the trade-off
+- Swap fixed weights for an adaptive aggregator (SoftAdapt, ReLoBRaLo)
+- Increase ``NUM_TIME`` for a denser temporal grid
+- Use spectral differentiation instead of finite differences for the residual
+- Extend the operator to varying viscosity (add ``nu`` as an input channel)
+
+### Related Examples
+
+- [FNO on Burgers Equation](fno-burgers.md) — Data-only FNO baseline
+- [FNO on Darcy Flow](fno-darcy.md) — 2D elliptic PDE
+- [Burgers PINN](../pinns/burgers.md) — Physics-only neural network
+- [TFNO on Darcy Flow](tfno-darcy.md) — Tensorized FNO with compression
+"""
 
 # %%
 if __name__ == "__main__":

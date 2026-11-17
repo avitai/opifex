@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names a path below `examples/` in snake_case; every reference to an example's source moves with
   them, and the compute jobs and budgets name the new paths. The hand-written pages under
   `docs/examples/` keep their paths until generated pages replace them.
+- Every example's markdown cells are triple-quoted strings, as substrax's guide writes them: 124
+  cells written as comments in 19 examples change form, their text unchanged; `data/` examples
+  open with their title cell, without a shebang line; `data/darcy_flow_analysis.py` reads no
+  command-line arguments, its sizes being named constants, and `main()` takes none.
 - Require `calibrax>=0.1.20` and `substrax>=0.1.28`; the `test` extra installs
   `substrax[notebooks,testing]`, which brings the notebook kernel and converter, so `ipykernel`
   and `jupytext` leave `dev`.

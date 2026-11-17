@@ -13,22 +13,26 @@
 # ---
 
 # %% [markdown]
-# # XPINN: Extended PINN on Viscous Burgers Equation
-#
-# This example demonstrates solving the 1D viscous Burgers equation using XPINN
-# (Extended Physics-Informed Neural Network). XPINNs use non-overlapping
-# subdomains with explicit interface conditions for continuity and flux matching.
-#
-# **Reference:** Ameya D. Jagtap, George Em Karniadakis.
-# "Extended Physics-Informed Neural Networks (XPINNs):
-# A Generalized Space-Time Domain Decomposition Based Deep Learning Framework
-# for Nonlinear Partial Differential Equations" (2020)
-#
-# **Problem Reference:** the viscous Burgers benchmark of Raissi, Perdikaris & Karniadakis
-# (2019), J. Comput. Phys. 378, 686
+"""
+# XPINN: Extended PINN on Viscous Burgers Equation
+
+This example demonstrates solving the 1D viscous Burgers equation using XPINN
+(Extended Physics-Informed Neural Network). XPINNs use non-overlapping
+subdomains with explicit interface conditions for continuity and flux matching.
+
+**Reference:** Ameya D. Jagtap, George Em Karniadakis.
+"Extended Physics-Informed Neural Networks (XPINNs):
+A Generalized Space-Time Domain Decomposition Based Deep Learning Framework
+for Nonlinear Partial Differential Equations" (2020)
+
+**Problem Reference:** the viscous Burgers benchmark of Raissi, Perdikaris & Karniadakis
+(2019), J. Comput. Phys. 378, 686
+"""
 
 # %% [markdown]
-# ## Setup and Imports
+"""
+## Setup and Imports
+"""
 
 # %%
 import jax
@@ -47,13 +51,15 @@ from opifex.neural.pinns.domain_decomposition import (
 
 
 # %% [markdown]
-# ## Configuration
-#
-# Following the standard Burgers setup (Raissi et al. 2019; Lu et al. 2021, DeepXDE):
-# - Domain: x in [-1, 1], t in [0, 1]
-# - Viscosity: nu = 0.01/pi
-# - IC: u(x, 0) = -sin(pi*x)
-# - BC: u(-1, t) = u(1, t) = 0
+"""
+## Configuration
+
+Following the standard Burgers setup (Raissi et al. 2019; Lu et al. 2021, DeepXDE):
+- Domain: x in [-1, 1], t in [0, 1]
+- Viscosity: nu = 0.01/pi
+- IC: u(x, 0) = -sin(pi*x)
+- BC: u(-1, t) = u(1, t) = 0
+"""
 
 # %%
 # Problem configuration (Raissi et al. 2019)
@@ -74,12 +80,14 @@ NUM_SUBDOMAINS = 2
 HIDDEN_DIMS = [40, 40, 40]
 
 # %% [markdown]
-# ## Define the Burgers Problem
-#
-# The 1D viscous Burgers equation:
-# $$\frac{\partial u}{\partial t} + u \frac{\partial u}{\partial x} = \nu \frac{\partial^2 u}{\partial x^2}$$
-#
-# With initial condition $u(x, 0) = -\sin(\pi x)$ and Dirichlet BCs $u(\pm 1, t) = 0$.
+r"""
+## Define the Burgers Problem
+
+The 1D viscous Burgers equation:
+$$\frac{\partial u}{\partial t} + u \frac{\partial u}{\partial x} = \nu \frac{\partial^2 u}{\partial x^2}$$
+
+With initial condition $u(x, 0) = -\sin(\pi x)$ and Dirichlet BCs $u(\pm 1, t) = 0$.
+"""
 
 
 # %%
@@ -100,9 +108,11 @@ def count_params(m):
 
 
 # %% [markdown]
-# ## Define Physics-Informed Loss
-#
-# Following the FBPINNs hard boundary constraint approach using tanh masking.
+"""
+## Define Physics-Informed Loss
+
+Following the FBPINNs hard boundary constraint approach using tanh masking.
+"""
 
 
 # %%
@@ -201,10 +211,12 @@ def total_loss(model, colloc_pts, xt_bc, u_bc, xt_ic, u_ic, config):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# All run logic lives in ``main()``: model construction, collocation point
-# generation, the training loop, evaluation, and visualization.
+"""
+## Run the example
+
+All run logic lives in ``main()``: model construction, collocation point
+generation, the training loop, evaluation, and visualization.
+"""
 
 
 # %%

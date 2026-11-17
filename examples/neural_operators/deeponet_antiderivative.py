@@ -9,40 +9,44 @@
 # ---
 
 # %% [markdown]
-# # DeepONet on Antiderivative Operator
-#
-# | Property      | Value                                    |
-# |---------------|------------------------------------------|
-# | Level         | Beginner                                 |
-# | Runtime       | ~30s (CPU), ~5s (GPU)                    |
-# | Memory        | ~500 MB                                  |
-# | Prerequisites | JAX, Flax NNX, Neural Operators basics   |
-#
-# ## Overview
-#
-# Train a DeepONet to learn the antiderivative operator, the canonical benchmark
-# from the original DeepONet paper (Lu et al., 2021). Given a function v(x),
-# the operator learns to predict u(x) = ∫₀ˣ v(t) dt.
-#
-# This example demonstrates:
-#
-# - **DeepONet architecture** with branch (function encoder) and trunk (location encoder)
-# - **Custom training loop** for operators with two distinct inputs
-# - **Antiderivative data generation** using Gaussian Random Field (GRF) basis
-# - **Zero initial condition constraint** via output transformation
-#
-# Follows the antiderivative operator example of the DeepONet paper
-# (Lu, Jin & Karniadakis 2021, arXiv:1910.03193), implemented with Opifex APIs.
-#
-# ## Learning Goals
-#
-# 1. Understand branch-trunk DeepONet architecture
-# 2. Generate synthetic operator learning data
-# 3. Implement custom training loop for multi-input operators
-# 4. Apply physics constraints via output transformations
+"""
+# DeepONet on Antiderivative Operator
+
+| Property      | Value                                    |
+|---------------|------------------------------------------|
+| Level         | Beginner                                 |
+| Runtime       | ~30s (CPU), ~5s (GPU)                    |
+| Memory        | ~500 MB                                  |
+| Prerequisites | JAX, Flax NNX, Neural Operators basics   |
+
+## Overview
+
+Train a DeepONet to learn the antiderivative operator, the canonical benchmark
+from the original DeepONet paper (Lu et al., 2021). Given a function v(x),
+the operator learns to predict u(x) = ∫₀ˣ v(t) dt.
+
+This example demonstrates:
+
+- **DeepONet architecture** with branch (function encoder) and trunk (location encoder)
+- **Custom training loop** for operators with two distinct inputs
+- **Antiderivative data generation** using Gaussian Random Field (GRF) basis
+- **Zero initial condition constraint** via output transformation
+
+Follows the antiderivative operator example of the DeepONet paper
+(Lu, Jin & Karniadakis 2021, arXiv:1910.03193), implemented with Opifex APIs.
+
+## Learning Goals
+
+1. Understand branch-trunk DeepONet architecture
+2. Generate synthetic operator learning data
+3. Implement custom training loop for multi-input operators
+4. Apply physics constraints via output transformations
+"""
 
 # %% [markdown]
-# ## Imports and Setup
+"""
+## Imports and Setup
+"""
 
 # %%
 import time
@@ -68,11 +72,13 @@ from opifex.neural.operators.deeponet import DeepONet
 
 
 # %% [markdown]
-# ## Configuration
-#
-# The antiderivative operator maps v(x) → u(x) where du/dx = v(x) and u(0) = 0.
-# We generate input functions v using a Gaussian Random Field (GRF) basis
-# with random coefficients, ensuring diverse function shapes.
+"""
+## Configuration
+
+The antiderivative operator maps v(x) → u(x) where du/dx = v(x) and u(0) = 0.
+We generate input functions v using a Gaussian Random Field (GRF) basis
+with random coefficients, ensuring diverse function shapes.
+"""
 
 # %%
 N_SENSORS = 50  # Number of sensor points for input function
@@ -86,11 +92,13 @@ LATENT_DIM = 64  # Shared dimension for branch/trunk outputs
 SEED = 42
 
 # %% [markdown]
-# ## Data Generation
-#
-# Generate input functions v(x) using a truncated Fourier series with random
-# coefficients. For each v, compute the antiderivative u(x) = ∫₀ˣ v(t) dt
-# using cumulative trapezoidal integration.
+"""
+## Data Generation
+
+Generate input functions v(x) using a truncated Fourier series with random
+coefficients. For each v, compute the antiderivative u(x) = ∫₀ˣ v(t) dt
+using cumulative trapezoidal integration.
+"""
 
 
 # %%
@@ -149,10 +157,12 @@ def generate_dataset(
 
 
 # %% [markdown]
-# ## Training and Evaluation Helpers
-#
-# The zero initial condition u(0) = 0 is enforced by multiplying predictions by
-# the x-coordinate. ``train_step`` and ``eval_model`` are JIT-compiled.
+"""
+## Training and Evaluation Helpers
+
+The zero initial condition u(0) = 0 is enforced by multiplying predictions by
+the x-coordinate. ``train_step`` and ``eval_model`` are JIT-compiled.
+"""
 
 
 # %%
@@ -193,10 +203,12 @@ def eval_model(model: DeepONet, x_branch: jax.Array, x_trunk: jax.Array) -> jax.
 
 
 # %% [markdown]
-# ## Run the Example
-#
-# `main()` generates the dataset, builds and trains the DeepONet, evaluates on
-# the test split, saves the figures, and returns a small dict of finite metrics.
+"""
+## Run the Example
+
+`main()` generates the dataset, builds and trains the DeepONet, evaluates on
+the test split, saves the figures, and returns a small dict of finite metrics.
+"""
 
 
 # %%
@@ -384,26 +396,28 @@ def main() -> dict[str, float | int]:
 
 
 # %% [markdown]
-# ## Results Summary
-#
-# The DeepONet learns to approximate the antiderivative operator with low error.
-# Key observations:
-# - The zero IC constraint (multiplying by x) ensures u(0) = 0
-# - Smooth GRF-based input functions are well-captured by the learned operator
-# - Error is typically largest near x=1 where the integral accumulates
-#
-# ## Next Steps
-#
-# - Try different input function distributions (step functions, polynomials)
-# - Experiment with physics-informed loss (adding du/dx = v constraint)
-# - Scale to higher-dimensional problems
-# - Compare against `FourierEnhancedDeepONet` for spectral input functions
-#
-# ### Related Examples
-#
-# - [DeepONet on Darcy Flow](deeponet-darcy.md) — 2D operator learning
-# - [FNO on Burgers Equation](fno-burgers.md) — Temporal evolution operator
-# - [Operator Comparison Tour](operator-tour.md) — Compare all operators
+"""
+## Results Summary
+
+The DeepONet learns to approximate the antiderivative operator with low error.
+Key observations:
+- The zero IC constraint (multiplying by x) ensures u(0) = 0
+- Smooth GRF-based input functions are well-captured by the learned operator
+- Error is typically largest near x=1 where the integral accumulates
+
+## Next Steps
+
+- Try different input function distributions (step functions, polynomials)
+- Experiment with physics-informed loss (adding du/dx = v constraint)
+- Scale to higher-dimensional problems
+- Compare against `FourierEnhancedDeepONet` for spectral input functions
+
+### Related Examples
+
+- [DeepONet on Darcy Flow](deeponet-darcy.md) — 2D operator learning
+- [FNO on Burgers Equation](fno-burgers.md) — Temporal evolution operator
+- [Operator Comparison Tour](operator-tour.md) — Compare all operators
+"""
 
 # %%
 if __name__ == "__main__":

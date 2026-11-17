@@ -13,14 +13,16 @@
 # ---
 
 # %% [markdown]
-# # Navier-Stokes PINN: Kovasznay Flow
-#
-# This example demonstrates solving the 2D steady Navier-Stokes equations
-# using a Physics-Informed Neural Network (PINN). The Kovasznay flow is an
-# exact solution that serves as an important benchmark for incompressible
-# flow solvers.
-#
-# Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
+# Navier-Stokes PINN: Kovasznay Flow
+
+This example demonstrates solving the 2D steady Navier-Stokes equations
+using a Physics-Informed Neural Network (PINN). The Kovasznay flow is an
+exact solution that serves as an important benchmark for incompressible
+flow solvers.
+
+Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
 
 # %%
 
@@ -60,26 +62,28 @@ EPOCHS = 30000
 LEARNING_RATE = 1e-3
 
 # %% [markdown]
-# ## Kovasznay Flow
-#
-# The Kovasznay flow is an exact solution to the steady Navier-Stokes equations:
-#
-# **Momentum equations:**
-# $$u \frac{\partial u}{\partial x} + v \frac{\partial u}{\partial y}
-#   = -\frac{\partial p}{\partial x} + \frac{1}{Re}
-#     \left(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2}\right)$$
-#
-# $$u \frac{\partial v}{\partial x} + v \frac{\partial v}{\partial y}
-#   = -\frac{\partial p}{\partial y} + \frac{1}{Re}
-#     \left(\frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2}\right)$$
-#
-# **Continuity equation:**
-# $$\frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} = 0$$
-#
-# **Analytical solution:**
-# $$u(x, y) = 1 - e^{\lambda x} \cos(2\pi y)$$
-# $$v(x, y) = \frac{\lambda}{2\pi} e^{\lambda x} \sin(2\pi y)$$
-# $$p(x, y) = \frac{1}{2}(1 - e^{2\lambda x})$$
+r"""
+## Kovasznay Flow
+
+The Kovasznay flow is an exact solution to the steady Navier-Stokes equations:
+
+**Momentum equations:**
+$$u \frac{\partial u}{\partial x} + v \frac{\partial u}{\partial y}
+  = -\frac{\partial p}{\partial x} + \frac{1}{Re}
+    \left(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2}\right)$$
+
+$$u \frac{\partial v}{\partial x} + v \frac{\partial v}{\partial y}
+  = -\frac{\partial p}{\partial y} + \frac{1}{Re}
+    \left(\frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2}\right)$$
+
+**Continuity equation:**
+$$\frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} = 0$$
+
+**Analytical solution:**
+$$u(x, y) = 1 - e^{\lambda x} \cos(2\pi y)$$
+$$v(x, y) = \frac{\lambda}{2\pi} e^{\lambda x} \sin(2\pi y)$$
+$$p(x, y) = \frac{1}{2}(1 - e^{2\lambda x})$$
+"""
 
 
 # %%
@@ -103,10 +107,12 @@ def p_exact(xy):
 
 
 # %% [markdown]
-# ## PINN Architecture
-#
-# Network from DeepXDE: [2] + [50]*4 + [3] with tanh activation.
-# Output: [u, v, p] (velocity components and pressure).
+"""
+## PINN Architecture
+
+Network from DeepXDE: [2] + [50]*4 + [3] with tanh activation.
+Output: [u, v, p] (velocity components and pressure).
+"""
 
 
 # %%
@@ -152,20 +158,24 @@ class NavierStokesPINN(nnx.Module):
 
 
 # %% [markdown]
-# ## Collocation Points
-#
-# Sample points following DeepXDE's distribution:
-# - Domain: 2601 random points in the rectangle
-# - Boundary: 400 points on all 4 edges
+"""
+## Collocation Points
+
+Sample points following DeepXDE's distribution:
+- Domain: 2601 random points in the rectangle
+- Boundary: 400 points on all 4 edges
+"""
 
 # %% [markdown]
-# ## Physics-Informed Loss
-#
-# The loss function combines:
-# 1. **Momentum-x**: $u \cdot u_x + v \cdot u_y + p_x - (1/Re)(u_{xx} + u_{yy}) = 0$
-# 2. **Momentum-y**: $u \cdot v_x + v \cdot v_y + p_y - (1/Re)(v_{xx} + v_{yy}) = 0$
-# 3. **Continuity**: $u_x + v_y = 0$
-# 4. **Boundary conditions**: Dirichlet for u, v, p
+r"""
+## Physics-Informed Loss
+
+The loss function combines:
+1. **Momentum-x**: $u \cdot u_x + v \cdot u_y + p_x - (1/Re)(u_{xx} + u_{yy}) = 0$
+2. **Momentum-y**: $u \cdot v_x + v \cdot v_y + p_y - (1/Re)(v_{xx} + v_{yy}) = 0$
+3. **Continuity**: $u_x + v_y = 0$
+4. **Boundary conditions**: Dirichlet for u, v, p
+"""
 
 
 # %%
@@ -244,9 +254,11 @@ def total_loss(pinn, xy_dom, xy_bc, u_bc, v_bc, p_bc, lambda_bc=1.0):
 
 
 # %% [markdown]
-# ## Training
-#
-# Following DeepXDE: Adam optimizer with lr=1e-3 for 30000 iterations.
+"""
+## Training
+
+Following DeepXDE: Adam optimizer with lr=1e-3 for 30000 iterations.
+"""
 
 
 # %%
@@ -263,10 +275,12 @@ def train_step(pinn, opt, xy_dom, xy_bc, u_bc_vals, v_bc_vals, p_bc_vals):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# Builds collocation points, trains the PINN, evaluates against the
-# analytical Kovasznay flow solution, and saves the visualizations.
+"""
+## Run the example
+
+Builds collocation points, trains the PINN, evaluates against the
+analytical Kovasznay flow solution, and saves the visualizations.
+"""
 
 
 # %%

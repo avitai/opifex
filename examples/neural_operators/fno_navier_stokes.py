@@ -9,44 +9,48 @@
 # ---
 
 # %% [markdown]
-# # FNO on 2D Navier-Stokes Equations
-#
-# | Property      | Value                                    |
-# |---------------|------------------------------------------|
-# | Level         | Intermediate                             |
-# | Runtime       | ~3 min (CPU) / ~30 sec (GPU)             |
-# | Memory        | ~3 GB                                    |
-# | Prerequisites | JAX, Flax NNX, FNO basics, CFD concepts  |
-#
-# ## Overview
-#
-# Train a Fourier Neural Operator (FNO) to learn the solution operator for the
-# 2D incompressible Navier-Stokes equations:
-#
-#     du/dt + (u*nabla)u = -nabla(p)/rho + nu*laplacian(u)
-#     div(u) = 0  (incompressibility)
-#
-# where u = (u, v) is the velocity field, p is pressure, rho is density, and nu is
-# kinematic viscosity. The operator we learn maps the **initial velocity field** to
-# the **velocity field at the final time**, with the flow parameterized by viscosity.
-#
-# This example demonstrates:
-#
-# - **FNO for CFD** — mapping the initial velocity field to the final-time solution
-# - **Taylor-Green vortex** — analytically incompressible initial conditions
-# - **Viscosity variation** — training across different viscosity regimes
-# - **Velocity field prediction** — 2-channel input/output for (u, v) components
-#
-# ## Learning Goals
-#
-# 1. Understand FNO as an initial-condition -> final-state solution operator
-# 2. Work with multi-channel velocity fields
-# 3. Use the uniform Navier-Stokes ``PDELoaders`` contract
-# 4. Evaluate final-time prediction accuracy (MSE / relative L2)
-# 5. Visualize 2D velocity fields and vorticity
+"""
+# FNO on 2D Navier-Stokes Equations
+
+| Property      | Value                                    |
+|---------------|------------------------------------------|
+| Level         | Intermediate                             |
+| Runtime       | ~3 min (CPU) / ~30 sec (GPU)             |
+| Memory        | ~3 GB                                    |
+| Prerequisites | JAX, Flax NNX, FNO basics, CFD concepts  |
+
+## Overview
+
+Train a Fourier Neural Operator (FNO) to learn the solution operator for the
+2D incompressible Navier-Stokes equations:
+
+    du/dt + (u*nabla)u = -nabla(p)/rho + nu*laplacian(u)
+    div(u) = 0  (incompressibility)
+
+where u = (u, v) is the velocity field, p is pressure, rho is density, and nu is
+kinematic viscosity. The operator we learn maps the **initial velocity field** to
+the **velocity field at the final time**, with the flow parameterized by viscosity.
+
+This example demonstrates:
+
+- **FNO for CFD** — mapping the initial velocity field to the final-time solution
+- **Taylor-Green vortex** — analytically incompressible initial conditions
+- **Viscosity variation** — training across different viscosity regimes
+- **Velocity field prediction** — 2-channel input/output for (u, v) components
+
+## Learning Goals
+
+1. Understand FNO as an initial-condition -> final-state solution operator
+2. Work with multi-channel velocity fields
+3. Use the uniform Navier-Stokes ``PDELoaders`` contract
+4. Evaluate final-time prediction accuracy (MSE / relative L2)
+5. Visualize 2D velocity fields and vorticity
+"""
 
 # %% [markdown]
-# ## Imports and Setup
+"""
+## Imports and Setup
+"""
 
 # %%
 import time
@@ -72,10 +76,12 @@ from opifex.neural.operators.fno.base import FourierNeuralOperator
 
 
 # %% [markdown]
-# ## Run the example
-#
-# All run logic (data loading, model creation, training, evaluation, plotting)
-# lives in ``main`` so nothing heavy executes at import time.
+"""
+## Run the example
+
+All run logic (data loading, model creation, training, evaluation, plotting)
+lives in ``main`` so nothing heavy executes at import time.
+"""
 
 
 # %%
@@ -339,28 +345,30 @@ def main() -> dict[str, float | int]:
 
 
 # %% [markdown]
-# ## Results Summary
-#
-# The FNO successfully learns the Navier-Stokes solution operator, mapping the
-# initial velocity field to the velocity field at the final time. Key observations:
-#
-# - **Multi-channel handling**: FNO naturally handles (u, v) velocity components
-# - **Viscosity variation**: Model generalizes across different viscosity regimes
-# - **Flow structure**: Predicted final-time fields preserve physical features
-#
-# ## Next Steps
-#
-# - Increase resolution and training data for better accuracy
-# - Add physics-informed loss for PINO on Navier-Stokes
-# - Predict at multiple final times by varying ``time_range``
-# - Use spectral convergence analysis for solution quality
-#
-# ### Related Examples
-#
-# - [FNO on Darcy Flow](fno-darcy.md) — Elliptic PDE baseline
-# - [FNO on Burgers Equation](fno-burgers.md) — 1D time-dependent PDE
-# - [PINO on Burgers](pino-burgers.md) — Physics-informed operator learning
-# - [Navier-Stokes PINN](../pinns/navier-stokes.md) — Physics-only approach
+"""
+## Results Summary
+
+The FNO successfully learns the Navier-Stokes solution operator, mapping the
+initial velocity field to the velocity field at the final time. Key observations:
+
+- **Multi-channel handling**: FNO naturally handles (u, v) velocity components
+- **Viscosity variation**: Model generalizes across different viscosity regimes
+- **Flow structure**: Predicted final-time fields preserve physical features
+
+## Next Steps
+
+- Increase resolution and training data for better accuracy
+- Add physics-informed loss for PINO on Navier-Stokes
+- Predict at multiple final times by varying ``time_range``
+- Use spectral convergence analysis for solution quality
+
+### Related Examples
+
+- [FNO on Darcy Flow](fno-darcy.md) — Elliptic PDE baseline
+- [FNO on Burgers Equation](fno-burgers.md) — 1D time-dependent PDE
+- [PINO on Burgers](pino-burgers.md) — Physics-informed operator learning
+- [Navier-Stokes PINN](../pinns/navier-stokes.md) — Physics-only approach
+"""
 
 # %%
 if __name__ == "__main__":

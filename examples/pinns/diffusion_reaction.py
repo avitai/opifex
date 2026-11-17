@@ -13,12 +13,14 @@
 # ---
 
 # %% [markdown]
-# # Diffusion-Reaction Equation PINN
-#
-# This example demonstrates solving a diffusion-reaction equation using a PINN.
-# The problem features multiple frequency components that the network must learn.
-#
-# **Reference**: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
+# Diffusion-Reaction Equation PINN
+
+This example demonstrates solving a diffusion-reaction equation using a PINN.
+The problem features multiple frequency components that the network must learn.
+
+**Reference**: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
 
 # %%
 
@@ -55,16 +57,18 @@ EPOCHS = 15000
 LEARNING_RATE = 1e-3
 
 # %% [markdown]
-# ## Problem Definition
-#
-# Diffusion-reaction equation:
-#
-# $$\frac{\partial u}{\partial t} = D \frac{\partial^2 u}{\partial x^2} + f(x, t)$$
-#
-# where the source term $f$ is chosen so the exact solution is a sum of sine waves:
-#
-# $$u(x, t) = e^{-t} \left( \sin(x) + \frac{\sin(2x)}{2} + \frac{\sin(3x)}{3} +
-#                          \frac{\sin(4x)}{4} + \frac{\sin(8x)}{8} \right)$$
+r"""
+## Problem Definition
+
+Diffusion-reaction equation:
+
+$$\frac{\partial u}{\partial t} = D \frac{\partial^2 u}{\partial x^2} + f(x, t)$$
+
+where the source term $f$ is chosen so the exact solution is a sum of sine waves:
+
+$$u(x, t) = e^{-t} \left( \sin(x) + \frac{\sin(2x)}{2} + \frac{\sin(3x)}{3} +
+                         \frac{\sin(4x)}{4} + \frac{\sin(8x)}{8} \right)$$
+"""
 
 
 # %%
@@ -98,7 +102,9 @@ def initial_condition(x):
 
 
 # %% [markdown]
-# ## PINN with Hard Constraint
+"""
+## PINN with Hard Constraint
+"""
 
 
 # %%
@@ -147,7 +153,9 @@ class DiffusionReactionPINN(nnx.Module):
 
 
 # %% [markdown]
-# ## Physics-Informed Loss
+"""
+## Physics-Informed Loss
+"""
 
 
 # %%
@@ -185,7 +193,9 @@ def pde_loss(pinn, xt):
 
 
 # %% [markdown]
-# ## Training
+"""
+## Training
+"""
 
 
 # %%
@@ -202,10 +212,12 @@ def train_step(pinn, opt, xt_dom):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# Builds collocation points, trains the hard-constrained PINN, evaluates against
-# the manufactured solution, and saves the visualizations.
+"""
+## Run the example
+
+Builds collocation points, trains the hard-constrained PINN, evaluates against
+the manufactured solution, and saves the visualizations.
+"""
 
 
 # %%

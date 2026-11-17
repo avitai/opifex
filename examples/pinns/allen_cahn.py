@@ -13,14 +13,16 @@
 # ---
 
 # %% [markdown]
-# # Allen-Cahn Equation PINN
-#
-# This example demonstrates solving the Allen-Cahn equation using a
-# Physics-Informed Neural Network (PINN). The Allen-Cahn equation is a
-# reaction-diffusion PDE that models phase separation and interface dynamics
-# in materials science.
-#
-# Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
+# Allen-Cahn Equation PINN
+
+This example demonstrates solving the Allen-Cahn equation using a
+Physics-Informed Neural Network (PINN). The Allen-Cahn equation is a
+reaction-diffusion PDE that models phase separation and interface dynamics
+in materials science.
+
+Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
 
 # %%
 
@@ -57,19 +59,21 @@ EPOCHS = 20000  # Reduced from 40000 for faster demo
 LEARNING_RATE = 1e-3
 
 # %% [markdown]
-# ## Problem Definition
-#
-# The Allen-Cahn equation is a reaction-diffusion PDE:
-#
-# $$\frac{\partial u}{\partial t} = D \frac{\partial^2 u}{\partial x^2} + 5(u - u^3)$$
-#
-# with:
-# - **Domain**: $x \in [-1, 1]$, $t \in [0, 1]$
-# - **Initial condition**: $u(x, 0) = x^2 \cos(\pi x)$
-# - **Boundary conditions**: $u(-1, t) = u(1, t) = -1$
-#
-# The reaction term $5(u - u^3)$ has stable equilibria at $u = \pm 1$ and
-# unstable equilibrium at $u = 0$. This creates phase separation dynamics.
+r"""
+## Problem Definition
+
+The Allen-Cahn equation is a reaction-diffusion PDE:
+
+$$\frac{\partial u}{\partial t} = D \frac{\partial^2 u}{\partial x^2} + 5(u - u^3)$$
+
+with:
+- **Domain**: $x \in [-1, 1]$, $t \in [0, 1]$
+- **Initial condition**: $u(x, 0) = x^2 \cos(\pi x)$
+- **Boundary conditions**: $u(-1, t) = u(1, t) = -1$
+
+The reaction term $5(u - u^3)$ has stable equilibria at $u = \pm 1$ and
+unstable equilibrium at $u = 0$. This creates phase separation dynamics.
+"""
 
 
 # %%
@@ -85,14 +89,16 @@ def boundary_value():
 
 
 # %% [markdown]
-# ## PINN Architecture with Hard Constraint
-#
-# To satisfy IC and BC exactly, we use output transform:
-#
-# $$u(x, t) = x^2 \cos(\pi x) + t(1-x^2) \hat{u}(x, t)$$
-#
-# At $t=0$: $u = x^2 \cos(\pi x)$ (IC satisfied)
-# At $x=\pm 1$: $u = \cos(\pm\pi) = -1$ (BC satisfied)
+r"""
+## PINN Architecture with Hard Constraint
+
+To satisfy IC and BC exactly, we use output transform:
+
+$$u(x, t) = x^2 \cos(\pi x) + t(1-x^2) \hat{u}(x, t)$$
+
+At $t=0$: $u = x^2 \cos(\pi x)$ (IC satisfied)
+At $x=\pm 1$: $u = \cos(\pm\pi) = -1$ (BC satisfied)
+"""
 
 
 # %%
@@ -139,12 +145,14 @@ class AllenCahnPINN(nnx.Module):
 
 
 # %% [markdown]
-# ## Physics-Informed Loss
-#
-# The Allen-Cahn equation residual:
-# $$\mathcal{L} = |u_t - D \cdot u_{xx} - 5(u - u^3)|^2$$
-#
-# With hard constraints, no explicit IC/BC loss is needed!
+r"""
+## Physics-Informed Loss
+
+The Allen-Cahn equation residual:
+$$\mathcal{L} = |u_t - D \cdot u_{xx} - 5(u - u^3)|^2$$
+
+With hard constraints, no explicit IC/BC loss is needed!
+"""
 
 
 # %%
@@ -188,7 +196,9 @@ def total_loss(pinn, xt_dom):
 
 
 # %% [markdown]
-# ## Training
+"""
+## Training
+"""
 
 
 # %%
@@ -205,10 +215,12 @@ def train_step(pinn, opt, xt_dom):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# Builds collocation points, trains the hard-constrained PINN, evaluates the
-# residual and IC/BC errors, and saves the visualizations.
+"""
+## Run the example
+
+Builds collocation points, trains the hard-constrained PINN, evaluates the
+residual and IC/BC errors, and saves the visualizations.
+"""
 
 
 # %%

@@ -13,13 +13,15 @@
 # ---
 
 # %% [markdown]
-# # Burgers Equation PINN
-#
-# This example demonstrates solving the viscous Burgers equation using a
-# Physics-Informed Neural Network (PINN). The Burgers equation is a
-# fundamental nonlinear PDE used in fluid mechanics and shock wave theory.
-#
-# Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
+# Burgers Equation PINN
+
+This example demonstrates solving the viscous Burgers equation using a
+Physics-Informed Neural Network (PINN). The Burgers equation is a
+fundamental nonlinear PDE used in fluid mechanics and shock wave theory.
+
+Reference: Lu, Meng, Mao & Karniadakis (2021), DeepXDE, SIAM Rev. 63, 208
+"""
 
 # %%
 
@@ -54,16 +56,18 @@ EPOCHS = 15000
 LEARNING_RATE = 1e-3
 
 # %% [markdown]
-# ## Problem Definition
-#
-# The viscous Burgers equation:
-#
-# $$\frac{\partial u}{\partial t} + u \frac{\partial u}{\partial x} = \nu \frac{\partial^2 u}{\partial x^2}$$
-#
-# with:
-# - **Domain**: $x \in [-1, 1]$, $t \in [0, 0.99]$
-# - **Initial condition**: $u(x, 0) = -\sin(\pi x)$
-# - **Boundary conditions**: $u(-1, t) = u(1, t) = 0$
+r"""
+## Problem Definition
+
+The viscous Burgers equation:
+
+$$\frac{\partial u}{\partial t} + u \frac{\partial u}{\partial x} = \nu \frac{\partial^2 u}{\partial x^2}$$
+
+with:
+- **Domain**: $x \in [-1, 1]$, $t \in [0, 0.99]$
+- **Initial condition**: $u(x, 0) = -\sin(\pi x)$
+- **Boundary conditions**: $u(-1, t) = u(1, t) = 0$
+"""
 
 
 # %%
@@ -80,9 +84,11 @@ def boundary_condition(t):
 
 
 # %% [markdown]
-# ## PINN Architecture
-#
-# Network from DeepXDE: [2] + [20]*3 + [1] with tanh activation.
+"""
+## PINN Architecture
+
+Network from DeepXDE: [2] + [20]*3 + [1] with tanh activation.
+"""
 
 
 # %%
@@ -127,20 +133,24 @@ class BurgersPINN(nnx.Module):
 
 
 # %% [markdown]
-# ## Collocation Points
-#
-# Sample points following DeepXDE's distribution:
-# - Domain: 2540 random points in [-1,1] x [0,0.99]
-# - Boundary: 80 points at x = ±1
-# - Initial: 160 points at t = 0
+"""
+## Collocation Points
+
+Sample points following DeepXDE's distribution:
+- Domain: 2540 random points in [-1,1] x [0,0.99]
+- Boundary: 80 points at x = ±1
+- Initial: 160 points at t = 0
+"""
 
 # %% [markdown]
-# ## Physics-Informed Loss
-#
-# The loss function combines:
-# 1. **PDE residual**: $|\partial_t u + u \cdot \partial_x u - \nu \cdot \partial_{xx} u|^2$
-# 2. **Boundary loss**: $|u(±1, t)|^2$
-# 3. **Initial condition loss**: $|u(x, 0) - u_0(x)|^2$
+r"""
+## Physics-Informed Loss
+
+The loss function combines:
+1. **PDE residual**: $|\partial_t u + u \cdot \partial_x u - \nu \cdot \partial_{xx} u|^2$
+2. **Boundary loss**: $|u(±1, t)|^2$
+3. **Initial condition loss**: $|u(x, 0) - u_0(x)|^2$
+"""
 
 
 # %%
@@ -208,9 +218,11 @@ def total_loss(pinn, xt_dom, xt_bc, xt_ic, u_ic):
 
 
 # %% [markdown]
-# ## Training
-#
-# Following DeepXDE: Adam optimizer with lr=1e-3 for 15000 iterations.
+"""
+## Training
+
+Following DeepXDE: Adam optimizer with lr=1e-3 for 15000 iterations.
+"""
 
 
 # %%
@@ -227,10 +239,12 @@ def train_step(pinn, opt, xt_dom, xt_bc, xt_ic, u_ic):
 
 
 # %% [markdown]
-# ## Run the example
-#
-# Builds collocation points, trains the PINN, evaluates the residual and
-# boundary/initial errors, and saves the visualizations.
+"""
+## Run the example
+
+Builds collocation points, trains the PINN, evaluates the residual and
+boundary/initial errors, and saves the visualizations.
+"""
 
 
 # %%
