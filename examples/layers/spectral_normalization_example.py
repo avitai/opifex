@@ -217,17 +217,18 @@ def main() -> dict[str, float | int]:
     # The plain network's final/max MSE are non-finite *by design* (it destabilises);
     # the demonstration is recorded as the finite ``plain_diverged`` flag rather than
     # returned as a NaN metric.
-    return {
+    summary = {
         "depth": depth,
         "learning_rate": learning_rate,
         "plain_diverged": float(plain_diverged),
         "spectral_final_mse": spectral_final,
         "spectral_lipschitz_bound": lipschitz_bound(spectral),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

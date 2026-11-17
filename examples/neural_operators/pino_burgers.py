@@ -470,7 +470,7 @@ def main() -> dict[str, float | int]:
     print(f"Results saved to: {OUTPUT_DIR}")
     print("=" * 70)
 
-    return {
+    summary = {
         "test_rel_l2": test_rel_l2,
         "test_ic_error": test_ic_error,
         "test_pde_residual": test_residual,
@@ -478,6 +478,9 @@ def main() -> dict[str, float | int]:
         "num_parameters": int(param_count),
         "training_time_s": training_time,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -508,6 +511,4 @@ reported on the held-out test set.
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

@@ -346,7 +346,7 @@ def main() -> dict[str, float | int]:
     plt.close()
     print(f"\nSaved: {OUTPUT_DIR}/meta_optimization.png")
 
-    return {
+    summary = {
         "num_parameters": n_params,
         "maml_zero_shot_loss": zero_shot["MAML"],
         "reptile_zero_shot_loss": zero_shot["Reptile"],
@@ -355,10 +355,11 @@ def main() -> dict[str, float | int]:
         "zero_shot_reduction_percent": reduction,
         "num_test_viscosities": len(test_viscosities),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for metric_name, metric_value in summary.items():
-        print(f"{metric_name}: {metric_value}")
+    main()

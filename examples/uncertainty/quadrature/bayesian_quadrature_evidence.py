@@ -118,7 +118,7 @@ def main() -> dict[str, jax.Array | float]:
     wsabi_absolute_error = jnp.abs(wsabi_mean - GROUND_TRUTH)
     monte_carlo_absolute_error = jnp.abs(monte_carlo_estimate.mean - GROUND_TRUTH)
 
-    return {
+    summary = {
         "ground_truth": float(GROUND_TRUTH),
         "vanilla_mean": vanilla_mean,
         "vanilla_variance": vanilla_variance,
@@ -129,10 +129,11 @@ def main() -> dict[str, jax.Array | float]:
         "monte_carlo_variance": monte_carlo_estimate.variance,
         "monte_carlo_absolute_error": monte_carlo_absolute_error,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for label, value in summary.items():
-        print(f"{label}: {value}")
+    main()

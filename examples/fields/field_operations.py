@@ -250,17 +250,18 @@ def main() -> dict[str, float | int]:
     print(f"Saved: {OUTPUT_DIR / 'pressure_projection.png'}")
     plt.close()
 
-    return {
+    summary = {
         "gradient_max_error": float(grad_error),
         "laplacian_max_error": float(lap_error),
         "max_divergence_before": float(max_divergence_before),
         "max_divergence_after": float(max_divergence_after),
         "resolution": int(n),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

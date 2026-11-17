@@ -489,7 +489,7 @@ def main() -> dict[str, float | int]:
     print(f"  Max sum: {jnp.max(weight_sum):.6f}")
     print("  (Should be close to 1.0 for partition of unity)")
 
-    return {
+    summary = {
         "total_params": int(total_params),
         "final_loss": float(losses[-1]),
         "rel_l2_error": float(rel_l2_error),
@@ -498,10 +498,11 @@ def main() -> dict[str, float | int]:
         "num_subdomains": len(subdomains),
         "epochs": int(EPOCHS),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

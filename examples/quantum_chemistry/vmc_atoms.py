@@ -415,7 +415,10 @@ def main() -> dict[str, float | int]:
     print(f"Saved plots to {OUTPUT_DIR}/")
     print("  energy_convergence.png, hydrogen_density.png")
 
-    return {f"{name}_energy_error_mha": error for name, error in energy_errors_mha.items()}
+    summary = {f"{name}_energy_error_mha": error for name, error in energy_errors_mha.items()}
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -441,6 +444,4 @@ attention backbone or a MALA sampler.
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

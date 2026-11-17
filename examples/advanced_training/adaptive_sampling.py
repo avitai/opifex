@@ -545,7 +545,7 @@ def main() -> dict[str, float | int]:
     print("Adaptive sampling example completed successfully!")
     print(f"Results saved to: {OUTPUT_DIR}")
 
-    return {
+    summary = {
         "param_count": int(n_params),
         "adaptive_final_loss": float(adaptive_history["loss"][-1]),
         "uniform_final_loss": float(uniform_history["loss"][-1]),
@@ -555,10 +555,11 @@ def main() -> dict[str, float | int]:
         "adaptive_solution_l2": adaptive_solution_l2,
         "uniform_solution_l2": uniform_solution_l2,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

@@ -174,13 +174,16 @@ def main() -> dict[str, float | int]:
     )
     print("=" * 72)
 
-    return {
+    summary = {
         "num_meshes": len(source),
         "max_nodes": int(max_nodes),
         "min_real_nodes": int(min(real_nodes)),
         "masked_node_total": masked_total,
         "true_node_total": true_total,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -205,6 +208,4 @@ def main() -> dict[str, float | int]:
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for metric_name, metric_value in summary.items():
-        print(f"{metric_name}: {metric_value}")
+    main()

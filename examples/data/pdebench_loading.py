@@ -202,13 +202,16 @@ def main() -> dict[str, float | int]:
     print(f"\nTrain pairs: {len(train_loader.source)}   Test pairs: {len(test_loader.source)}")
     print("=" * 72)
 
-    return {
+    summary = {
         "train_pairs": len(train_loader.source),
         "test_pairs": len(test_loader.source),
         "batch_size": batch_size,
         "input_min": input_min,
         "input_max": input_max,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -234,6 +237,4 @@ def main() -> dict[str, float | int]:
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for metric_name, metric_value in summary.items():
-        print(f"{metric_name}: {metric_value}")
+    main()

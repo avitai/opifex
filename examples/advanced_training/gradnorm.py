@@ -616,7 +616,7 @@ def main() -> dict[str, float | int]:
     print("GradNorm example completed successfully!")
     print(f"Results saved to: {OUTPUT_DIR}")
 
-    return {
+    summary = {
         "param_count": int(n_params),
         "l2_error_gradnorm": float(l2_gradnorm),
         "l2_error_fixed": float(l2_fixed),
@@ -624,10 +624,11 @@ def main() -> dict[str, float | int]:
         "final_bc_loss": float(history["bc_loss"][-1]),
         "final_ic_loss": float(history["ic_loss"][-1]),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

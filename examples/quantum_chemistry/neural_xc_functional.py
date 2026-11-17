@@ -505,17 +505,18 @@ def main() -> dict[str, float | int]:
     print()
     print("Neural XC Functional training example completed successfully!")
 
-    return {
+    summary = {
         "r2": r2,
         "final_test_loss": test_losses[-1],
         "mse": mse,
         "mae": mae,
         "mean_correlation": mean_correlation,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

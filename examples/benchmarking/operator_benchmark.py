@@ -1026,11 +1026,14 @@ def main() -> dict[str, float | int]:
     best_relative_l2 = (
         min(r.metrics["relative_l2"].value for r in successful) if successful else 0.0
     )
-    return {
+    summary = {
         "total_runs": len(study.all_results),
         "successful_runs": len(successful),
         "best_relative_l2": float(best_relative_l2),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -1045,6 +1048,4 @@ def main() -> dict[str, float | int]:
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

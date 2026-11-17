@@ -210,17 +210,18 @@ def main() -> dict[str, jax.Array | float]:
         assumed_observation_noise=true_observation_noise * 1e-2,
     )
 
-    return {
+    summary = {
         "true_theta": float(true_theta),
         "well_specified_fenrir_loglik": well_specified_fenrir,
         "well_specified_dalton_loglik": well_specified_dalton,
         "misspecified_fenrir_loglik": misspecified_fenrir,
         "misspecified_dalton_loglik": misspecified_dalton,
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for label, value in summary.items():
-        print(f"{label}: {value}")
+    main()

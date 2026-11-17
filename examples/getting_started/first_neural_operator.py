@@ -462,16 +462,17 @@ def main() -> dict[str, float | int]:
     print("For better results, see the advanced examples with H1 loss.")
     print("=" * 70)
 
-    return {
+    summary = {
         "param_count": int(n_params),
         "rel_l2_error_32": float(rel_l2_32),
         "rel_l2_error_64": float(rel_l2_64),
         "training_time_s": float(training_time),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()

@@ -495,7 +495,7 @@ def main() -> dict[str, float | int]:
     print(f"Results saved to: {OUTPUT_DIR}")
     print("=" * 70)
 
-    return {
+    summary = {
         "local_fno_mse": local_mse,
         "local_fno_rel_l2": local_rel_l2,
         "standard_fno_mse": fno_mse,
@@ -503,6 +503,9 @@ def main() -> dict[str, float | int]:
         "local_fno_parameters": int(local_fno_params),
         "standard_fno_parameters": int(fno_params),
     }
+    for name, value in summary.items():
+        print(f"{name}: {value}")
+    return summary
 
 
 # %% [markdown]
@@ -518,6 +521,4 @@ After running this example you should observe:
 
 # %%
 if __name__ == "__main__":
-    summary = main()
-    for key, value in summary.items():
-        print(f"{key}: {value}")
+    main()
