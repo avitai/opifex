@@ -61,7 +61,7 @@ dependencies = [
   "datarax>=0.1.17",
   # 0.1.6 adds substrax.runtime, substrax.artifacts and substrax.testing; 0.1.8 substrax.rng
   # and substrax.optim.
-  "substrax>=0.1.27",
+  "substrax>=0.1.28",
   # TensorFlow Probability's JAX substrate supplies bessel_ive for the periodic state-space
   # kernels, as in bayesnewton. It was already installed through avitai-artifex -> distrax.
   "tfp-nightly>=0.26.0.dev20251024"
@@ -161,7 +161,7 @@ dev = [
   # deliberate change, not something a Tuesday should do to the gate.
   "ruff>=0.15.2,<0.16",
   # `substrax-compute` runs the examples on a GPU; the Modal backend needs Modal
-  "substrax[modal]>=0.1.27",
+  "substrax[modal]>=0.1.28",
   "twine>=4.0.2"
 ]
 docs = [
@@ -181,7 +181,7 @@ metal = [
 ]
 mlflow = [
   # The MLflow experiment backend records through substrax's MLFlowLogger.
-  "substrax[mlflow]>=0.1.27"
+  "substrax[mlflow]>=0.1.28"
 ]
 neural-dft = [
   # Neural DFT specific dependencies for quantum chemistry
@@ -278,7 +278,7 @@ test = [
   "pytest-split>=0.10.0",
   "pytest-timeout>=2.4.0",
   "pytest-xdist>=3.8.0",
-  "substrax[notebooks,testing]>=0.1.27"
+  "substrax[notebooks,testing]>=0.1.28"
 ]
 
 [project.scripts]
