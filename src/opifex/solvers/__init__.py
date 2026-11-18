@@ -6,6 +6,11 @@ Exports all unified solvers and wrappers.
 from opifex.solvers._uq_capabilities import SOLVER_CAPABILITIES
 from opifex.solvers.hybrid import additive_hybrid
 from opifex.solvers.neural_operator import NeuralOperatorSolver
+from opifex.solvers.nonlinear_least_squares import (
+    levenberg_marquardt,
+    LevenbergMarquardt,
+    NonlinearLeastSquaresProblem,
+)
 from opifex.solvers.pinn import (
     heat_residual,
     helmholtz_residual,
@@ -14,16 +19,31 @@ from opifex.solvers.pinn import (
     PINNSolver,
     poisson_residual,
 )
+from opifex.solvers.stiff_ode import (
+    InitialValueProblem,
+    Kvaerno3,
+    Rodas4,
+    Ros34PW2,
+    solve_stiff_ode,
+)
 
 
 __all__ = [
     "SOLVER_CAPABILITIES",
+    "InitialValueProblem",
+    "Kvaerno3",
+    "LevenbergMarquardt",
     "NeuralOperatorSolver",
+    "NonlinearLeastSquaresProblem",
     "PINNConfig",
     "PINNResult",
     "PINNSolver",
+    "Rodas4",
+    "Ros34PW2",
     "additive_hybrid",
     "heat_residual",
     "helmholtz_residual",
+    "levenberg_marquardt",
     "poisson_residual",
+    "solve_stiff_ode",
 ]
