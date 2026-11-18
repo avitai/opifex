@@ -38,6 +38,21 @@ def _adapter_baseline_with_notes(notes: str) -> UQCapability:
     )
 
 
+def _jax_kernel_solver_with_notes(notes: str) -> UQCapability:
+    """Return a pure-JAX classical solver capability + 3 adapter strategies."""
+    return (
+        UQCapability(
+            default_strategy=DefaultStrategy.DETERMINISTIC,
+            native_jax_kernel=True,
+            source_package="opifex",
+            notes=notes,
+        )
+        .with_adapter("ensemble")
+        .with_adapter("conformal")
+        .with_adapter("calibration")
+    )
+
+
 # Standard deterministic neural model family — covers the three
 # entry-point solvers in ``opifex.solvers``. All three are deterministic
 # trainers; UQ is layered on through the canonical adapter strategies.
@@ -67,6 +82,23 @@ _SOLVER_MODEL_CAPABILITIES: dict[str, UQCapability] = {
         "NeuralOperatorSolver wraps a deterministic neural operator; "
         "UQ is adapter-mediated (or supplied by UQNO when used as the "
         "underlying operator)."
+    ),
+    "solver:LevenbergMarquardt": _jax_kernel_solver_with_notes(
+        "Pure-JAX Madsen-Nielsen / More damped Gauss-Newton nonlinear least-squares "
+        "solver (QR, Cholesky, or matrix-free LSMR) with jax.lax.custom_root implicit "
+        "differentiation; UQ over ensemble solves aggregates via SolutionDistribution."
+    ),
+    "solver:Rodas4": _jax_kernel_solver_with_notes(
+        "Pure-JAX Hairer & Wanner (1996) 6-stage, 4th-order stiffly accurate L-stable "
+        "Rosenbrock ODE solver built on opifex.core.solver.integrate with jax.checkpoint."
+    ),
+    "solver:Ros34PW2": _jax_kernel_solver_with_notes(
+        "Pure-JAX Rang & Angermann (2005) 4-stage, 3rd-order L-stable Rosenbrock-Wanner "
+        "W-method built on opifex.core.solver.integrate with jax.checkpoint."
+    ),
+    "solver:Kvaerno3": _jax_kernel_solver_with_notes(
+        "Pure-JAX Kvaerno (2004) 4-stage, 3rd-order A-L stable stiffly accurate ESDIRK "
+        "ODE solver built on opifex.core.solver.integrate with jax.checkpoint."
     ),
 }
 
