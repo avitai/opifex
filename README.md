@@ -6,7 +6,7 @@
 
 *From Latin "opifex" - worker, skilled maker*
 
-[Documentation](docs/) • [Getting Started](docs/getting-started/installation.md) • [Examples](examples/) • [Contributing](docs/development/contributing.md)
+[Documentation](https://opifex.readthedocs.io/en/latest/) • [Getting Started](docs/getting-started/installation.md) • [Examples](examples/) • [Contributing](docs/development/contributing.md)
 
 </div>
 
@@ -43,7 +43,7 @@
 >
 > | Area | Status | Impact |
 > |------|--------|--------|
-> | **API** | 🔄 Unstable | Breaking changes are expected. Public interfaces may change without deprecation warnings. Pin to specific commits if stability is required. |
+> | **API** | 🔄 Unstable | Breaking changes are expected. Public interfaces may change without deprecation warnings. Pin to a specific release or commit if stability is required. |
 > | **Tests** | 🔄 In Flux | Test suite is being expanded. Some tests may fail or be skipped. Coverage metrics are improving but not yet full. |
 > | **Documentation** | 🔄 Evolving | Docs may not reflect current implementation. Code examples might be outdated. Refer to source code and tests for accurate usage. |
 >
@@ -59,27 +59,27 @@ A **JAX-native platform** for scientific machine learning, built for unified exc
 
 ## 🎯 Core Vision
 
-- **🔬 Unified Excellence**: Single platform supporting all major Opifex paradigms with mathematical clarity
-- **📊 Probabilistic-First**: Built-in uncertainty quantification treating all computation as Bayesian inference
-- **⚡ High Performance**: Optimized for speed with JAX transformations and GPU acceleration
-- **🏗️ Production-Oriented**: Designed with benchmarking and deployment tools for future production use
+- **🔬 Unified Excellence**: Single JAX/Flax NNX platform spanning neural operators, physics-informed learning, differentiable solvers, atomistic & quantum modeling, and uncertainty quantification
+- **📊 Probabilistic-First**: Built-in calibration, conformal prediction, Bayesian inference, and active learning across scientific workflows
+- **⚡ High Performance**: End-to-end `jit`, `vmap`, and reverse/implicit `grad` compatibility with GPU acceleration
+- **🏗️ Production-Oriented**: Reproducible benchmarking, roofline profiling, experiment tracking, and serving primitives
 - **🤝 Community-Driven**: Open patterns for education, research collaboration, and industrial adoption
 
 ## ✨ Key Features
 
 - **Neural Operators**: FNO, DeepONet, PINO, TFNO, UFNO, SFNO, LocalFNO, AM-FNO, MS-FNO, UNO, FourierDeepONet, AdaptiveDeepONet, MultiPhysicsDeepONet, GINO, MGNO, UQNO, LNO, WNO, GNO, OperatorNet (20 registered architectures; `opifex.neural.operators.OPERATOR_REGISTRY`)
-- **Physics-Informed Neural Networks**: Standard PINNs plus domain decomposition (FBPINN, XPINN, CPINN)
-- **Atomistic Potentials**: E(3)-equivariant SchNet, PaiNN, and NequIP backbones (with MACE-style higher body-order via symmetric contraction), energy/forces/stress heads, and an ASE calculator
-- **Quantum Chemistry**: Differentiable Kohn-Sham DFT, neural exchange-correlation functionals, variational Monte Carlo, and equivariant Hamiltonian prediction (QH9)
-- **Equivariant Core**: Native E(3) algebra - irreps, Clebsch-Gordan, Wigner-D, and spherical harmonics
-- **Uncertainty Quantification**: Conformal prediction, calibration, Gaussian processes, Bayesian quadrature, probabilistic numerics, simulation-based inference, and a broad adapter suite (ensembles, last-layer, SNGP, evidential)
-- **Equation Discovery**: SINDy, Ensemble SINDy, Weak SINDy, and Bayesian SINDy
-- **Field Operations**: JAX-native differential operators, advection, and pressure projection on structured grids
-- **Data Loading**: JAX-native pipelines for PDEBench tensors and VTK unstructured meshes on the datarax Source/Pipeline contract
-- **Advanced Training**: NTK analysis, GradNorm loss balancing, adaptive sampling (RAR-D)
-- **Optimization**: Learn-to-optimize, meta-optimization (MAML/Reptile), and second-order methods
-- **Unified SciML Solvers**: Standardized protocol for PINNs, Neural Operators, and Hybrid solvers
-- **59 Working Examples**: Full coverage from getting started to advanced research workflows
+  - **Spectral, Multi-Scale & Clifford Families**: Resolution-invariant Fourier (`FNO`, `TFNO`, `UFNO`, `UNO`, `MS-FNO`, `AM-FNO`, `LocalFNO`), spherical (`SFNO`), wavelet (`WNO`), latent attention (`LNO`), and multivector Clifford (`CliffordFNO`) operators
+  - **Branch-Trunk, Geometry & Physics-Informed Families**: `DeepONet` variants (`FourierDeepONet`, `AdaptiveDeepONet`, `MultiPhysicsDeepONet`), irregular-mesh graph and geometry-informed operators (`GNO`, `GINO`, `MGNO`), physics-informed `PINO`, and uncertainty-aware `UQNO`
+- **Physics-Informed Neural Networks & KANs**: Standard PINNs, variational/fractional/spacetime/GP variants (`VPINN`, `fPINN`, `GST-PINN`, `GP-PINN`, multi-scale PINNs), domain decomposition (`FBPINN`, `XPINN`, `CPINN`), and physics-informed Kolmogorov-Arnold networks (`PIKAN`)
+- **Differentiable PDE, Stiff ODE & Nonlinear Solvers**: Typed `Problem` / `Method` / `Solution` protocol (`opifex.core.solver`) spanning staggered-grid Navier-Stokes, lid-driven cavity, Burgers, Darcy, shallow-water, and spectral `ETDRK4` PDE solvers, pure-JAX stiff Rosenbrock/ESDIRK ODE integrators (`Rodas4`, `Ros34PW2`, `Kvaerno3`), `LevenbergMarquardt` nonlinear least squares with implicit differentiation, `UDE`, and `additive_hybrid` classical-neural solvers
+- **Atomistic Potentials**: E(3)-equivariant `SchNet`, `PaiNN`, and `NequIP` backbones (with MACE-style higher body-order symmetric contraction), energy/forces/stress heads, and an ASE calculator
+- **Quantum Chemistry**: Differentiable Kohn-Sham DFT (`SCFSolver` with Anderson/DIIS mixing and implicit fixed-point differentiation), neural exchange-correlation functionals, variational Monte Carlo, and equivariant Fock/Hamiltonian prediction (`QH9`)
+- **Equivariant Algebra, Geometry & Fields**: Native E(3) irreps, Clebsch-Gordan, Wigner-D, and spherical harmonics; spherical and Poincaré hyperbolic manifolds, constructive solid geometry (`CSG`), point-cloud radius graphs, and staggered-grid MAC differential operators with exact DFT/DCT-II pressure projection
+- **Uncertainty Quantification & Probabilistic Numerics**: Split, grouped, time-series, risk-controlling, and right-censored IPCW/doubly-robust conformal prediction (`CensoredSplitConformalRegressor`); censored Gaussian/Tobit likelihoods and correlated contrasts; Gaussian processes, state-space & computation-aware Kalman filters (`cakf_filter`), Bayesian quadrature, data assimilation, simulation-based inference (NPE/NLE/NRE), PAC-Bayes, Sobol/Morris sensitivity, FORM/SORM reliability, BlackJAX MCMC, and UQ adapters (`opifex.capabilities.UQ_CAPABILITIES`)
+- **Active Learning, Bayesian Optimization & Multi-Fidelity**: Traced joint mutual-information batch acquisition (`batch_bald`), constrained multi-objective `qEHVI`, Thompson sampling, REMBO, trust-region & asynchronous BO, experimental design, and linear/`NARGP`/`MUMBO` multi-fidelity surrogates
+- **Equation Discovery**: Sparse Identification of Nonlinear Dynamics (`SINDy`, `EnsembleSINDy`, `WeakSINDy`, `BayesianSINDy`) and symbolic regression
+- **Training, Meta-Optimization & Control**: NNX-native `Trainer` with `GradNorm` physics/boundary loss balancing, NTK spectral diagnostics, adaptive residual sampling (`RAR-D`), learn-to-optimize (`L2O`) & meta-learning (`MAML`/`Reptile`), second-order hybrid optimizers, and model predictive control (`MPC`)
+- **Scientific Data, Benchmarking & MLOps**: `datarax` `Source`/`Pipeline` loaders (`PDEBench`, `VTK` unstructured meshes, `QH9`, spectral PDE generators), `calibrax`-backed operator benchmarking & roofline profiling (`opifex-benchmark` CLI), MLflow/W&B/Neptune experiment tracking, and 59 runnable example scripts and notebooks
 
 For detailed feature documentation, see [Features](docs/features.md).
 
@@ -96,6 +96,7 @@ opifex is on PyPI:
 
 ```bash
 uv add opifex            # or: pip install opifex
+uv add "opifex[cuda12]"  # Linux NVIDIA GPU wheels (CUDA 12)
 uv add "opifex[mlflow]"  # with the MLflow experiment backend
 ```
 
@@ -106,14 +107,14 @@ To work on opifex itself, clone the repository and use the managed environment:
 git clone https://github.com/avitai/opifex.git
 cd opifex
 
-# Set up development environment
+# Set up development environment (auto-detects CUDA / Metal / CPU)
 ./setup.sh
 
 # Activate environment
 source ./activate.sh
 
 # Run tests to verify installation
-uv run pytest tests/ -v
+uv run pytest
 ```
 
 For detailed installation instructions, see [Installation Guide](docs/getting-started/installation.md).
@@ -128,7 +129,7 @@ from flax import nnx
 from opifex.neural.operators.fno import FourierNeuralOperator
 
 # Create FNO for learning PDE solution operators
-rngs = nnx.Rngs(jax.random.PRNGKey(0))
+rngs = nnx.Rngs(jax.random.key(0))
 
 fno = FourierNeuralOperator(
     in_channels=1,
@@ -140,7 +141,7 @@ fno = FourierNeuralOperator(
 )
 
 # Input: (batch, channels, *spatial_dims)
-x = jax.random.normal(jax.random.PRNGKey(1), (4, 1, 64, 64))
+x = jax.random.normal(jax.random.key(1), (4, 1, 64, 64))
 y = fno(x)
 print(f"FNO: {x.shape} -> {y.shape}")  # (4, 1, 64, 64) -> (4, 1, 64, 64)
 ```
@@ -153,7 +154,7 @@ from flax import nnx
 from opifex.neural.operators.deeponet import DeepONet
 
 # Create DeepONet for function-to-function mapping
-rngs = nnx.Rngs(jax.random.PRNGKey(0))
+rngs = nnx.Rngs(jax.random.key(0))
 
 deeponet = DeepONet(
     branch_sizes=[100, 64, 64, 32],  # 100 sensor locations
@@ -164,8 +165,8 @@ deeponet = DeepONet(
 
 # Branch input: function values at sensors (batch, num_sensors)
 # Trunk input: evaluation coordinates (batch, n_locations, coord_dim)
-branch_input = jax.random.normal(jax.random.PRNGKey(1), (8, 100))
-trunk_input = jax.random.uniform(jax.random.PRNGKey(2), (8, 50, 2))  # 50 eval points
+branch_input = jax.random.normal(jax.random.key(1), (8, 100))
+trunk_input = jax.random.uniform(jax.random.key(2), (8, 50, 2))  # 50 eval points
 
 output = deeponet(branch_input, trunk_input)
 print(f"DeepONet output: {output.shape}")  # (8, 50)
@@ -174,34 +175,57 @@ print(f"DeepONet output: {output.shape}")  # (8, 50)
 ### Equation Discovery (SINDy)
 
 ```python
+import jax
 import jax.numpy as jnp
 from opifex.discovery.sindy import SINDy, SINDyConfig
 
-# Generate Lorenz trajectory (σ=10, ρ=28, β=8/3) with RK4
+# Generate Lorenz trajectory (σ=10, ρ=28, β=8/3) with scanned RK4
 def lorenz(state, sigma=10.0, rho=28.0, beta=8.0 / 3.0):
     x, y, z = state
     return jnp.array([sigma * (y - x), x * (rho - z) - y, x * y - beta * z])
 
-dt, state = 0.001, jnp.array([1.0, 1.0, 1.0])
-trajectory, derivatives = [state], [lorenz(state)]
-for _ in range(10000):
+dt, state0 = 0.001, jnp.array([1.0, 1.0, 1.0])
+
+def rk4_step(state, _):
     k1 = lorenz(state)
     k2 = lorenz(state + 0.5 * dt * k1)
     k3 = lorenz(state + 0.5 * dt * k2)
     k4 = lorenz(state + dt * k3)
-    state = state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
-    trajectory.append(state)
-    derivatives.append(lorenz(state))
+    nxt = state + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+    return nxt, (nxt, lorenz(nxt))
+
+_, (traj, derivs) = jax.lax.scan(rk4_step, state0, None, length=10000)
+trajectory = jnp.concatenate([state0[None], traj], axis=0)
+derivatives = jnp.concatenate([lorenz(state0)[None], derivs], axis=0)
 
 # Discover governing equations from data
 model = SINDy(SINDyConfig(polynomial_degree=2, threshold=0.3))
-model.fit(jnp.stack(trajectory), jnp.stack(derivatives))
+model.fit(trajectory, derivatives)
 
 for eq in model.equations(["x", "y", "z"]):
     print(eq)
-# dx/dt = -9.999 x + 10.000 y            (true: -10 x + 10 y)
-# dy/dt = 28.000 x + -1.000 y + -1.000 x z  (true: 28 x - y - x z)
+# dx/dt = -10.000 x + 10.000 y            (true: -10 x + 10 y)
+# dy/dt = 27.999 x + -1.000 y + -1.000 x z  (true: 28 x - y - x z)
 # dz/dt = -2.667 z + 1.000 x y            (true: -8/3 z + x y)
+```
+
+### Conformal Uncertainty Quantification
+
+```python
+import jax
+import jax.numpy as jnp
+from opifex.uncertainty.conformal import SplitConformalRegressor
+
+x_cal = jnp.linspace(0.0, 1.0, 100)
+y_cal = jnp.sin(2.0 * jnp.pi * x_cal) + 0.1 * jax.random.normal(jax.random.key(0), (100,))
+pred_cal = jnp.sin(2.0 * jnp.pi * x_cal)
+
+calibrator = SplitConformalRegressor(alpha=0.1)
+state = calibrator.fit(predictions=pred_cal, targets=y_cal)
+
+x_test = jnp.array([0.25, 0.5, 0.75])
+interval = calibrator.with_state(state).predict(predictions=jnp.sin(2.0 * jnp.pi * x_test))
+print(f"90% interval shape: {interval.lower.shape} -> {interval.upper.shape}")  # (3,) -> (3,)
 ```
 
 For full examples and tutorials, see the [Examples](examples/) directory and [Documentation](docs/).
@@ -210,7 +234,7 @@ For full examples and tutorials, see the [Examples](examples/) directory and [Do
 
 ```bash
 # Run tests
-uv run pytest tests/ -v
+uv run pytest
 
 # Code quality checks
 uv run pre-commit run --all-files
