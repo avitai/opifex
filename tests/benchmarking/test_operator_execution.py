@@ -139,9 +139,9 @@ class TestBenchmarkRunnerHelpers:
 
         runner = BenchmarkRunner()
 
-        # Register operator with explicit type metadata
-        runner.registry.register_operator(
-            TensorizedFourierNeuralOperator, metadata={"operator_type": "fno"}
+        # The runner discovered the operator; give it an explicit type
+        runner.registry.set_operator_metadata(
+            TensorizedFourierNeuralOperator.__name__, "operator_type", "fno"
         )
 
         config = BenchmarkConfig(
@@ -303,9 +303,9 @@ class TestBenchmarkRunnerRealExecution:
 
         runner = BenchmarkRunner()
 
-        # Register TFNO with proper metadata
-        runner.registry.register_operator(
-            TensorizedFourierNeuralOperator, metadata={"operator_type": "fno"}
+        # The runner discovered TFNO; give it an explicit type
+        runner.registry.set_operator_metadata(
+            TensorizedFourierNeuralOperator.__name__, "operator_type", "fno"
         )
 
         # Create benchmark config with loader_type

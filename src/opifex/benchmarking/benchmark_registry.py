@@ -300,6 +300,26 @@ class OperatorBenchmarkRegistry:
         """
         return self._operator_metadata.get(operator_name, {})
 
+    def set_operator_metadata(self, operator_name: str, key: str, value: Any) -> None:
+        """Set one metadata key of a registered operator.
+
+        Registering and annotating are separate operations: an operator is
+        registered once, by ``register_operator`` or ``auto_discover_operators``,
+        and its metadata is set afterwards. A key already present takes the new
+        value; the other keys and the registered class are unchanged.
+
+        Args:
+            operator_name: Name of a registered operator.
+            key: Metadata key, for example ``"operator_type"``.
+            value: Value stored under ``key``.
+
+        Raises:
+            ValueError: If ``operator_name`` is not registered.
+        """
+        if not self._operator_registry.has(operator_name):
+            raise ValueError(f"Operator '{operator_name}' not found in registry")
+        self._operator_metadata.setdefault(operator_name, {})[key] = value
+
     def get_benchmark_config(self, benchmark_name: str) -> BenchmarkConfig:
         """Get benchmark configuration by name.
 

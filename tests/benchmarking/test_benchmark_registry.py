@@ -83,6 +83,45 @@ class TestOperatorRegistration:
         assert len(registry._operator_registry) == 1
 
 
+class TestOperatorMetadataOnARegisteredOperator:
+    """Setting metadata is its own operation and needs a registered operator."""
+
+    def test_set_metadata_adds_a_key_and_keeps_the_rest(
+        self, registry: OperatorBenchmarkRegistry
+    ) -> None:
+        """A key set on a registered operator joins its detected metadata."""
+        registry.register_operator(_DummyOperator)
+        registry.set_operator_metadata("_DummyOperator", "operator_type", "fno")
+        metadata = registry.get_operator_metadata("_DummyOperator")
+        assert metadata["operator_type"] == "fno"
+        assert metadata["module"] == _DummyOperator.__module__
+
+    def test_set_metadata_replaces_the_value_of_an_existing_key(
+        self, registry: OperatorBenchmarkRegistry
+    ) -> None:
+        """Setting a key twice keeps the second value."""
+        registry.register_operator(_DummyOperator, metadata={"operator_type": "gno"})
+        registry.set_operator_metadata("_DummyOperator", "operator_type", "fno")
+        assert registry.get_operator_metadata("_DummyOperator") == {"operator_type": "fno"}
+
+    def test_set_metadata_leaves_the_registration_alone(
+        self, registry: OperatorBenchmarkRegistry
+    ) -> None:
+        """Setting metadata registers nothing and replaces no class."""
+        registry.register_operator(_DummyOperator)
+        registry.set_operator_metadata("_DummyOperator", "operator_type", "fno")
+        assert registry.list_available_operators() == ["_DummyOperator"]
+        assert registry.get_operator_class("_DummyOperator") is _DummyOperator
+
+    def test_set_metadata_on_an_unregistered_operator_is_refused(
+        self, registry: OperatorBenchmarkRegistry
+    ) -> None:
+        """An unregistered name is refused and no metadata is stored for it."""
+        with pytest.raises(ValueError, match="'_DummyOperator' not found"):
+            registry.set_operator_metadata("_DummyOperator", "operator_type", "fno")
+        assert registry.get_operator_metadata("_DummyOperator") == {}
+
+
 class TestBenchmarkRegistration:
     """Tests for benchmark configuration registration."""
 
