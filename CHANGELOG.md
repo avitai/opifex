@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `OperatorBenchmarkRegistry.set_operator_metadata(operator_name, key, value)` sets one metadata
+  key of a registered operator and refuses an unregistered name with `ValueError`. Registering
+  and annotating are separate operations: an operator the runner discovered gets its
+  `operator_type` from this call, never from a second `register_operator` of the same name.
+
 ## [0.2.12] - 2026-11-18
 
 ### Added

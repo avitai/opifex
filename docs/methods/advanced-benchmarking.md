@@ -150,6 +150,9 @@ registry.register_benchmark(config)
 # Auto-discover operators
 registry.auto_discover_operators()
 
+# Set one metadata key of a discovered operator
+registry.set_operator_metadata("TensorizedFourierNeuralOperator", "operator_type", "fno")
+
 # Get benchmark suite for a domain
 suite = registry.get_benchmark_suite("quantum_computing")
 ```
