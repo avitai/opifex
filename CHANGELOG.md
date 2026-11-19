@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-11-18
+
 ### Added
 
 - `NonlinearLeastSquaresProblem`, `LevenbergMarquardt`, `LinearSolverKind`, `ScalingKind`, and `levenberg_marquardt` in `opifex.solvers.nonlinear_least_squares` (`solver:LevenbergMarquardt` in `SOLVER_CAPABILITIES`): pure-JAX Madsen-Nielsen / Moré damped Gauss-Newton solver (`"qr"` Householder QR, `"cholesky"`, and matrix-free `"lsmr"` via `opifex.uncertainty.linalg.lstsq.lsmr`) on `jax.lax.scan` with `jax.lax.custom_root` Pearlmutter HVP implicit differentiation and zero `equinox`-stack dependencies.
@@ -70,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ruff leaves `examples/**/*.ipynb` to `substrax-notebooks convert` (`extend-exclude` with
   `force-exclude`, so a hook naming a notebook skips it too) and lints the scripts;
   `trailing-whitespace` leaves the generated pages under `docs/examples/` alone.
+- Update `README.md` Key Features (neural operators, PINNs/KANs, differentiable PDE/stiff-ODE/nonlinear solvers, atomistic & quantum chemistry, equivariant geometry, uncertainty quantification, and active learning), installation extras (`opifex[cuda12]`), and Basic Usage snippets (`jax.random.key`, `jax.lax.scan` Lorenz RK4 trajectory for SINDy, and `SplitConformalRegressor`).
 
 ### Removed
 
