@@ -25,8 +25,7 @@ from dataclasses import dataclass
 
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array, Bool, Int
-from numpy.typing import NDArray
+from jaxtyping import Array, Bool, Int, Int64
 
 
 FULL_ORBITALS: int = 14
@@ -112,9 +111,9 @@ def _outside_the_layout(atomic_number: int, table: Mapping[int, object]) -> str:
 
 
 def ao_permutation(
-    atomic_numbers: Sequence[int] | Int[NDArray[np.integer], " n_atoms"],
+    atomic_numbers: Sequence[int] | Int[np.ndarray, " n_atoms"],
     convention: AoConvention,
-) -> tuple[Int[NDArray[np.int64], " n_ao"], Int[NDArray[np.int64], " n_ao"]]:
+) -> tuple[Int64[np.ndarray, " n_ao"], Int64[np.ndarray, " n_ao"]]:
     r"""Return the AO permutation and signs that reorder one molecule's def2-SVP matrix.
 
     Shells are laid out atom by atom, each shell's components are permuted and signed, and
@@ -141,8 +140,8 @@ def ao_permutation(
         shells += convention.shells[element]
         shell_order += [first + shell for shell in convention.shell_order[element]]
 
-    shell_indices: list[NDArray[np.int64]] = []
-    shell_signs: list[NDArray[np.int64]] = []
+    shell_indices: list[np.ndarray] = []
+    shell_signs: list[np.ndarray] = []
     offset = 0
     for shell in shells:
         order = np.asarray(convention.components[shell], dtype=np.int64)
@@ -154,7 +153,7 @@ def ao_permutation(
     return indices, signs
 
 
-def native_ao_count(atomic_numbers: Sequence[int] | Int[NDArray[np.integer], " n_atoms"]) -> int:
+def native_ao_count(atomic_numbers: Sequence[int] | Int[np.ndarray, " n_atoms"]) -> int:
     """Return a molecule's def2-SVP AO count, host-side: 5 per H, 14 per C, N, O or F.
 
     Args:

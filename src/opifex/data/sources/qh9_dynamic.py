@@ -32,8 +32,7 @@ from pathlib import Path  # noqa: TC003
 from typing import cast
 
 import numpy as np
-from jaxtyping import Int  # noqa: TC002
-from numpy.typing import NDArray  # noqa: TC002
+from jaxtyping import Int64  # noqa: TC002
 
 from opifex.data.sources.qh9_source import _decode_row, QH9Example
 
@@ -65,9 +64,9 @@ def qh9_dynamic_geometry_split(
     num_train: int = 80,
     num_val: int = 10,
 ) -> tuple[
-    Int[NDArray[np.int64], " n_train"],
-    Int[NDArray[np.int64], " n_val"],
-    Int[NDArray[np.int64], " n_test"],
+    Int64[np.ndarray, " n_train"],
+    Int64[np.ndarray, " n_val"],
+    Int64[np.ndarray, " n_test"],
 ]:
     """Reproduce the QH9-Dynamic geometry-wise ``80 / 10 / 10`` split.
 
@@ -112,9 +111,9 @@ def qh9_dynamic_mol_split(
     geometries_per_mol: int = QH9_DYNAMIC_GEOMETRIES_PER_MOL,
     seed: int = _MOL_SPLIT_SEED,
 ) -> tuple[
-    Int[NDArray[np.int64], " n_train"],
-    Int[NDArray[np.int64], " n_val"],
-    Int[NDArray[np.int64], " n_test"],
+    Int64[np.ndarray, " n_train"],
+    Int64[np.ndarray, " n_val"],
+    Int64[np.ndarray, " n_test"],
 ]:
     """Reproduce the QH9-Dynamic molecule-wise ``80 / 10 / 10`` split.
 
