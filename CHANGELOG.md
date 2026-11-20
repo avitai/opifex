@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `Trainer` takes no `rngs` and `TrainingState` has no `rngs` field. Nothing
   drew from them; a missing `rngs` was replaced by `nnx.Rngs(0)`. A model keeps its own
   `nnx.Rngs`. Pass `Trainer(model, config)`; the examples and docs are updated.
+- **Breaking:** `LoRALinear` and `apply_lora` require `rngs`; a missing one was replaced by
+  `nnx.Rngs(0)`, so every adapter built without it drew the same `A` factor
+  (`rngs-fallback`).
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

@@ -106,7 +106,7 @@ class _FineTuneNet(nnx.Module):
         super().__init__()
         self.backbone = nnx.Linear(3, 3, rngs=rngs)
         head = nnx.Linear(3, 1, rngs=rngs)
-        self.head = LoRALinear(head, rank=2, alpha=1.0)
+        self.head = LoRALinear(head, rank=2, alpha=1.0, rngs=rngs)
 
     def __call__(self, x: jax.Array) -> jax.Array:
         return self.head(jax.nn.tanh(self.backbone(x)))

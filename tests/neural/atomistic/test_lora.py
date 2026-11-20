@@ -34,24 +34,24 @@ class TestLoRAInitIsIdentity:
     def test_output_equals_base_at_init(self) -> None:
         """With ``B = 0`` the LoRA forward reproduces the base linear exactly."""
         base = _base_linear()
-        adapter = LoRALinear(base, rank=2, alpha=1.0)
+        adapter = LoRALinear(base, rank=2, alpha=1.0, rngs=nnx.Rngs(1))
         x = jax.random.normal(jax.random.PRNGKey(1), (5, base.in_features))
         assert jnp.allclose(adapter(x), base(x), atol=1e-6)
 
     def test_lora_b_is_zero_at_init(self) -> None:
         """``B`` is zero-initialised so the correction starts at exactly zero."""
-        adapter = LoRALinear(_base_linear(), rank=2, alpha=1.0)
+        adapter = LoRALinear(_base_linear(), rank=2, alpha=1.0, rngs=nnx.Rngs(1))
         assert jnp.all(adapter.lora_b.value == 0.0)
 
     def test_lora_a_is_nonzero_at_init(self) -> None:
         """``A`` is random-small (nonzero) so gradients can flow once ``B`` moves."""
-        adapter = LoRALinear(_base_linear(), rank=2, alpha=1.0)
+        adapter = LoRALinear(_base_linear(), rank=2, alpha=1.0, rngs=nnx.Rngs(1))
         assert jnp.any(adapter.lora_a.value != 0.0)
 
     def test_effective_kernel_equals_base_at_init(self) -> None:
         """The fused effective kernel equals the base kernel at init."""
         base = _base_linear()
-        adapter = LoRALinear(base, rank=2, alpha=1.0)
+        adapter = LoRALinear(base, rank=2, alpha=1.0, rngs=nnx.Rngs(1))
         assert jnp.allclose(adapter.effective_kernel(), base.kernel.value, atol=1e-6)
 
 
@@ -60,7 +60,7 @@ class TestLoRAPerturbedMatchesFormula:
         """After setting ``B``, output equals ``x @ (W + (alpha/r) A@B) + b``."""
         base = _base_linear(in_features=4, out_features=3)
         rank, alpha = 2, 4.0
-        adapter = LoRALinear(base, rank=rank, alpha=alpha)
+        adapter = LoRALinear(base, rank=rank, alpha=alpha, rngs=nnx.Rngs(1))
         # Perturb B to a known nonzero value.
         new_b = jnp.arange(rank * base.out_features, dtype=jnp.float32).reshape(
             rank, base.out_features
@@ -78,7 +78,7 @@ class TestLoRAPerturbedMatchesFormula:
         """``effective_kernel`` equals ``W + (alpha/rank) * A @ B`` exactly."""
         base = _base_linear()
         rank, alpha = 3, 2.0
-        adapter = LoRALinear(base, rank=rank, alpha=alpha)
+        adapter = LoRALinear(base, rank=rank, alpha=alpha, rngs=nnx.Rngs(1))
         adapter.lora_b.value = jnp.ones_like(adapter.lora_b.value)
         scaling = alpha / rank
         expected = base.kernel.value + scaling * (adapter.lora_a.value @ adapter.lora_b.value)
@@ -93,7 +93,7 @@ class TestLoRAEquivariantSafety:
         equivariant linear (one block per irrep) without mixing irreps.
         """
         base = _base_linear(in_features=4, out_features=3)
-        adapter = LoRALinear(base, rank=2, alpha=1.0)
+        adapter = LoRALinear(base, rank=2, alpha=1.0, rngs=nnx.Rngs(1))
         # Set B to affect only output channel 0.
         b = jnp.zeros_like(adapter.lora_b.value)
         b = b.at[:, 0].set(1.0)
@@ -109,7 +109,7 @@ class TestLoRATransforms:
     def test_jit_grad_vmap_smoke(self) -> None:
         """The LoRA forward is ``jit`` / ``grad`` / ``vmap`` clean (REQUIRED)."""
         base = _base_linear(in_features=4, out_features=3)
-        adapter = LoRALinear(base, rank=2, alpha=1.0)
+        adapter = LoRALinear(base, rank=2, alpha=1.0, rngs=nnx.Rngs(1))
         adapter.lora_b.value = 0.1 * jnp.ones_like(adapter.lora_b.value)
         graphdef, state = nnx.split(adapter)
 
