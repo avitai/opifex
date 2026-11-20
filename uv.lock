@@ -494,7 +494,7 @@ wheels = [
 
 [[package]]
 name = "calibrax"
-version = "0.1.20"
+version = "0.1.21"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -509,9 +509,9 @@ dependencies = [
     { name = "scipy" },
     { name = "substrax" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/71/26/9fa3b0d1a6e601f656a36df8ca7a64b465cc14ba8be39af3b5892e7c84b7/calibrax-0.1.20.tar.gz", hash = "sha256:b7a1254ff473c585ae6478e2b923fde92efbedc5a27d8783740e610e449c2739", size = 241829, upload-time = "2026-11-17T01:49:58.108Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ac/47/e449b833dccab2b3647647023d46fa10a9087aeacfbfab5590e7607f6867/calibrax-0.1.21.tar.gz", hash = "sha256:3bf906685d9b257f2f6e96e4e49862dae221b30652fbea25d1b325ae473fba27", size = 241974, upload-time = "2026-11-20T03:39:28.313Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/b9/05bbf1f6b43302741decc52c00b3195f25545a5d1329ac0adbc461df7cc3/calibrax-0.1.20-py3-none-any.whl", hash = "sha256:80a34b0d061886ac492557a1844c3b466b688a6c1170753d8891560b4ed23cc8", size = 305455, upload-time = "2026-11-17T01:49:55.949Z" },
+    { url = "https://files.pythonhosted.org/packages/29/09/fda8b33573d0f36f4ed25e09fe2e7805267d8690316cfe273a380ae09666/calibrax-0.1.21-py3-none-any.whl", hash = "sha256:688dea4a87ef816f87594982ce310f26353f6258c77bae47961169d0072546ac", size = 305429, upload-time = "2026-11-20T03:39:26.105Z" },
 ]
 
 [package.optional-dependencies]
@@ -4242,7 +4242,7 @@ requires-dist = [
     { name = "beartype", marker = "extra == 'test'", specifier = ">=0.14.1" },
     { name = "blackjax", specifier = ">=1.2.5" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.0.3" },
-    { name = "calibrax", extras = ["publication"], specifier = ">=0.1.20" },
+    { name = "calibrax", extras = ["publication"], specifier = ">=0.1.21" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.9.2" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=7.9.2" },
     { name = "datarax", specifier = ">=0.1.17" },

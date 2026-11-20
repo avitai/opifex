@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Requires `calibrax[publication]>=0.1.21`, whose `Registry.register` refuses a name the
+  registry already holds with `DuplicateRegistrationError` (a `ValueError`, exported from
+  `calibrax.core`) instead of replacing the item registered first.
+
 ## [0.2.13] - 2026-11-19
 
 ### Added
