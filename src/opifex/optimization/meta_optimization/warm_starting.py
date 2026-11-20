@@ -72,12 +72,15 @@ class WarmStartingStrategy:
         self,
         previous_params: jax.Array,
         current_problem_features: jax.Array,  # noqa: ARG002 - warm-start interface receives current problem features
+        *,
+        key: jax.Array,
     ) -> jax.Array:
         """Get warm-start parameters based on parameter transfer.
 
         Args:
             previous_params: Parameters from previous optimization
             current_problem_features: Features of current problem
+            key: Key the exploration perturbation is drawn from
 
         Returns:
             Warm-start parameters for current problem
@@ -87,7 +90,7 @@ class WarmStartingStrategy:
             adapted_params = previous_params * self.adaptation_ratio
 
             # Add small random perturbation for exploration
-            noise = 0.1 * jax.random.normal(jax.random.PRNGKey(42), previous_params.shape)
+            noise = 0.1 * jax.random.normal(key, previous_params.shape)
             return adapted_params + noise
 
         # Default: return parameters as-is

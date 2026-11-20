@@ -38,20 +38,20 @@ def optimistix_minimise(
     start: PyTree,
     *,
     max_steps: int = 256,
-    key: jax.Array | None = None,
+    key: jax.Array,
 ) -> tuple[PyTree, jax.Array]:
     """Run a real ``optimistix`` minimiser on ``task`` from ``start``.
 
-    Adapts ``Task.loss(params, key)`` to optimistix's ``fn(y, args) -> scalar`` (a fixed key,
-    since classical solvers need a deterministic objective). Returns ``(minimiser, final_loss)``.
+    Adapts ``Task.loss(params, key)`` to optimistix's ``fn(y, args) -> scalar``: every evaluation
+    uses the one ``key``, since classical solvers need a deterministic objective. Returns
+    ``(minimiser, final_loss)``.
     """
-    eval_key = key if key is not None else jax.random.key(0)
 
     def objective(y: PyTree, args: object) -> jax.Array:  # noqa: ARG001 - optimistix fn(y, args)
-        return task.loss(y, eval_key)
+        return task.loss(y, key)
 
     solution = optx.minimise(objective, solver, start, max_steps=max_steps, throw=False)
-    return solution.value, task.loss(solution.value, eval_key)
+    return solution.value, task.loss(solution.value, key)
 
 
 def loss_curve(

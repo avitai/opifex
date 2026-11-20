@@ -236,12 +236,15 @@ class MetaOptimizer:
         self,
         current_problem_features: jax.Array,
         target_shape: tuple[int, ...],
+        *,
+        key: jax.Array,
     ) -> jax.Array:
         """Get warm-start parameters for new problem.
 
         Args:
             current_problem_features: Features of current problem
             target_shape: Target shape for parameters
+            key: Key a random initialisation, or the warm start's perturbation, is drawn from
 
         Returns:
             Warm-start parameters
@@ -264,12 +267,12 @@ class MetaOptimizer:
             # Adapt to target shape
             if best_params.shape == target_shape:
                 return self.warm_start_strategy.get_warm_start_params(
-                    best_params, current_problem_features
+                    best_params, current_problem_features, key=key
                 )
             # Shape mismatch, return random initialization
-            return jax.random.normal(jax.random.PRNGKey(42), target_shape)
+            return jax.random.normal(key, target_shape)
         # No previous results, return random initialization
-        return jax.random.normal(jax.random.PRNGKey(42), target_shape)
+        return jax.random.normal(key, target_shape)
 
     def quantum_step(
         self,
