@@ -160,9 +160,10 @@ def test_loss_components_uses_dedicated_boundary_points() -> None:
         return jnp.zeros_like(_u)
 
     boundary_term = pinn.physics_loss(interior, trivial_residual, bc)
-    y_b = pinn(boundary_x, deterministic=True)
+    posterior_mean = nnx.view(pinn, deterministic=True)
+    y_b = posterior_mean(boundary_x)
     expected_at_boundary = jnp.mean((y_b - 0.5) ** 2)
-    y_interior = pinn(interior, deterministic=True)
+    y_interior = posterior_mean(interior)
     at_interior = jnp.mean((y_interior - 0.5) ** 2)
 
     assert jnp.allclose(boundary_term, expected_at_boundary, rtol=1e-5, atol=1e-6)
