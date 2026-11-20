@@ -566,6 +566,19 @@ class TestPDEBenchIntegration:
         with pytest.raises(FileNotFoundError, match="allow_synthetic"):
             loader.load_dataset(dataset_name="advection", subset_size=4, resolution="low")
 
+    def test_pdebench_refuses_a_real_file_it_cannot_read(self, tmp_path) -> None:
+        """A real PDEBench file is refused, not replaced with synthetic data."""
+        import pytest
+
+        from opifex.benchmarking.pdebench_integration import PDEBenchLoader
+
+        data_root = tmp_path / "pdebench"
+        data_root.mkdir()
+        (data_root / "advection.h5").write_bytes(b"")
+        loader = PDEBenchLoader(data_root=str(data_root))
+        with pytest.raises(NotImplementedError, match=r"advection\.h5"):
+            loader.load_dataset(dataset_name="advection", subset_size=4, resolution="low")
+
     def test_pdebench_synthetic_warns_and_flags(self, tmp_path) -> None:
         """Opt-in synthetic data must warn loudly and flag metadata."""
         import pytest

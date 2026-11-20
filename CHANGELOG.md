@@ -94,6 +94,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ScientificComputingIntegrator.comprehensive_scientific_validation` stamps its result
   with `time.time()`; its `timestamp` was a uniform draw from key 0 times 1000, the same
   value on every call.
+- `PDEBenchLoader.load_dataset` refuses with `NotImplementedError` when a real PDEBench HDF5
+  file is present. Reading one is not implemented, and it returned synthetic data in its
+  place, without the opt-in or the warning the synthetic path requires.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.
