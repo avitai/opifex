@@ -10,7 +10,8 @@ RNG safety:
   the named ``"posterior"`` stream) or an explicit ``jax.Array`` key.
 * Resolution goes through ``substrax.rng.key_from``: an ``nnx.Rngs`` without a
   sampling stream is refused, naming the layer.
-* No hidden ``jax.random.PRNGKey(0)`` fallbacks in production paths.
+* No seed written into library code: ``tests/core/test_nnx_source_rules.py`` applies
+  substrax's ``seed-literal`` rule to all of ``src/opifex``.
 
 KL helper: ``kl_divergence()`` delegates to
 :func:`opifex.uncertainty.kernels.bayesian.diagonal_gaussian_kl` so the
@@ -153,31 +154,6 @@ def test_constructor_rejects_non_positive_prior_std() -> None:
         BayesianLinear(in_features=4, out_features=3, prior_std=0.0, rngs=nnx.Rngs(0))
     with pytest.raises(ValueError, match=r"prior_std"):
         BayesianLinear(in_features=4, out_features=3, prior_std=-1.0, rngs=nnx.Rngs(0))
-
-
-def test_no_fixed_prngkey_in_production_path() -> None:
-    """AST scan: the layer module must not contain real ``jax.random.PRNGKey(...)`` call sites.
-
-    A plain-text search would false-positive on docstrings; AST walking
-    checks only real call expressions.
-    """
-    import ast
-    from pathlib import Path
-
-    tree = ast.parse(Path("src/opifex/uncertainty/layers/bayesian.py").read_text())
-    offending: list[str] = []
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "PRNGKey"
-        ):
-            offending.append(f"line {node.lineno}: {ast.unparse(node)}")
-    assert not offending, (
-        "BayesianLinear production path must not call jax.random.PRNGKey(...) "
-        "directly. Use call-time rngs via substrax.rng.key_from. "
-        f"Offending call sites: {offending}"
-    )
 
 
 # ---------------------------------------------------------------------------

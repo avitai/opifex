@@ -100,6 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `PDEBenchLoader.load_dataset` and `PDEBenchEvaluationPipeline` take
   `synthetic_key` in place of `allow_synthetic`: a key opts in to synthetic data and is the
   key it is drawn from. The data was drawn from key 42.
+- `seed-literal` holds over `src/opifex`, so opifex's own fixed-key checks, which looked
+  only for `jax.random.PRNGKey(...)` in four uncertainty modules
+  (`tests/uncertainty/test_rng_safety.py` and a test in
+  `tests/uncertainty/layers/test_bayesian.py`), are removed.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.
