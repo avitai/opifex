@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src/opifex` is checked against `substrax.testing.nnx_rules`
   (`tests/core/test_nnx_source_rules.py`). `noop-super-init`: the 133 `super().__init__()`
   calls in direct `nnx.Module` subclasses are removed; `nnx.Module` defines no `__init__`, so
-  each reached `object.__init__`.
+  each reached `object.__init__`. `trainable-metadata`: `SystemDynamicsModel`'s linear `A`
+  and `B` matrices no longer pass `trainable=True` to `nnx.Param`, metadata flax never reads.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.
