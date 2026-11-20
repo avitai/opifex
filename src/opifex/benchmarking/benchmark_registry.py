@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from calibrax.core import DuplicateRegistrationError
 from calibrax.core.registry import Registry
 
 
@@ -349,7 +350,16 @@ class OperatorBenchmarkRegistry:
         return list(self._benchmarks.keys())
 
     def auto_discover_operators(self) -> None:
-        """Auto-discover neural operators from opifex.neural.operators module."""
+        """Register every operator class of ``opifex.neural.operators``.
+
+        Discovery registers each operator once. An operator already registered under
+        the same name is refused before any is registered, so a refused discovery
+        leaves the registry as it was.
+
+        Raises:
+            DuplicateRegistrationError: If any discovered operator's name is already
+                registered.
+        """
         try:
             from opifex.neural import operators
 
@@ -362,10 +372,20 @@ class OperatorBenchmarkRegistry:
                 ):  # Skip base classes
                     operator_classes.append(attr)
 
-            # Register discovered operators
+            taken = sorted(
+                operator_class.__name__
+                for operator_class in operator_classes
+                if operator_class.__name__ in self._operator_registry
+            )
+            if taken:
+                msg = (
+                    f"{taken!r} already registered in {type(self).__name__}; discovery "
+                    "registers every operator of opifex.neural.operators once, so remove "
+                    "them first to discover again."
+                )
+                raise DuplicateRegistrationError(msg)
             for operator_class in operator_classes:
-                if not self._operator_registry.has(operator_class.__name__):
-                    self.register_operator(operator_class)
+                self.register_operator(operator_class)
 
         except ImportError as e:
             logger.warning("Could not auto-discover operators: %s", e)
