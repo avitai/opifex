@@ -165,6 +165,11 @@ suite = registry.get_benchmark_suite("quantum_computing")
 - Compatibility checking
 - JSON persistence
 
+Discovery registers each operator of `opifex.neural.operators` once. If any of them is
+already registered, `auto_discover_operators()` raises calibrax's
+`DuplicateRegistrationError` naming those operators and registers none, so call it once
+per registry and set metadata afterwards with `set_operator_metadata`.
+
 ### ValidationFramework
 
 The ValidationFramework provides reference comparison and convergence analysis:

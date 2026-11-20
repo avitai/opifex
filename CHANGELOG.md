@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ValueError` and its message reads `'<name>' is already registered in <Registry>; remove
   it first to replace it.` `ServableModelRegistry` still refuses a class that is not an
   `nnx.Module` subclass with `TypeError`.
+- **Breaking:** `OperatorBenchmarkRegistry.auto_discover_operators()` refuses with
+  `DuplicateRegistrationError` when any operator it discovers is already registered, naming
+  every such operator, and registers none of them. It skipped those names before, so a
+  second discovery, or a discovery after registering a built-in operator by hand, passed
+  silently. `BenchmarkRunner` discovers only into an empty registry and is unaffected.
 
 ## [0.2.13] - 2026-11-19
 

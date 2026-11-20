@@ -1,20 +1,16 @@
 """Tests for OperatorBenchmarkRegistry with calibrax Registry composition."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from calibrax.core import DuplicateRegistrationError
 
 from opifex.benchmarking.benchmark_registry import (
     BenchmarkConfig,
     DomainConfig,
     OperatorBenchmarkRegistry,
 )
+from opifex.neural.operators import FourierNeuralOperator
 
 
 class _DummyOperator:
@@ -120,6 +116,34 @@ class TestOperatorMetadataOnARegisteredOperator:
         with pytest.raises(ValueError, match="'_DummyOperator' not found"):
             registry.set_operator_metadata("_DummyOperator", "operator_type", "fno")
         assert registry.get_operator_metadata("_DummyOperator") == {}
+
+
+class TestOperatorDiscovery:
+    """Discovery registers each operator of ``opifex.neural.operators`` once."""
+
+    def test_discovery_registers_the_operators(self, registry: OperatorBenchmarkRegistry) -> None:
+        """An empty registry gains the discovered operators."""
+        registry.auto_discover_operators()
+        assert registry.get_operator_class("FourierNeuralOperator") is FourierNeuralOperator
+
+    def test_discovering_again_is_refused_and_changes_nothing(
+        self, registry: OperatorBenchmarkRegistry
+    ) -> None:
+        """A second discovery names the operators already held and registers none."""
+        registry.auto_discover_operators()
+        names = registry.list_available_operators()
+        with pytest.raises(DuplicateRegistrationError, match="'FourierNeuralOperator'"):
+            registry.auto_discover_operators()
+        assert registry.list_available_operators() == names
+
+    def test_discovery_after_registering_an_operator_by_hand_registers_none(
+        self, registry: OperatorBenchmarkRegistry
+    ) -> None:
+        """One operator already held refuses the whole discovery, leaving no partial set."""
+        registry.register_operator(FourierNeuralOperator)
+        with pytest.raises(DuplicateRegistrationError, match=r"\['FourierNeuralOperator'\]"):
+            registry.auto_discover_operators()
+        assert registry.list_available_operators() == ["FourierNeuralOperator"]
 
 
 class TestBenchmarkRegistration:
