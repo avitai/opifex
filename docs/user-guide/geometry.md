@@ -519,9 +519,8 @@ def generate_boundary_conforming_mesh(geometry, target_edge_length=0.1):
         n_points=int(2 * jnp.pi / target_edge_length), key=key
     )
 
-    # Add interior points
-    bbox_min = jnp.min(boundary_points, axis=0) - 0.5
-    bbox_max = jnp.max(boundary_points, axis=0) + 0.5
+    # Add interior points, drawn from the geometry's exact bounding box
+    bbox_min, bbox_max = geometry.bbox
 
     # Generate candidate interior points
     n_interior = 1000
@@ -676,9 +675,8 @@ class ComplexDomainPDEProblem(PDEProblem):
 
     def generate_collocation_points(self, n_points, key):
         """Generate physics-informed collocation points."""
-        # Sample points inside the geometry
-        bbox_min = jnp.array([-2.0, -2.0])
-        bbox_max = jnp.array([2.0, 2.0])
+        # Sample points inside the geometry, from its exact bounding box
+        bbox_min, bbox_max = self.geometry.bbox
 
         candidates = jax.random.uniform(
             key, (n_points * 3, 2), minval=bbox_min, maxval=bbox_max

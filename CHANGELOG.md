@@ -54,6 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `benchmark_with_prefetching` draws no random operands: the two it drew were overwritten
   from the pool buffers and never read, and its prefetch payload, whose values nothing reads,
   is zeros.
+- **Breaking:** `sample_boundary_points` and `compute_shape_area` require a keyword-only
+  `key`; they drew from fixed keys 42 and 123.
+- **Breaking:** geometry membership is exact and vectorised, as DeepXDE's `inside`:
+  `contains` takes points of shape `(..., d)` and returns a boolean array of shape `(...)`,
+  where it returned a Python `bool` for one point. `Rectangle`, `Circle` and `Interval` are
+  closed sets, `Polygon` uses the winding number, and `CSGUnion`, `CSGIntersection` and
+  `CSGDifference` combine their operands' memberships with `|`, `&` and `& ~`. They decided
+  membership by the sign of a smoothed signed distance, which put points of a rectangle near
+  its corners outside the union. Every shape has an exact `bbox`; `compute_shape_area` draws
+  its points from it and takes no `bbox` argument (it raised `TracerBoolConversionError`
+  before, because it vmapped `contains`). `validate_implementation`, which failed on a
+  correct implementation and was tested by nothing, is removed.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

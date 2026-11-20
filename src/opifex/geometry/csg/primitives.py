@@ -9,8 +9,11 @@ from jaxtyping import Float  # noqa: TC002
 from opifex.geometry.base import Geometry
 from opifex.geometry.csg.types import (
     _EnhancedShapeBase,
+    BoundingBox,
+    Membership,
     Point1D,
     Point2D,
+    PointBatch2D,
     Points1D,
     Points2D,
 )
@@ -35,11 +38,23 @@ class Interval(Geometry):
         self.b = float(b)
         self.length = self.b - self.a
 
-    def contains(self, point: Point1D) -> bool:
-        """Check if point is inside interval (inclusive of boundary)."""
-        point = jnp.asarray(point)
-        x = point[0] if point.ndim > 0 else point
-        return bool(self.a <= x <= self.b)
+    def contains(self, points: Float[jax.Array, "... 1"]) -> Membership:
+        """Return whether each point lies in the closed interval ``[a, b]``.
+
+        Args:
+            points: Points of shape ``(..., 1)``, or a scalar.
+
+        Returns:
+            Booleans of shape ``(...)``.
+        """
+        points = jnp.asarray(points)
+        x = points[..., 0] if points.ndim > 0 else points
+        return (self.a <= x) & (x <= self.b)
+
+    @property
+    def bbox(self) -> BoundingBox:
+        """Return ``[[a], [b]]``."""
+        return jnp.array([[self.a], [self.b]])
 
     def distance(self, point: Point1D) -> Float[jax.Array, ""]:
         """Compute signed distance to interval boundary.
@@ -138,12 +153,16 @@ class Rectangle(_EnhancedShapeBase):
         self.y_min = self.center[1] - self.height / 2
         self.y_max = self.center[1] + self.height / 2
 
-    def contains(self, point: Point2D) -> bool:
-        """Check if point is inside rectangle (inclusive of boundary)."""
-        point = jnp.asarray(point)
-        return bool(
-            (self.x_min <= point[0] <= self.x_max) and (self.y_min <= point[1] <= self.y_max)
-        )
+    def contains(self, points: PointBatch2D) -> Membership:
+        """Return whether each point lies in the closed rectangle (boundary included)."""
+        points = jnp.asarray(points)
+        bounds = self.bbox
+        return jnp.all((points >= bounds[0]) & (points <= bounds[1]), axis=-1)
+
+    @property
+    def bbox(self) -> BoundingBox:
+        """Return ``[[x_min, y_min], [x_max, y_max]]``."""
+        return jnp.array([[self.x_min, self.y_min], [self.x_max, self.y_max]])
 
     def distance(self, point: Point2D) -> Float[jax.Array, ""]:
         """Compute signed distance to rectangle boundary (smooth and differentiable)."""
@@ -275,11 +294,15 @@ class Circle(_EnhancedShapeBase):
                 raise ValueError("Radius must be positive")
             self.radius = float(radius)
 
-    def contains(self, point: Point2D) -> bool:
-        """Check if point is inside circle (inclusive of boundary)."""
-        point = jnp.asarray(point)
-        distance_squared = jnp.sum((point - self.center) ** 2)
-        return bool(distance_squared <= self.radius**2)
+    def contains(self, points: PointBatch2D) -> Membership:
+        """Return whether each point lies in the closed disc (boundary included)."""
+        points = jnp.asarray(points)
+        return jnp.sum((points - self.center) ** 2, axis=-1) <= self.radius**2
+
+    @property
+    def bbox(self) -> BoundingBox:
+        """Return the disc's bounding box, ``center -/+ radius``."""
+        return jnp.stack([self.center - self.radius, self.center + self.radius])
 
     def distance(self, point: Point2D) -> Float[jax.Array, ""]:
         """Compute signed distance to circle boundary (smooth and differentiable)."""
@@ -351,29 +374,33 @@ class Polygon(_EnhancedShapeBase):
         self.vertices = jnp.asarray(vertices)
         self.n_vertices = vertices.shape[0]
 
-    def contains(self, point: Point2D) -> bool:
-        """Check if point is inside polygon using ray casting algorithm."""
-        point = jnp.asarray(point)
+    def contains(self, points: PointBatch2D) -> Membership:
+        """Return whether each point lies in the polygon, by its winding number.
 
-        def ray_intersects_edge(i):
-            """Check if horizontal ray from point intersects edge i."""
-            v1 = self.vertices[i]
-            v2 = self.vertices[(i + 1) % self.n_vertices]
+        Dan Sunday's winding-number test, as DeepXDE's ``Polygon.inside`` uses it: an edge
+        crossing upwards with the point on its left adds one, one crossing downwards with the
+        point on its right subtracts one, and a nonzero total is inside. The test is half-open
+        on the boundary (points on some edges count as inside, on others as outside).
+        """
+        points = jnp.asarray(points)
+        start = self.vertices
+        end = jnp.roll(self.vertices, -1, axis=0)
+        x = points[..., None, 0]
+        y = points[..., None, 1]
+        left = (end[:, 0] - start[:, 0]) * (y - start[:, 1]) - (x - start[:, 0]) * (
+            end[:, 1] - start[:, 1]
+        )
+        upward = (start[:, 1] <= y) & (end[:, 1] > y) & (left > 0)
+        downward = (start[:, 1] > y) & (end[:, 1] <= y) & (left < 0)
+        winding = jnp.sum(upward, axis=-1, dtype=jnp.int32) - jnp.sum(
+            downward, axis=-1, dtype=jnp.int32
+        )
+        return winding != 0
 
-            # Check if ray can intersect (y-coordinate conditions)
-            y_check = (v1[1] > point[1]) != (v2[1] > point[1])
-
-            # Compute x-intersection point
-            x_intersect = v1[0] + (point[1] - v1[1]) / (v2[1] - v1[1]) * (v2[0] - v1[0])
-
-            # Ray intersects if intersection is to the right of the point
-            return y_check & (point[0] < x_intersect)
-
-        # Count intersections
-        intersections = jnp.sum(jax.vmap(ray_intersects_edge)(jnp.arange(self.n_vertices)))
-
-        # Point is inside if odd number of intersections
-        return bool(intersections % 2 == 1)
+    @property
+    def bbox(self) -> BoundingBox:
+        """Return the bounding box of the vertices."""
+        return jnp.stack([jnp.min(self.vertices, axis=0), jnp.max(self.vertices, axis=0)])
 
     def distance(self, point: Point2D) -> Float[jax.Array, ""]:
         """Compute signed distance to polygon boundary (enhanced)."""
@@ -458,8 +485,7 @@ class Polygon(_EnhancedShapeBase):
             proposals = jnp.stack([proposals_x, proposals_y], axis=1)
 
             # Check containment
-            mask = jax.vmap(self.contains)(proposals)
-            return proposals[mask]
+            return proposals[self.contains(proposals)]
 
         # Initial batch
         valid_points = rejection_sample(key, n)

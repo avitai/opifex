@@ -13,8 +13,7 @@ Sub-modules:
   the smooth-blended :func:`smooth_union`.
 * :mod:`opifex.geometry.csg.molecular` — :class:`MolecularGeometry`,
   :class:`PeriodicCell`, and DFT/exclusion-zone helpers.
-* :mod:`opifex.geometry.csg.utils` — Monte-Carlo :func:`compute_shape_area`
-  and :func:`validate_implementation` self-test.
+* :mod:`opifex.geometry.csg.utils` — Monte-Carlo :func:`compute_shape_area`.
 """
 
 from opifex.geometry.csg.molecular import (
@@ -44,7 +43,7 @@ from opifex.geometry.csg.types import (
     Points3D,
     Shape2D,
 )
-from opifex.geometry.csg.utils import compute_shape_area, validate_implementation
+from opifex.geometry.csg.utils import compute_shape_area
 
 
 __all__ = [
@@ -73,5 +72,4 @@ __all__ = [
     "sample_boundary_points",
     "smooth_union",
     "union",
-    "validate_implementation",
 ]

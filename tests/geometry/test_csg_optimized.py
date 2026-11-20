@@ -160,60 +160,92 @@ class TestOptimizedCSGOperations:
         assert jnp.allclose(result_normal, result_jit)
 
 
-class TestCSGSDFMembership:
-    """Pin SDF-based ``contains`` membership for the boolean CSG nodes.
+class TestCSGMembership:
+    """Exact, vectorised membership, as DeepXDE's ``inside`` (``deepxde/geometry/csg.py``).
 
-    Every concrete shape subclasses ``_EnhancedShapeBase`` (or implements the
-    ``Shape2D`` protocol) and therefore always exposes ``distance()``, so the
-    SDF branch of each ``contains`` is the only reachable path. These tests
-    baseline that membership semantics so the non-SDF fallback dead code can be
-    removed without behaviour change.
+    ``contains`` takes points of shape ``(..., 2)`` and returns a boolean array of shape
+    ``(...)``. Primitives are closed sets; union is ``a | b``, intersection ``a & b`` and
+    difference ``a & ~b`` of the operands' memberships, so no smoothing of a signed distance
+    decides membership.
     """
 
-    def test_csg_union_sdf_membership(self):
+    def test_csg_union_membership(self):
         """Union of two disjoint circles: a point inside either circle is in."""
         circle_a = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
         circle_b = Circle(center=jnp.array([3.0, 0.0]), radius=1.0)
-        union_shape = CSGUnion(circle_a, circle_b)
+        points = jnp.array([[0.0, 0.0], [3.0, 0.0], [2.5, 0.0], [1.5, 0.0], [10.0, 10.0]])
+        inside = CSGUnion(circle_a, circle_b).contains(points)
+        assert inside.dtype == jnp.bool_
+        assert inside.tolist() == [True, True, True, False, False]
 
-        # Centre of each circle is inside the union.
-        assert union_shape.contains(jnp.array([0.0, 0.0])) is True
-        assert union_shape.contains(jnp.array([3.0, 0.0])) is True
-        # Off-axis interior point of the second circle is inside.
-        assert union_shape.contains(jnp.array([2.5, 0.0])) is True
-        # Point in the gap between the disjoint circles is outside.
-        assert union_shape.contains(jnp.array([1.5, 0.0])) is False
-        # Far-away point is outside.
-        assert union_shape.contains(jnp.array([10.0, 10.0])) is False
-
-    def test_csg_intersection_sdf_membership(self):
+    def test_csg_intersection_membership(self):
         """Intersection of two overlapping circles is the shared lens region."""
         circle_a = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
         circle_b = Circle(center=jnp.array([1.0, 0.0]), radius=1.0)
-        intersection_shape = CSGIntersection(circle_a, circle_b)
+        points = jnp.array([[0.5, 0.0], [-0.5, 0.0], [1.5, 0.0], [10.0, 10.0]])
+        inside = CSGIntersection(circle_a, circle_b).contains(points)
+        assert inside.tolist() == [True, False, False, False]
 
-        # Midpoint of the overlap is inside both circles.
-        assert intersection_shape.contains(jnp.array([0.5, 0.0])) is True
-        # Inside circle A only -> outside the intersection.
-        assert intersection_shape.contains(jnp.array([-0.5, 0.0])) is False
-        # Inside circle B only -> outside the intersection.
-        assert intersection_shape.contains(jnp.array([1.5, 0.0])) is False
-        # Far-away point is outside.
-        assert intersection_shape.contains(jnp.array([10.0, 10.0])) is False
-
-    def test_csg_difference_sdf_membership(self):
-        """Difference A - B: inside A and outside B is in; inside B is out."""
+    def test_csg_difference_membership(self):
+        """Difference A - B: inside A and outside B is in; inside B, its boundary too, is out."""
         circle_a = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
-        circle_b = Circle(center=jnp.array([0.7, 0.0]), radius=0.4)
-        difference_shape = CSGDifference(circle_a, circle_b)
+        circle_b = Circle(center=jnp.array([0.5, 0.0]), radius=0.25)
+        points = jnp.array([[-0.5, 0.0], [0.0, 0.0], [0.5, 0.0], [0.75, 0.0], [10.0, 10.0]])
+        inside = CSGDifference(circle_a, circle_b).contains(points)
+        assert inside.tolist() == [True, True, False, False, False]
 
-        # Inside A, far from the subtracted disc -> inside the difference.
-        assert difference_shape.contains(jnp.array([-0.5, 0.0])) is True
-        assert difference_shape.contains(jnp.array([0.0, 0.0])) is True
-        # Centre of the subtracted disc -> carved out, outside the difference.
-        assert difference_shape.contains(jnp.array([0.7, 0.0])) is False
-        # Outside A entirely -> outside the difference.
-        assert difference_shape.contains(jnp.array([10.0, 10.0])) is False
+    def test_a_rectangle_corner_point_is_in_a_union(self):
+        """(0.95, 0.95) lies in the 2x2 square, and so in its union with any shape.
+
+        The rectangle's smoothed signed distance is positive there, so an SDF-based union
+        put the point outside.
+        """
+        square = Rectangle(center=jnp.array([0.0, 0.0]), width=2.0, height=2.0)
+        far_circle = Circle(center=jnp.array([10.0, 10.0]), radius=0.5)
+        assert bool(CSGUnion(square, far_circle).contains(jnp.array([0.95, 0.95])))
+
+    def test_primitives_are_closed_and_take_leading_dimensions(self):
+        rectangle = Rectangle(center=jnp.array([0.0, 0.0]), width=2.0, height=1.0)
+        points = jnp.array(
+            [[[1.0, 0.5], [1.0001, 0.0], [0.0, 0.0]], [[-1.0, -0.5], [0.0, 0.6], [0.5, 0.25]]]
+        )
+        assert rectangle.contains(points).tolist() == [[True, False, True], [True, False, True]]
+        circle = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
+        assert circle.contains(jnp.array([[1.0, 0.0], [0.0, -1.0], [0.8, 0.8]])).tolist() == [
+            True,
+            True,
+            False,
+        ]
+
+    def test_a_non_convex_polygon_uses_the_winding_number(self):
+        """An L-shape: its notch is outside although it lies within the convex hull."""
+        l_shape = Polygon(
+            vertices=jnp.array(
+                [[0.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0], [1.0, 2.0], [0.0, 2.0]]
+            )
+        )
+        points = jnp.array([[0.5, 0.5], [1.5, 0.5], [0.5, 1.5], [1.5, 1.5], [3.0, 3.0]])
+        assert l_shape.contains(points).tolist() == [True, True, True, False, False]
+
+    def test_bounding_boxes_compose_as_in_deepxde(self):
+        """Union: the hull of both boxes; intersection: their overlap; difference: A's."""
+        a = Rectangle(center=jnp.array([0.0, 0.0]), width=2.0, height=2.0)
+        b = Circle(center=jnp.array([1.5, 0.0]), radius=1.0)
+        assert jnp.array_equal(a.bbox, jnp.array([[-1.0, -1.0], [1.0, 1.0]]))
+        assert jnp.array_equal(b.bbox, jnp.array([[0.5, -1.0], [2.5, 1.0]]))
+        assert jnp.array_equal(CSGUnion(a, b).bbox, jnp.array([[-1.0, -1.0], [2.5, 1.0]]))
+        assert jnp.array_equal(CSGIntersection(a, b).bbox, jnp.array([[0.5, -1.0], [1.0, 1.0]]))
+        assert jnp.array_equal(CSGDifference(a, b).bbox, a.bbox)
+        triangle = Polygon(vertices=jnp.array([[-1.0, -1.0], [1.0, -1.0], [0.0, 2.0]]))
+        assert jnp.array_equal(triangle.bbox, jnp.array([[-1.0, -1.0], [1.0, 2.0]]))
+
+    def test_membership_is_traceable(self):
+        """``contains`` is a pure array function, so it runs under jit."""
+        union_shape = CSGUnion(
+            self_circle := Circle(center=jnp.array([0.0, 0.0]), radius=1.0), self_circle
+        )
+        inside = jax.jit(union_shape.contains)(jnp.array([[0.0, 0.0], [2.0, 0.0]]))
+        assert inside.tolist() == [True, False]
 
 
 class TestOptimizedPeriodicCell:
