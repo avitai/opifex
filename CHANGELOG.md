@@ -104,6 +104,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only for `jax.random.PRNGKey(...)` in four uncertainty modules
   (`tests/uncertainty/test_rng_safety.py` and a test in
   `tests/uncertainty/layers/test_bayesian.py`), are removed.
+- **Breaking:** `CliffordFourierBlock`, `CliffordFNO`, `PIKAN`, `SincKAN`, `UNeuralOperator`,
+  `FourierContinuationExtender`, `FourierBoundaryHandler`, `SystemIdentifier` and
+  `SystemDynamicsModel` take no `deterministic` argument. Each ignored it or passed it to
+  layers that ignore it (`mode-flag-default`).
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

@@ -41,9 +41,9 @@ compares:
 | NeuralOperator (PyTorch) | Opifex (JAX) |
 |--------------------------|--------------|
 | `UNO(in_channels, out_channels, hidden_channels, uno_out_channels, uno_n_modes, uno_scalings, ...)` | `create_uno(in_channels=, out_channels=, hidden_channels=, uno_out_channels=, uno_n_modes=, uno_scalings=, rngs=)` |
-| `torch.utils.data.DataLoader(dataset)` | `create_darcy_loader(n_samples=, batch_size=, resolution=)` (datarax `PDELoaders`); this example trains from arrays (`generate_darcy`) |
+| `torch.utils.data.DataLoader(dataset)` | `create_darcy_loader(n_samples=, batch_size=, resolution=, seed=)` (datarax `PDELoaders`); this example trains from arrays (`generate_darcy`) |
 | `trainer = Trainer(model, ...)` then `trainer.train(...)` | `Trainer(model=, config=)` then `trainer.fit(train_data, val_data)` |
-| `model.eval(); with torch.no_grad(): ...` | `trained_model(x, deterministic=True)` |
+| `model.eval(); with torch.no_grad(): ...` | `trained_model.eval()`, then `trained_model(x)` |
 | Manual `torch.meshgrid` for grid embeddings | `GridEmbedding2D(in_channels=, grid_boundaries=)` |
 | Direct inference at a new resolution (Fourier-domain resize) | Same -- feed a finer grid straight through the trained model |
 
@@ -315,10 +315,10 @@ class UNOWithGrid(nnx.Module):
             rngs=rngs,
         )
 
-    def __call__(self, x: jax.Array, *, deterministic: bool = True) -> jax.Array:
+    def __call__(self, x: jax.Array) -> jax.Array:
         x_embedded = self.grid_embedding(x)
         x_cf = jnp.transpose(x_embedded, (0, 3, 1, 2))
-        y_cf = self.uno(x_cf, deterministic=deterministic)
+        y_cf = self.uno(x_cf)
         return jnp.transpose(y_cf, (0, 2, 3, 1))
 
 
@@ -417,7 +417,7 @@ X_test_jnp = jnp.array(X_test_n)
 Y_test_jnp = jnp.array(Y_test)
 
 predictions = (
-    predict_in_batches(lambda b: trained_model(b, deterministic=True), X_test_jnp) * y_std
+    predict_in_batches(trained_model, X_test_jnp) * y_std
     + y_mean
 )
 
@@ -459,7 +459,7 @@ y_high_jnp = jnp.array(y_high)
 
 # Feed the finer grid directly through the model (Fourier-domain resize, no upsample).
 pred_high = (
-    predict_in_batches(lambda b: trained_model(b, deterministic=True), x_high_n) * y_std
+    predict_in_batches(trained_model, x_high_n) * y_std
     + y_mean
 )
 sr_error = float(jnp.mean(per_sample_relative_l2(pred_high, y_high_jnp)))

@@ -203,7 +203,7 @@ class TestCliffordFNO:
             jax.random.PRNGKey(0),
             (2, 8, 8, 1),
         )
-        y = model(x, deterministic=True)
+        y = model(x)
         assert y.shape == (2, 8, 8, 1)
 
     def test_jit_compatible(self):

@@ -250,7 +250,7 @@ class UNOWithGrid(nnx.Module):
         x_hwc = jnp.moveaxis(x, 1, -1)
         x_embedded = self.grid_embedding(x_hwc)
         x_chw = jnp.moveaxis(x_embedded, -1, 1)
-        return self.uno(x_chw, deterministic=True)
+        return self.uno(x_chw)
 
 
 # %% [markdown]

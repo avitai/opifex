@@ -161,8 +161,6 @@ class CliffordFourierBlock(nnx.Module):
     def __call__(
         self,
         x: jax.Array,
-        *,
-        deterministic: bool = False,
     ) -> jax.Array:
         """Forward: spectral + bypass + activation.
 
@@ -170,15 +168,11 @@ class CliffordFourierBlock(nnx.Module):
             x: Multivector field, shape
                 2D: (B, H, W, C, 4)
                 3D: (B, D, H, W, C, 8)
-            deterministic: Unused, API consistency.
 
         Returns:
             Same shape as input.
         """
-        return nnx.gelu(
-            self.spectral(x, deterministic=deterministic)  # type: ignore[reportCallIssue]
-            + self.bypass(x, deterministic=deterministic)  # type: ignore[reportCallIssue]
-        )
+        return nnx.gelu(self.spectral(x) + self.bypass(x))
 
 
 class CliffordFNO(nnx.Module):
@@ -231,8 +225,6 @@ class CliffordFNO(nnx.Module):
     def __call__(
         self,
         x: jax.Array,
-        *,
-        deterministic: bool = False,
     ) -> jax.Array:
         """Forward pass.
 
@@ -240,7 +232,6 @@ class CliffordFNO(nnx.Module):
             x: Input field.
                 2D: (B, H, W, C_in)
                 3D: (B, D, H, W, C_in)
-            deterministic: Passed to sub-layers.
 
         Returns:
             2D: (B, H, W, C_out)
@@ -263,7 +254,7 @@ class CliffordFNO(nnx.Module):
 
         # Apply Fourier blocks
         for block in self.blocks:
-            h = block(h, deterministic=deterministic)
+            h = block(h)
 
         # Flatten blade dim and project
         h = h.reshape(
