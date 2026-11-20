@@ -4,6 +4,8 @@ This module tests the Version 7.4 Scientific Computing Integration implementatio
 including physics profiling, numerical validation, and conservation checking.
 """
 
+import time
+
 import jax.numpy as jnp
 import pytest
 
@@ -471,11 +473,14 @@ class TestScientificComputingIntegrator:
             "test_gradient": (0.5, 0.5),
         }
 
+        before = time.time()
         results = integrator.comprehensive_scientific_validation(
             sample_model_output, reference_data, benchmarks
         )
+        after = time.time()
 
         assert isinstance(results, dict)
+        assert before <= results["timestamp"] <= after
         assert "domain" in results
         assert "overall_scientific_score" in results
         assert results["domain"] == "quantum_chemistry"
