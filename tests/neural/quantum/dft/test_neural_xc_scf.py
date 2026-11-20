@@ -64,6 +64,49 @@ def _perturb_output_layer(
     layer.kernel.value = layer.kernel.value + kernel_shift
 
 
+def _dropout_functional(*, use_attention: bool) -> NeuralXCFunctional:
+    """A functional with dropout, its output layer off the zero init.
+
+    The SCF grid holds thousands of points and the attention is quadratic in them, so the
+    SCF test runs without it, as the other SCF tests here do.
+    """
+    functional = NeuralXCFunctional(
+        hidden_sizes=(16, 16, 16),
+        use_attention=use_attention,
+        num_attention_heads=2,
+        dropout_rate=0.5,
+        rngs=nnx.Rngs(params=0, dropout=1),
+    )
+    _perturb_output_layer(functional, bias_shift=0.3, kernel_shift=0.2)
+    return functional
+
+
+def test_the_functional_mode_decides_its_dropout() -> None:
+    """``.eval()`` gives one output for one input; ``.train()`` drops units, so two differ."""
+    functional = _dropout_functional(use_attention=True)
+    density = jnp.array([[0.1, 0.5, 1.0, 2.0]])
+    gradients = jax.random.normal(jax.random.PRNGKey(1), (1, 4, 3))
+    functional.eval()
+    assert jnp.array_equal(functional(density, gradients), functional(density, gradients))
+    functional.train()
+    assert not jnp.array_equal(functional(density, gradients), functional(density, gradients))
+
+
+def test_the_scf_evaluates_a_training_mode_functional_without_dropout() -> None:
+    """The SCF energy of a functional left in training mode is one value, run to run."""
+    with jax.enable_x64(True):
+        functional = _dropout_functional(use_attention=False)
+        functional.train()
+        energies = [
+            SCFSolver(_h2_system(), neural_functional=functional, max_iterations=80)
+            .solve()
+            .total_energy
+            for _ in range(2)
+        ]
+    assert bool(jnp.isfinite(energies[0]))
+    assert float(energies[0]) == float(energies[1])
+
+
 def test_neural_xc_scf_converges_h2() -> None:
     """The H2 RKS SCF with the neural XC functional converges to a finite energy."""
     with jax.enable_x64(True):

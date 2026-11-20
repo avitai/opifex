@@ -85,12 +85,11 @@ class MultiHeadAttention(nnx.Module):
         # Scale factor for numerical stability
         self.scale = 1.0 / math.sqrt(self.head_dim)
 
-    def __call__(self, x: jax.Array, *, deterministic: bool = False) -> jax.Array:
+    def __call__(self, x: jax.Array) -> jax.Array:
         """Apply multi-head attention with enhanced stability.
 
         Args:
             x: Input tensor [batch, seq_len, features]
-            deterministic: Whether to use deterministic computation (disables dropout)
 
         Returns:
             Attention output [batch, seq_len, features]
@@ -122,7 +121,7 @@ class MultiHeadAttention(nnx.Module):
         attn_weights = nnx.softmax(attn_weights, axis=-1)
 
         # Apply dropout if training
-        if self.dropout_rate > 0.0 and not deterministic:
+        if self.dropout_rate > 0.0:
             attn_weights = self.dropout(attn_weights)
 
         # Apply attention to values
@@ -189,15 +188,12 @@ class DensityFeatureExtractor(nnx.Module):
         self,
         density: jax.Array,
         gradients: jax.Array,
-        *,
-        deterministic: bool = False,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jax.Array:
         """Extract physics-informed features from density and gradients.
 
         Args:
             density: Electron density [batch, grid_points]
             gradients: Density gradients [batch, grid_points, 3]
-            deterministic: Whether to use deterministic computation
 
         Returns:
             Combined features [batch, grid_points, feature_dim]
@@ -335,18 +331,16 @@ class NeuralXCFunctional(nnx.Module):
             rngs=rngs,
         )
 
-    def _raw_enhancement_signal(
-        self, density: jax.Array, gradients: jax.Array, *, deterministic: bool
-    ) -> jax.Array:
+    def _raw_enhancement_signal(self, density: jax.Array, gradients: jax.Array) -> jax.Array:
         r"""Network output: the unbounded enhancement signal per grid point.
 
         Built from physics-informed features (which include the dimensionless
         reduced gradient :math:`s`), passed through the attention/MLP trunk. The
         exact-constraint layer turns this into a bounded enhancement factor.
         """
-        features = self.feature_extractor(density, gradients, deterministic=deterministic)
+        features = self.feature_extractor(density, gradients)
         if self.use_attention:
-            attention_output = self.attention(features, deterministic=deterministic)
+            attention_output = self.attention(features)
             features = features + attention_output  # Residual connection
 
         x = features
@@ -356,13 +350,11 @@ class NeuralXCFunctional(nnx.Module):
                 layer_output = layer_output + x  # Residual connection for depth
             x = self.activation(layer_output)
             if self.dropout_rate > 0.0:
-                x = self.dropout(x, deterministic=deterministic)
+                x = self.dropout(x)
 
         return jnp.squeeze(self.output_layer(x), axis=-1)
 
-    def __call__(
-        self, density: jax.Array, gradients: jax.Array, *, deterministic: bool = False
-    ) -> jax.Array:
+    def __call__(self, density: jax.Array, gradients: jax.Array) -> jax.Array:
         r"""Compute the constraint-satisfying XC energy per particle.
 
         The network produces a raw enhancement signal which the exact-constraint
@@ -374,7 +366,6 @@ class NeuralXCFunctional(nnx.Module):
         Args:
             density: Electron density [batch, grid_points].
             gradients: Density gradients [batch, grid_points, 3].
-            deterministic: Whether to use deterministic computation.
 
         Returns:
             XC energy per particle [batch, grid_points].
@@ -384,13 +375,11 @@ class NeuralXCFunctional(nnx.Module):
         if gradients.ndim != 3:
             raise ValueError(f"Expected 3D gradient tensor, got {gradients.ndim}D")
 
-        raw = self._raw_enhancement_signal(density, gradients, deterministic=deterministic)
+        raw = self._raw_enhancement_signal(density, gradients)
         sigma = jnp.sum(gradients**2, axis=-1)
         return constrained_xc_energy_density(raw, density, sigma)
 
-    def energy_density_from_sigma(
-        self, density: jax.Array, sigma: jax.Array, *, deterministic: bool = True
-    ) -> jax.Array:
+    def energy_density_from_sigma(self, density: jax.Array, sigma: jax.Array) -> jax.Array:
         r"""XC energy per particle as a function of ``rho`` and ``sigma=|grad rho|^2``.
 
         The GGA-native interface used on a real molecular grid and for the AD XC
@@ -404,7 +393,6 @@ class NeuralXCFunctional(nnx.Module):
         Args:
             density: Electron density [Shape: (n_points,)].
             sigma: Squared density gradient ``|grad rho|^2`` [Shape: (n_points,)].
-            deterministic: Whether to use deterministic computation.
 
         Returns:
             XC energy per particle [Shape: (n_points,)].
@@ -415,13 +403,11 @@ class NeuralXCFunctional(nnx.Module):
         magnitude = jnp.sqrt(jnp.clip(sigma, 0.0, None) + 1.0e-24)
         zeros = jnp.zeros_like(magnitude)
         gradient = jnp.stack([magnitude, zeros, zeros], axis=-1)[None, ...]
-        raw = self._raw_enhancement_signal(density[None, :], gradient, deterministic=deterministic)[
-            0
-        ]
+        raw = self._raw_enhancement_signal(density[None, :], gradient)[0]
         return constrained_xc_energy_density(raw, density, sigma)
 
     def xc_potential_components(
-        self, density: jax.Array, sigma: jax.Array, *, deterministic: bool = True
+        self, density: jax.Array, sigma: jax.Array
     ) -> tuple[jax.Array, jax.Array]:
         r"""GGA XC potential pair :math:`(v_\rho, v_\sigma)` by autodiff.
 
@@ -438,23 +424,20 @@ class NeuralXCFunctional(nnx.Module):
         Args:
             density: Electron density [Shape: (n_points,)].
             sigma: Squared density gradient ``|grad rho|^2`` [Shape: (n_points,)].
-            deterministic: Whether to use deterministic computation.
 
         Returns:
             The pair ``(v_rho, v_sigma)`` each [Shape: (n_points,)].
         """
 
         def energy_density(rho: jax.Array, sig: jax.Array) -> jax.Array:
-            per_particle = self.energy_density_from_sigma(rho, sig, deterministic=deterministic)
+            per_particle = self.energy_density_from_sigma(rho, sig)
             return jnp.sum(rho * per_particle)
 
         v_rho = jax.grad(energy_density, argnums=0)(density, sigma)
         v_sigma = jax.grad(energy_density, argnums=1)(density, sigma)
         return v_rho, v_sigma
 
-    def compute_functional_derivative(
-        self, density: jax.Array, gradients: jax.Array, *, deterministic: bool = False
-    ) -> jax.Array:
+    def compute_functional_derivative(self, density: jax.Array, gradients: jax.Array) -> jax.Array:
         r"""Density-channel functional derivative ``d(rho eps_xc)/d rho``.
 
         Computes the *live* GGA density-channel potential at fixed
@@ -464,16 +447,13 @@ class NeuralXCFunctional(nnx.Module):
         Args:
             density: Electron density [batch, grid_points] or [grid_points].
             gradients: Density gradients [..., 3].
-            deterministic: Whether to use deterministic computation.
 
         Returns:
             ``d(rho eps_xc)/d rho`` with the same shape as ``density``.
         """
         flat_density = density.reshape(-1)
         flat_sigma = jnp.sum(gradients**2, axis=-1).reshape(-1)
-        v_rho, _ = self.xc_potential_components(
-            flat_density, flat_sigma, deterministic=deterministic
-        )
+        v_rho, _ = self.xc_potential_components(flat_density, flat_sigma)
         return v_rho.reshape(density.shape)
 
     def assess_chemical_accuracy(
@@ -481,8 +461,6 @@ class NeuralXCFunctional(nnx.Module):
         density: jax.Array,
         gradients: jax.Array,
         reference_energy: jax.Array | None = None,
-        *,
-        deterministic: bool = False,
     ) -> dict[str, float]:
         """Assess chemical accuracy of XC functional predictions.
 
@@ -490,12 +468,11 @@ class NeuralXCFunctional(nnx.Module):
             density: Electron density
             gradients: Density gradients
             reference_energy: Reference XC energy for comparison (optional)
-            deterministic: Whether to use deterministic computation
 
         Returns:
             Dictionary containing accuracy metrics
         """
-        predicted_energy = self(density, gradients, deterministic=deterministic)
+        predicted_energy = self(density, gradients)
 
         metrics = {
             "predicted_xc_energy": float(jnp.sum(predicted_energy)),

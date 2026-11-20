@@ -161,7 +161,7 @@ between predicted and reference LDA XC energies.
 # %%
 def loss_fn(model, densities, gradients, targets):
     """Mean squared error loss for XC energy prediction."""
-    predictions = model(densities, gradients, deterministic=True)
+    predictions = model(densities, gradients)
     return jnp.mean((predictions - targets) ** 2)
 
 
@@ -255,7 +255,7 @@ def main() -> dict[str, float | int]:
     print(f"  Use advanced features: {USE_ADVANCED_FEATURES}")
     print(f"  Total parameters: {param_count:,}")
 
-    test_output = model(train_densities[:1], train_gradients[:1], deterministic=True)
+    test_output = model(train_densities[:1], train_gradients[:1])
     print(f"  Test output shape: {test_output.shape}")
 
     # Set up training.
@@ -328,7 +328,8 @@ def main() -> dict[str, float | int]:
     print("Evaluating model performance...")
     print("-" * 50)
 
-    test_predictions = model(test_densities, test_gradients, deterministic=True)
+    model.eval()
+    test_predictions = model(test_densities, test_gradients)
 
     mse = float(jnp.mean((test_predictions - test_xc_ref) ** 2))
     mae = float(jnp.mean(jnp.abs(test_predictions - test_xc_ref)))
@@ -468,7 +469,6 @@ def main() -> dict[str, float | int]:
         test_densities[:10],
         test_gradients[:10],
         reference_energy=test_xc_ref[:10],
-        deterministic=True,
     )
 
     for metric_name, value in accuracy_metrics.items():
