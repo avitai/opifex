@@ -35,6 +35,8 @@ dependencies = [
   # numerical computing
   "scipy>=1.10.0",
   # numerical computing
+  "scikit-learn>=1.9.1",
+  # keyword feature hashing in the platform search engine (FeatureHasher)
   "tensorly>=0.9.0",
   # tensor decomposition for neural operators
   "matplotlib>=3.7.0",

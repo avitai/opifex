@@ -4,8 +4,13 @@ Provides full test coverage for search functionality including
 text search, semantic search, filtering, and recommendation systems.
 """
 
+import os
+import subprocess
+import sys
+
 import jax.numpy as jnp
 import pytest
+from sklearn.utils import murmurhash3_32
 
 from opifex.platform.registry.search import (
     SearchEngine,
@@ -147,6 +152,42 @@ class TestSearchEngine:
 
         assert engine.enable_semantic is False
         assert engine.similarity_threshold == 0.8
+
+    def test_an_embedding_is_the_same_in_every_interpreter(self) -> None:
+        """A keyword lands in the same bucket whatever the interpreter's hash salt.
+
+        The builtin ``hash`` of a ``str`` changes with ``PYTHONHASHSEED``, so buckets taken
+        from it, and the keyword collisions that rank search results, differ between runs.
+        """
+        script = (
+            "from opifex.platform.registry.search import SearchEngine\n"
+            "embedding = SearchEngine(None)._generate_embedding("
+            "'adam optimizer neural networks spectral fourier operator')\n"
+            "print([int(i) for i in embedding.nonzero()[0]])\n"
+        )
+        buckets = {
+            subprocess.run(
+                [sys.executable, "-c", script],
+                check=True,
+                capture_output=True,
+                text=True,
+                env={**os.environ, "PYTHONHASHSEED": salt, "JAX_PLATFORMS": "cpu"},
+            ).stdout
+            for salt in ("0", "1", "2")
+        }
+        assert len(buckets) == 1, buckets
+
+    def test_a_keyword_takes_its_signed_feature_hashing_bucket(self, search_engine) -> None:
+        """Keywords are hashed as scikit-learn's ``FeatureHasher`` hashes features.
+
+        The bucket is ``abs(murmurhash3_32(keyword, seed=0)) % 256`` and the entry's sign is
+        the hash's sign (``alternate_sign``, Weinberger et al. 2009), so colliding keywords
+        cancel in expectation rather than adding up.
+        """
+        embedding = search_engine._generate_embedding("fourier")
+        hashed = murmurhash3_32("fourier", seed=0)
+        expected = jnp.zeros(256).at[abs(hashed) % 256].set(1.0 if hashed >= 0 else -1.0)
+        assert jnp.array_equal(embedding, expected)
 
     @pytest.mark.asyncio
     async def test_text_search_basic(self, search_engine):
