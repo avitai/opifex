@@ -18,12 +18,12 @@ Bibliography (cited in implementation docstrings):
   — sparse-grid stochastic collocation.
 """
 
-from __future__ import annotations
-
-from collections.abc import Callable, Mapping  # noqa: TC003 — eager per opifex convention
+from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
+from flax import nnx
+from substrax.rng import key_from
 
 from opifex.uncertainty.scientific.polynomial_chaos import (
     fit_pce_coefficients,
@@ -42,7 +42,7 @@ def fit_galerkin_surrogate(
     model: Callable[[jax.Array], jax.Array],
     basis: PolynomialChaosBasis,
     num_samples: int,
-    rngs: Mapping[str, jax.Array],
+    rngs: nnx.Rngs | jax.Array,
 ) -> StochasticGalerkinSurrogate:
     """Fit a stochastic-Galerkin (least-squares PCE) surrogate.
 
@@ -58,9 +58,8 @@ def fit_galerkin_surrogate(
             order. The ``coefficients`` field of the input ``basis`` is
             ignored — only ``family`` and ``order`` are read.
         num_samples: Monte-Carlo sample count.
-        rngs: Mapping of RNG-stream name to ``jax.random.PRNGKey``.
-            Reads stream ``"sg_samples"``; falls back to ``"default"`` /
-            ``"sample"`` if missing.
+        rngs: The samples' key, or an ``nnx.Rngs`` whose first stream of
+            ``"sg_samples"``, ``"sample"``, ``"default"`` draws it.
 
     Returns:
         A fitted :class:`StochasticGalerkinSurrogate` whose
@@ -69,7 +68,9 @@ def fit_galerkin_surrogate(
     if num_samples <= 0:
         raise ValueError(f"num_samples must be positive; got {num_samples}.")
 
-    key = _select_key(rngs, default_streams=(_SG_RNG_STREAM, "sample", "default"))
+    key = key_from(
+        rngs, streams=(_SG_RNG_STREAM, "sample", "default"), context="stochastic-Galerkin samples"
+    )
 
     samples = _sample_from_measure(family=basis.family, key=key, shape=(num_samples,))
     targets = model(samples[:, None])
@@ -104,7 +105,6 @@ def fit_collocation_surrogate(
     *,
     model: Callable[[jax.Array], jax.Array],
     sparse_grid: SparseGrid,
-    rngs: Mapping[str, jax.Array],
 ) -> StochasticCollocationSurrogate:
     """Fit a sparse-grid stochastic-collocation surrogate.
 
@@ -119,13 +119,10 @@ def fit_collocation_surrogate(
     Args:
         model: A pure JAX callable.
         sparse_grid: A :class:`SparseGrid` (Smolyak or tensor-product).
-        rngs: RNG-stream mapping; unused (collocation is deterministic)
-            but accepted so the call signature matches the plan.
 
     Returns:
         A fitted :class:`StochasticCollocationSurrogate`.
     """
-    del rngs  # collocation is deterministic given the grid
     if sparse_grid.nodes.ndim != 2:
         raise ValueError(f"sparse_grid.nodes must be 2-D; got shape {sparse_grid.nodes.shape}.")
 
@@ -151,22 +148,6 @@ def evaluate_collocation_surrogate(
 ) -> jax.Array:
     """Public ``evaluate`` glue — delegates to ``surrogate.evaluate(x)``."""
     return surrogate.evaluate(x)
-
-
-def _select_key(rngs: Mapping[str, jax.Array], *, default_streams: tuple[str, ...]) -> jax.Array:
-    """Return the first key whose stream name matches ``default_streams``.
-
-    Raises:
-        KeyError: When none of the requested streams are present in
-            ``rngs``.
-    """
-    for name in default_streams:
-        if name in rngs:
-            return rngs[name]
-    raise KeyError(
-        f"None of the expected RNG streams ({default_streams!r}) found in "
-        f"rngs={list(rngs)}; supply at least one."
-    )
 
 
 def _sample_from_measure(*, family: str, key: jax.Array, shape: tuple[int, ...]) -> jax.Array:

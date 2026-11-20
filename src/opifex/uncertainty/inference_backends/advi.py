@@ -29,6 +29,7 @@ from typing import Literal
 import jax
 import jax.numpy as jnp
 from flax import nnx  # noqa: TC002
+from substrax.rng import key_from
 
 from opifex.uncertainty.inference_backends._advi_algorithm import (
     approximate,
@@ -119,8 +120,8 @@ class ADVIBackend:
                 "to fit(...) or construct the backend with target_log_prob=<callable>."
             )
 
-        approx_key = rngs.sampler() if "sampler" in rngs else rngs.default()
-        sample_key = rngs.sampler() if "sampler" in rngs else rngs.default()
+        approx_key = key_from(rngs, streams=("sampler", "default"), context="ADVI fit")
+        sample_key = key_from(rngs, streams=("sampler", "default"), context="ADVI posterior draws")
         state = approximate(
             rng_key=approx_key,
             log_density_fn=log_density_fn,

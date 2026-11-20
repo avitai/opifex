@@ -25,6 +25,7 @@ from collections.abc import Callable  # noqa: TC003 — kept eager per opifex co
 import jax
 import jax.numpy as jnp
 from flax import nnx  # noqa: TC002
+from substrax.rng import key_from
 
 from opifex.uncertainty.inference_backends._pathfinder_algorithm import (
     pathfinder_approximate,
@@ -106,8 +107,10 @@ class PathfinderBackend:
                 f"{self.name!r} backend.fit requires a 'target_log_prob': pass one "
                 "to fit(...) or construct the backend with target_log_prob=<callable>."
             )
-        approx_key = rngs.sampler() if "sampler" in rngs else rngs.default()
-        sample_key = rngs.sampler() if "sampler" in rngs else rngs.default()
+        approx_key = key_from(rngs, streams=("sampler", "default"), context="Pathfinder fit")
+        sample_key = key_from(
+            rngs, streams=("sampler", "default"), context="Pathfinder posterior draws"
+        )
         state = pathfinder_approximate(
             rng_key=approx_key,
             log_density_fn=log_density_fn,
