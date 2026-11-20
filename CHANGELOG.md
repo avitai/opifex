@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   array type with the dtype in the jaxtyping class (`Int64[np.ndarray, " n"]`), which also
   makes a runtime check refuse an array of another dtype.
 
+### Changed
+
+- The clean-environment build check installs the wheel with the `dev` and `test` extras from
+  PyPI and imports every module through `scripts/check_every_module_imports.py`, where it
+  imported `opifex` and `opifex.core.training.trainer` alone. The unit tests run on the lock,
+  so this step is the one that meets the dependency versions a fresh install resolves.
+
 ## [0.2.12] - 2026-11-18
 
 ### Added
