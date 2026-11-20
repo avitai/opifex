@@ -53,7 +53,7 @@ dependencies = [
   # the pytest workers during collection. The floor states that requirement so a
   # conservative re-lock cannot silently drop back to 0.1.0.
   "avitai-artifex>=0.1.15",
-  "calibrax[publication]>=0.1.20",
+  "calibrax[publication]>=0.1.21",
   # 0.1.17 moves the checkpoint-state protocol to substrax's ``Checkpointable`` and removes
   # ``datarax.typing.Checkpointable``. Nothing here imports that name — the two mentions in
   # ``uncertainty/sbi/simulators.py`` are prose in a docstring — so the floor is raised to
