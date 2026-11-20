@@ -140,7 +140,7 @@ class PDEBenchLoader:
         normalize: bool = True,
         format_for_model: str = "auto",
         *,
-        allow_synthetic: bool = False,
+        synthetic_key: jax.Array | None = None,
     ) -> dict[str, Any]:
         """
         Load and preprocess a PDEBench dataset.
@@ -149,7 +149,7 @@ class PDEBenchLoader:
         downloaded separately (see the PDEBench data-download tooling). If the
         corresponding HDF5 file
         is not present under ``data_root`` it raises :class:`FileNotFoundError`
-        unless ``allow_synthetic=True`` is passed explicitly. When synthetic data
+        unless a ``synthetic_key`` is passed. When synthetic data
         is requested it is generated from the dataset's spatial/channel
         characteristics, a :class:`UserWarning` is emitted, and the returned
         metadata is flagged with ``data_source="synthetic"`` and
@@ -162,8 +162,9 @@ class PDEBenchLoader:
             split: Dataset split ("train", "val", "test")
             normalize: Whether to normalize the data
             format_for_model: Target model format ("fno", "deeponet", "auto")
-            allow_synthetic: Opt in to clearly-flagged synthetic data when no real
-                PDEBench HDF5 file is available. Defaults to ``False`` (fail fast).
+            synthetic_key: Key that opts in to clearly-flagged synthetic data when no
+                real PDEBench HDF5 file is available, and that the data is drawn from.
+                ``None`` (the default) fails fast.
 
         Returns:
             Dictionary containing:
@@ -175,7 +176,7 @@ class PDEBenchLoader:
         Raises:
             ValueError: If ``dataset_name`` is not supported.
             FileNotFoundError: If no real PDEBench HDF5 file is found for the
-                dataset and ``allow_synthetic`` is ``False``.
+                dataset and no ``synthetic_key`` is given.
             NotImplementedError: If a real PDEBench HDF5 file is found; reading one is
                 not implemented.
         """
@@ -189,11 +190,11 @@ class PDEBenchLoader:
                 "PDEBench HDF5 files is not implemented; it is refused rather than replaced "
                 "with synthetic data."
             )
-        if not allow_synthetic:
+        if synthetic_key is None:
             raise FileNotFoundError(
                 f"No real PDEBench HDF5 file found for dataset {dataset_name!r} under "
                 f"{self.data_root}. Download the PDEBench data files first, or pass "
-                "allow_synthetic=True to generate clearly-flagged synthetic data "
+                "a synthetic_key to generate clearly-flagged synthetic data "
                 "(metadata['is_synthetic'] == True) for testing only."
             )
         warnings.warn(
@@ -210,7 +211,7 @@ class PDEBenchLoader:
         dataset_config = self._dataset_configs[dataset_name]
 
         # Generate synthetic data based on dataset characteristics
-        key = jax.random.PRNGKey(42)  # Fixed seed for reproducibility
+        key = synthetic_key
 
         # Determine batch size
         batch_size = subset_size if subset_size is not None else 100
@@ -318,19 +319,21 @@ class PDEBenchEvaluationPipeline:
     dataset loading, model evaluation, and result analysis.
     """
 
-    def __init__(self, output_dir: str | None = None, *, allow_synthetic: bool = False) -> None:
+    def __init__(
+        self, output_dir: str | None = None, *, synthetic_key: jax.Array | None = None
+    ) -> None:
         """
         Initialize evaluation pipeline.
 
         Args:
             output_dir: Directory for saving evaluation results
-            allow_synthetic: Propagated to :meth:`PDEBenchLoader.load_dataset`.
-                When ``True`` the pipeline may run on clearly-flagged synthetic
-                data (with a loud warning) if real PDEBench files are absent.
-                Defaults to ``False`` (fail fast on missing real data).
+            synthetic_key: Propagated to :meth:`PDEBenchLoader.load_dataset`. Given a
+                key, the pipeline may run on clearly-flagged synthetic data drawn from
+                it (with a loud warning) if real PDEBench files are absent. ``None``
+                (the default) fails fast on missing real data.
         """
         self.loader = PDEBenchLoader()
-        self.allow_synthetic = allow_synthetic
+        self.synthetic_key = synthetic_key
         self.evaluator = BenchmarkEvaluator(
             output_dir=output_dir or "./pdebench_results", save_detailed_results=True
         )
@@ -368,7 +371,7 @@ class PDEBenchEvaluationPipeline:
                     subset_size=subset_size,
                     resolution=resolution,
                     format_for_model="auto",  # Auto-detect based on model
-                    allow_synthetic=self.allow_synthetic,
+                    synthetic_key=self.synthetic_key,
                 )
 
                 # Determine forward function based on data format

@@ -563,7 +563,7 @@ class TestPDEBenchIntegration:
         from opifex.benchmarking.pdebench_integration import PDEBenchLoader
 
         loader = PDEBenchLoader(data_root=str(tmp_path / "empty_pdebench"))
-        with pytest.raises(FileNotFoundError, match="allow_synthetic"):
+        with pytest.raises(FileNotFoundError, match="synthetic_key"):
             loader.load_dataset(dataset_name="advection", subset_size=4, resolution="low")
 
     def test_pdebench_refuses_a_real_file_it_cannot_read(self, tmp_path) -> None:
@@ -591,10 +591,31 @@ class TestPDEBenchIntegration:
                 dataset_name="advection",
                 subset_size=4,
                 resolution="low",
-                allow_synthetic=True,
+                synthetic_key=jax.random.key(0),
             )
         assert dataset["metadata"]["is_synthetic"] is True
         assert dataset["metadata"]["data_source"] == "synthetic"
+
+    def test_pdebench_synthetic_data_follows_the_key(self, tmp_path) -> None:
+        """Two keys give two synthetic data sets; one key twice gives the same one."""
+        import pytest
+
+        from opifex.benchmarking.pdebench_integration import PDEBenchLoader
+
+        loader = PDEBenchLoader(data_root=str(tmp_path / "empty_pdebench"))
+
+        def inputs(seed: int) -> jax.Array:
+            with pytest.warns(UserWarning, match="SYNTHETIC"):
+                dataset = loader.load_dataset(
+                    dataset_name="advection",
+                    subset_size=4,
+                    resolution="low",
+                    synthetic_key=jax.random.key(seed),
+                )
+            return dataset["input_data"]
+
+        assert jnp.array_equal(inputs(0), inputs(0))
+        assert not jnp.array_equal(inputs(0), inputs(1))
 
     def test_pdebench_advection_dataset_loading(self) -> None:
         """Test loading PDEBench Advection dataset."""
@@ -607,7 +628,7 @@ class TestPDEBenchIntegration:
             dataset_name="advection",
             subset_size=10,  # Small subset for testing
             resolution="low",
-            allow_synthetic=True,
+            synthetic_key=jax.random.key(0),
         )
         assert dataset["metadata"]["is_synthetic"] is True
 
@@ -623,7 +644,7 @@ class TestPDEBenchIntegration:
 
         loader = PDEBenchLoader()
         dataset = loader.load_dataset(
-            dataset_name="burgers", subset_size=5, resolution="low", allow_synthetic=True
+            dataset_name="burgers", subset_size=5, resolution="low", synthetic_key=jax.random.key(0)
         )
 
         assert "input_data" in dataset
@@ -637,7 +658,10 @@ class TestPDEBenchIntegration:
 
         loader = PDEBenchLoader()
         dataset = loader.load_dataset(
-            dataset_name="darcy_flow", subset_size=5, resolution="low", allow_synthetic=True
+            dataset_name="darcy_flow",
+            subset_size=5,
+            resolution="low",
+            synthetic_key=jax.random.key(0),
         )
 
         assert "input_data" in dataset
@@ -654,7 +678,9 @@ class TestPDEBenchIntegration:
         baseline_repo = BaselineRepository()
 
         # Load a small dataset
-        loader.load_dataset("advection", subset_size=3, resolution="low", allow_synthetic=True)
+        loader.load_dataset(
+            "advection", subset_size=3, resolution="low", synthetic_key=jax.random.key(0)
+        )
 
         # Get baseline performance metrics
         baseline_metrics = baseline_repo.get_baseline_metrics(
@@ -672,7 +698,7 @@ class TestPDEBenchIntegration:
         )
         from opifex.neural.operators.foundations import FourierNeuralOperator
 
-        pipeline = PDEBenchEvaluationPipeline(allow_synthetic=True)
+        pipeline = PDEBenchEvaluationPipeline(synthetic_key=jax.random.key(0))
 
         # Create a simple FNO model for testing
         rngs = nnx.Rngs(42)
