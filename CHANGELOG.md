@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `LoRALinear` and `apply_lora` require `rngs`; a missing one was replaced by
   `nnx.Rngs(0)`, so every adapter built without it drew the same `A` factor
   (`rngs-fallback`).
+- **Breaking:** `fit_galerkin_surrogate(rngs=...)` takes an `nnx.Rngs` (stream `sg_samples`,
+  else `sample`, else `default`) or a key, in place of a mapping of stream names to keys;
+  `fit_collocation_surrogate` takes no `rngs`, which it never read. The ADVI, Pathfinder
+  and SVGD backends take their keys through `substrax.rng.key_from` instead of probing the
+  `nnx.Rngs` (`rngs-probe`).
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

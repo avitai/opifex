@@ -30,6 +30,7 @@ from collections.abc import Callable  # noqa: TC003 — kept eager per opifex co
 import jax
 import jax.numpy as jnp
 from flax import nnx  # noqa: TC002
+from substrax.rng import key_from
 
 from opifex.uncertainty.inference_backends._peer_predictive import (
     peer_predictive_from_refit,
@@ -106,9 +107,7 @@ class SVGDBackend:
                 f"{self.name!r} backend.fit requires a 'target_log_prob': pass one "
                 "to fit(...) or construct the backend with target_log_prob=<callable>."
             )
-        # The blackjax peer accepts the "sampler" stream by convention; fall
-        # back to "default" if no sampler stream exists.
-        key = rngs.sampler() if "sampler" in rngs else rngs.default()
+        key = key_from(rngs, streams=("sampler", "default"), context="SVGD particles")
         perturbation_shape = (self.num_particles, *self.init_state.shape)
         perturbation = jax.random.normal(key, perturbation_shape) * self.init_scale
         initial_particles = self.init_state + perturbation

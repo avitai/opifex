@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+from flax import nnx
 
 from opifex.uncertainty.scientific.polynomial_chaos import (
     PolynomialChaosBasis,
@@ -44,7 +45,7 @@ def test_stochastic_galerkin_fit_is_deterministic_given_a_fixed_key() -> None:
     returns identical coefficients on two calls with the same key.
     """
     basis = PolynomialChaosBasis(family="hermite", order=4, coefficients=jnp.zeros((5,)))
-    rngs = {"sg_samples": jax.random.PRNGKey(0)}
+    rngs = jax.random.key(0)
     surrogate_a = fit_galerkin_surrogate(
         model=_smooth_target, basis=basis, num_samples=512, rngs=rngs
     )
@@ -55,9 +56,28 @@ def test_stochastic_galerkin_fit_is_deterministic_given_a_fixed_key() -> None:
     assert jnp.allclose(surrogate_a.coefficients, surrogate_b.coefficients)
 
 
+def test_stochastic_galerkin_draws_from_the_sg_samples_stream_of_an_rngs() -> None:
+    """An ``nnx.Rngs`` holding ``sg_samples`` and ``default`` gives the samples' key from
+    ``sg_samples``: the fit equals one given that stream's key directly."""
+    basis = PolynomialChaosBasis(family="hermite", order=4, coefficients=jnp.zeros((5,)))
+    from_rngs = fit_galerkin_surrogate(
+        model=_smooth_target,
+        basis=basis,
+        num_samples=512,
+        rngs=nnx.Rngs(default=1, sg_samples=0),
+    )
+    from_key = fit_galerkin_surrogate(
+        model=_smooth_target,
+        basis=basis,
+        num_samples=512,
+        rngs=nnx.Rngs(sg_samples=0).sg_samples(),
+    )
+    assert jnp.array_equal(from_rngs.coefficients, from_key.coefficients)
+
+
 def test_stochastic_galerkin_evaluate_recovers_smooth_target() -> None:
     basis = PolynomialChaosBasis(family="hermite", order=6, coefficients=jnp.zeros((7,)))
-    rngs = {"sg_samples": jax.random.PRNGKey(0)}
+    rngs = jax.random.key(0)
     surrogate = fit_galerkin_surrogate(
         model=_smooth_target, basis=basis, num_samples=8192, rngs=rngs
     )
@@ -85,7 +105,7 @@ def test_stochastic_collocation_error_is_monotonically_non_increasing() -> None:
     errors: list[float] = []
     for level in (1, 2, 3, 4):
         grid = smolyak_sparse_grid(level=level, num_dims=1, family="hermite")
-        surrogate = fit_collocation_surrogate(model=_smooth_target, sparse_grid=grid, rngs={})
+        surrogate = fit_collocation_surrogate(model=_smooth_target, sparse_grid=grid)
         assert isinstance(surrogate, StochasticCollocationSurrogate)
         predicted = surrogate.evaluate(test_grid)
         err = float(jnp.linalg.norm(predicted - target))
@@ -114,7 +134,7 @@ def test_tensor_grid_gauss_hermite_returns_known_count() -> None:
 def test_stochastic_galerkin_surrogate_traces_under_jit() -> None:
     """Pattern (B) ``StochasticGalerkinSurrogate`` round-trips a ``jit``."""
     basis = PolynomialChaosBasis(family="hermite", order=3, coefficients=jnp.zeros((4,)))
-    rngs = {"sg_samples": jax.random.PRNGKey(0)}
+    rngs = jax.random.key(0)
     surrogate = fit_galerkin_surrogate(
         model=_smooth_target, basis=basis, num_samples=256, rngs=rngs
     )
@@ -132,7 +152,7 @@ def test_stochastic_galerkin_surrogate_traces_under_jit() -> None:
 def test_stochastic_collocation_surrogate_traces_under_jit() -> None:
     """``StochasticCollocationSurrogate.evaluate`` must compile under ``jit``."""
     grid = smolyak_sparse_grid(level=2, num_dims=1, family="hermite")
-    surrogate = fit_collocation_surrogate(model=_smooth_target, sparse_grid=grid, rngs={})
+    surrogate = fit_collocation_surrogate(model=_smooth_target, sparse_grid=grid)
 
     @jax.jit
     def evaluate_jit(s: StochasticCollocationSurrogate, x: jax.Array) -> jax.Array:
