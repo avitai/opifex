@@ -260,7 +260,8 @@ class MLPLearnedOptimizer(LearnedOptimizer):
         self.exp_mult = exp_mult
         self.step_mult = step_mult
         # Capture the config-determined graphdef once (init() supplies fresh theta).
-        template = _OptimizerMLP(_NUM_FEATURES, hidden_size, hidden_layers, rngs=nnx.Rngs(0))
+        graph_only = nnx.Rngs(0)  # substrax-allow: seed-literal: graphdef only; init() draws theta
+        template = _OptimizerMLP(_NUM_FEATURES, hidden_size, hidden_layers, rngs=graph_only)
         self._graphdef = nnx.split(template)[0]
 
     def init(self, key: jax.Array) -> nnx.State:
@@ -435,7 +436,8 @@ class AdafacMLPLearnedOptimizer(LearnedOptimizer):
         self.hidden_layers = hidden_layers
         self.exp_mult = exp_mult
         self.step_mult = step_mult
-        template = _OptimizerMLP(_NUM_ADAFAC_INPUTS, hidden_size, hidden_layers, rngs=nnx.Rngs(0))
+        graph_only = nnx.Rngs(0)  # substrax-allow: seed-literal: graphdef only; init() draws theta
+        template = _OptimizerMLP(_NUM_ADAFAC_INPUTS, hidden_size, hidden_layers, rngs=graph_only)
         self._graphdef = nnx.split(template)[0]
 
     def init(self, key: jax.Array) -> nnx.State:

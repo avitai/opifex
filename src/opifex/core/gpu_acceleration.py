@@ -435,7 +435,7 @@ class CachedProgressiveTester:
 
         try:
             # Create test matrices
-            key = jax.random.PRNGKey(42)
+            key = jax.random.PRNGKey(42)  # substrax-allow: seed-literal: timing operand only
             x = jax.random.normal(key, (size, size), dtype=dtype)
             y = jax.random.normal(key, (size, size), dtype=dtype)
 
@@ -573,23 +573,13 @@ class OptimizedGPUManager:
                     ((size, size), jnp.float32),
                 ]
 
-                with self.memory_pool.managed_buffers(shapes_and_dtypes) as buffers:
-                    x_buf, y_buf = buffers
-
-                    # Fill buffers with test data
-                    key = jax.random.PRNGKey(42)
-                    x = jax.random.normal(key, (size, size))
-                    y = jax.random.normal(key, (size, size))
-
-                    # Copy to managed buffers
-                    x = x.at[:].set(x_buf[:size, :size])
-                    y = y.at[:].set(y_buf[:size, :size])
-
+                # The pooled buffers are held for the timed call; it draws its own operands.
+                with self.memory_pool.managed_buffers(shapes_and_dtypes):
                     # Prefetch next test data if available
                     if i + 1 < len(test_sizes):
                         next_size = test_sizes[i + 1]
-                        next_key = jax.random.PRNGKey(43)
-                        next_x = jax.random.normal(next_key, (next_size, next_size))
+                        # Only the transfer is exercised; the values are never read.
+                        next_x = jnp.zeros((next_size, next_size))
                         with contextlib.suppress(Exception):
                             self.async_manager.prefetch_next_batch(next_x, jax.devices()[0])
 

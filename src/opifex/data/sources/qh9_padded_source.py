@@ -137,7 +137,7 @@ class QH9PaddedConfig(StructuralConfig):
 
     max_atoms: int = 32
     max_edges: int = 992
-    seed: int = 43
+    seed: int = 43  # substrax-allow: seed-literal: QH9-Stable reference split seed
     shuffle: bool = False
 
     def __post_init__(self) -> None:
