@@ -42,7 +42,7 @@ spectral analysis of the velocity-magnitude field.
 |--------------------------|--------------|
 | `UFNO(n_modes, hidden_channels, uno_n_modes, ...)` | `create_turbulence_ufno(in_channels=, out_channels=, rngs=)` |
 | Manual grid coordinate concatenation | `GridEmbedding2D(in_channels=, grid_boundaries=)` |
-| `torch.utils.data.DataLoader(dataset)` | `create_navier_stokes_loader(...)` (datarax `PDELoaders`) |
+| `torch.utils.data.DataLoader(dataset)` | `create_navier_stokes_loader(..., seed=)` (datarax `PDELoaders`) |
 | Manual energy loss + `loss.backward()` | `trainer.custom_losses["energy"] = fn` + `trainer.fit()` |
 | `model.to(device)` | Automatic device placement via JAX |
 

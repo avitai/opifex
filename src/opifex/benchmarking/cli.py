@@ -178,7 +178,7 @@ def _run_benchmark(
         return 1
 
     # Create runner with our registry
-    runner = BenchmarkRunner()
+    runner = BenchmarkRunner(seed=seed)
     runner.registry = registry
 
     # Get benchmark config
@@ -187,7 +187,6 @@ def _run_benchmark(
     # Override config with CLI args
     benchmark_config.computational_requirements["n_epochs"] = epochs
     benchmark_config.computational_requirements["batch_size"] = batch_size
-    benchmark_config.computational_requirements["seed"] = seed
 
     print(f"Running benchmark: {benchmark_name}")
     print(f"Operator: {operator_name}")

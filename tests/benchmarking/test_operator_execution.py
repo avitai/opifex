@@ -6,6 +6,7 @@ These tests define the expected behavior for running real operators
 Following TDD: These tests are written FIRST before the implementation.
 """
 
+import jax
 import jax.numpy as jnp
 import optax
 import pytest
@@ -64,7 +65,7 @@ class TestDataLoaderIntegration:
         """Benchmarks use actual Opifex datarax loaders."""
         from opifex.data.loaders import create_darcy_loader
 
-        loaders = create_darcy_loader(n_samples=10, batch_size=2, resolution=32)
+        loaders = create_darcy_loader(n_samples=10, batch_size=2, resolution=32, seed=0)
 
         batch = next(iter(loaders.train))
         assert "input" in batch
@@ -76,7 +77,7 @@ class TestDataLoaderIntegration:
         """Burgers loader works with benchmarks."""
         from opifex.data.loaders import create_burgers_loader
 
-        loaders = create_burgers_loader(n_samples=10, batch_size=2, resolution=32)
+        loaders = create_burgers_loader(n_samples=10, batch_size=2, resolution=32, seed=0)
 
         batch = next(iter(loaders.train))
         assert "input" in batch
@@ -91,7 +92,7 @@ class TestBenchmarkRunnerHelpers:
         from opifex.benchmarking.benchmark_registry import BenchmarkConfig
         from opifex.benchmarking.benchmark_runner import BenchmarkRunner
 
-        runner = BenchmarkRunner()
+        runner = BenchmarkRunner(seed=0)
 
         config = BenchmarkConfig(
             name="test_darcy",
@@ -115,7 +116,7 @@ class TestBenchmarkRunnerHelpers:
         from opifex.benchmarking.benchmark_registry import BenchmarkConfig
         from opifex.benchmarking.benchmark_runner import BenchmarkRunner
 
-        runner = BenchmarkRunner()
+        runner = BenchmarkRunner(seed=0)
 
         config = BenchmarkConfig(
             name="test_missing",
@@ -129,6 +130,27 @@ class TestBenchmarkRunnerHelpers:
         with pytest.raises(ValueError, match=r"missing.*loader_type"):
             runner._get_data_loaders(config)
 
+    def test_the_runner_seed_decides_the_benchmark_data(self):
+        """The runner's seed (``opifex-benchmark --seed``) reaches the data loader."""
+        from opifex.benchmarking.benchmark_registry import BenchmarkConfig
+        from opifex.benchmarking.benchmark_runner import BenchmarkRunner
+
+        config = BenchmarkConfig(
+            name="test_seeded",
+            domain="fluid_dynamics",
+            problem_type="operator_learning",
+            input_shape=(32, 32, 1),
+            output_shape=(32, 32, 1),
+            computational_requirements={"loader_type": "darcy", "batch_size": 4},
+        )
+
+        def first_input(seed: int) -> jax.Array:
+            train_loader, _ = BenchmarkRunner(seed=seed)._get_data_loaders(config)
+            return next(iter(train_loader))["input"]
+
+        assert jnp.array_equal(first_input(3), first_input(3))
+        assert not jnp.array_equal(first_input(3), first_input(4))
+
     def test_get_operator_config_from_metadata(self):
         """_get_operator_config uses registry metadata, not name matching."""
         from opifex.benchmarking.benchmark_registry import BenchmarkConfig
@@ -137,7 +159,7 @@ class TestBenchmarkRunnerHelpers:
             TensorizedFourierNeuralOperator,
         )
 
-        runner = BenchmarkRunner()
+        runner = BenchmarkRunner(seed=0)
 
         # The runner discovered the operator; give it an explicit type
         runner.registry.set_operator_metadata(
@@ -218,11 +240,13 @@ class TestTrainingLoop:
         )
 
         # Quick training (just 2 epochs for test speed)
-        config = ExecutionConfig(n_epochs=2, batch_size=4, learning_rate=1e-3)
+        config = ExecutionConfig(n_epochs=2, batch_size=4, learning_rate=1e-3, seed=0)
         executor = OperatorExecutor(config)
 
         # Use actual datarax loaders (one generation split into train/val).
-        loaders = create_darcy_loader(n_samples=12, batch_size=4, resolution=16, val_fraction=1 / 3)
+        loaders = create_darcy_loader(
+            n_samples=12, batch_size=4, resolution=16, val_fraction=1 / 3, seed=0
+        )
 
         # Execute benchmark
         result = executor.execute_training_benchmark(
@@ -255,9 +279,9 @@ class TestOperatorExecutorEdgeCases:
 
     def test_invalid_operator_config_raises(self):
         """Invalid operator config raises informative error."""
-        from opifex.benchmarking.operator_executor import OperatorExecutor
+        from opifex.benchmarking.operator_executor import ExecutionConfig, OperatorExecutor
 
-        executor = OperatorExecutor()
+        executor = OperatorExecutor(ExecutionConfig(seed=0))
         with pytest.raises((TypeError, ValueError)):
             executor._create_operator(
                 operator_class=type(None),  # Invalid
@@ -267,10 +291,10 @@ class TestOperatorExecutorEdgeCases:
 
     def test_empty_loader_returns_zero_metrics(self):
         """Empty data loader returns zeroed metrics gracefully."""
-        from opifex.benchmarking.operator_executor import OperatorExecutor
+        from opifex.benchmarking.operator_executor import ExecutionConfig, OperatorExecutor
         from opifex.neural.operators.fno.tensorized import create_tucker_fno
 
-        executor = OperatorExecutor()
+        executor = OperatorExecutor(ExecutionConfig(seed=0))
         rngs = nnx.Rngs(42)
         model = create_tucker_fno(
             in_channels=1,
@@ -301,7 +325,7 @@ class TestBenchmarkRunnerRealExecution:
             TensorizedFourierNeuralOperator,
         )
 
-        runner = BenchmarkRunner()
+        runner = BenchmarkRunner(seed=0)
 
         # The runner discovered TFNO; give it an explicit type
         runner.registry.set_operator_metadata(
@@ -364,10 +388,12 @@ class TestExecutorFinalBatchPolicy:
         from opifex.benchmarking.operator_executor import ExecutionConfig, OperatorExecutor
         from opifex.data.loaders import create_darcy_loader
 
-        loaders = create_darcy_loader(n_samples=12, batch_size=4, resolution=16, val_fraction=1 / 3)
+        loaders = create_darcy_loader(
+            n_samples=12, batch_size=4, resolution=16, val_fraction=1 / 3, seed=0
+        )
         model = self._model()
         opt = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
-        executor = OperatorExecutor(ExecutionConfig(n_epochs=3, batch_size=4))
+        executor = OperatorExecutor(ExecutionConfig(n_epochs=3, batch_size=4, seed=0))
 
         metrics = executor._train_loop(model, opt, loaders.train)
 
@@ -381,11 +407,14 @@ class TestExecutorFinalBatchPolicy:
         from opifex.benchmarking.operator_executor import (
             _prepare_input,
             _prepare_target,
+            ExecutionConfig,
             OperatorExecutor,
         )
         from opifex.data.loaders import create_darcy_loader
 
-        loaders = create_darcy_loader(n_samples=10, batch_size=4, resolution=16, val_fraction=0.2)
+        loaders = create_darcy_loader(
+            n_samples=10, batch_size=4, resolution=16, val_fraction=0.2, seed=0
+        )
         model = self._model()
         batch = next(iter(loaders.val))  # the one validation batch: the two records, no more
         loaders.val.reset()
@@ -393,7 +422,7 @@ class TestExecutorFinalBatchPolicy:
         pred = model(_prepare_input(batch["input"]))
         target = _prepare_target(batch["output"], pred)
 
-        metrics = OperatorExecutor()._evaluate(model, loaders.val)
+        metrics = OperatorExecutor(ExecutionConfig(seed=0))._evaluate(model, loaders.val)
 
         assert metrics["mse"] == pytest.approx(float(mse(pred, target)), rel=1e-5)
         assert jnp.asarray(metrics["mse"]).shape == ()

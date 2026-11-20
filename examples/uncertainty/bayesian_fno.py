@@ -138,15 +138,16 @@ _REPO_ROOT = _find_repo_root()
 ## Load Darcy Flow Data
 
 `generate_darcy` generates the smooth Darcy permeability-to-pressure
-dataset. We generate three disjoint splits, each from its own seed: train (fits
-the models), calibration (fits the variance scale), and test (reports the metrics).
+dataset. We generate three disjoint splits, each from its own key (one split of the
+seed's key): train (fits the models), calibration (fits the variance scale), and test
+(reports the metrics).
 """
 
 
 # %%
-def _collect_split(n_samples: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
+def _collect_split(n_samples: int, key: jax.Array) -> tuple[np.ndarray, np.ndarray]:
     """Generate ``n_samples`` distinct Darcy samples as channels-first ``(n, 1, H, W)`` arrays."""
-    data = generate_darcy(n_samples=n_samples, resolution=RESOLUTION, seed=seed)
+    data = generate_darcy(n_samples=n_samples, resolution=RESOLUTION, key=key)
     return data["input"], data["output"]
 
 
@@ -363,9 +364,10 @@ def main() -> dict[str, float | int]:
     # --- Load Darcy flow data ---------------------------------------------
     print()
     print("Loading Darcy flow data...")
-    x_train, y_train = _collect_split(N_TRAIN, SEED)
-    x_calibration, y_calibration = _collect_split(N_CALIBRATION, SEED + 1000)
-    x_test, y_test = _collect_split(N_TEST, SEED + 2000)
+    train_key, calibration_key, test_key = jax.random.split(jax.random.key(SEED), 3)
+    x_train, y_train = _collect_split(N_TRAIN, train_key)
+    x_calibration, y_calibration = _collect_split(N_CALIBRATION, calibration_key)
+    x_test, y_test = _collect_split(N_TEST, test_key)
     print(f"  Train input shape: {x_train.shape}")
     print(f"  Test input shape:  {x_test.shape}")
 

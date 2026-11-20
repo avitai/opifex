@@ -54,7 +54,7 @@ class ExecutionConfig:
     warmup_steps: int = 5
     eval_frequency: int = 10
     use_mixed_precision: bool = False
-    seed: int = 42
+    seed: int
 
 
 class OperatorExecutor:
@@ -68,13 +68,13 @@ class OperatorExecutor:
     - calibrax.metrics for evaluation (DRY)
     """
 
-    def __init__(self, config: ExecutionConfig | None = None) -> None:
+    def __init__(self, config: ExecutionConfig) -> None:
         """Initialize executor with configuration.
 
         Args:
-            config: Execution configuration. Uses defaults if None.
+            config: Execution configuration, including the seed that initialises the operator.
         """
-        self.config = config or ExecutionConfig()
+        self.config = config
 
     def execute_training_benchmark(
         self,

@@ -126,7 +126,8 @@ runner = BenchmarkRunner(
     registry=registry,
     validator=validator,
     analyzer=analyzer,
-    results_manager=manager
+    results_manager=manager,
+    seed=42,
 )
 
 # Run domain-specific benchmark suite

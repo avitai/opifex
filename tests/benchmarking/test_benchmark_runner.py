@@ -114,7 +114,7 @@ class TestBenchmarkRunnerInitialization:
             "opifex.benchmarking.benchmark_runner.OperatorBenchmarkRegistry"
         ) as mock_registry:
             mock_registry.return_value.list_available_operators.return_value = []
-            runner = BenchmarkRunner(output_dir=output_dir)
+            runner = BenchmarkRunner(output_dir=output_dir, seed=0)
 
             assert runner.output_dir == Path(output_dir)
             assert runner.registry is not None
@@ -130,7 +130,7 @@ class TestBenchmarkRunnerInitialization:
             "opifex.benchmarking.benchmark_runner.OperatorBenchmarkRegistry"
         ) as mock_registry:
             mock_registry.return_value.list_available_operators.return_value = []
-            BenchmarkRunner(output_dir=str(output_dir))
+            BenchmarkRunner(output_dir=str(output_dir), seed=0)
 
             assert output_dir.exists()
 
@@ -148,6 +148,7 @@ class TestBenchmarkRunnerInitialization:
             validator=mock_validator,
             analyzer=mock_analyzer,
             output_dir=str(temp_directory),
+            seed=0,
         )
 
         assert runner.registry is mock_registry
@@ -165,7 +166,7 @@ class TestBenchmarkRunnerErrors:
         mock_registry.list_available_operators.return_value = []
         mock_registry.list_available_benchmarks.return_value = ["benchmark1"]
 
-        runner = BenchmarkRunner(registry=mock_registry, output_dir=str(temp_directory))
+        runner = BenchmarkRunner(registry=mock_registry, output_dir=str(temp_directory), seed=0)
 
         with pytest.raises(ValueError, match="No operators available"):
             runner.run_comprehensive_benchmark()
@@ -176,7 +177,7 @@ class TestBenchmarkRunnerErrors:
         mock_registry.list_available_operators.return_value = ["op1"]
         mock_registry.list_available_benchmarks.return_value = []
 
-        runner = BenchmarkRunner(registry=mock_registry, output_dir=str(temp_directory))
+        runner = BenchmarkRunner(registry=mock_registry, output_dir=str(temp_directory), seed=0)
 
         with pytest.raises(ValueError, match="No benchmarks available"):
             runner.run_comprehensive_benchmark()
@@ -200,6 +201,7 @@ class TestBenchmarkRunnerFailureRecording:
             analyzer=MagicMock(),
             results_manager=MagicMock(),
             output_dir=str(temp_directory),
+            seed=0,
         )
 
         good_result = MagicMock(name="good_result")

@@ -89,7 +89,7 @@ config = PDEBenchConfig(
     output_steps=5,
     normalize=True,   # attaches a per-channel min-max MapOperator stage
 )
-loader = create_pdebench_loader(config, batch_size=32)
+loader = create_pdebench_loader(config, batch_size=32, seed=0)
 ```
 
 ### Batching for training

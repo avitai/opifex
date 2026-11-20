@@ -190,8 +190,8 @@ def main() -> dict[str, float | int]:
         output_steps=5,
         normalize=True,
     )
-    train_loader = create_pdebench_loader(train_config, batch_size=batch_size)
-    test_loader = create_pdebench_loader(test_config, batch_size=batch_size)
+    train_loader = create_pdebench_loader(train_config, batch_size=batch_size, seed=0)
+    test_loader = create_pdebench_loader(test_config, batch_size=batch_size, seed=0)
 
     batch = train_loader.step()
     input_min, input_max = float(jnp.min(batch["input"])), float(jnp.max(batch["input"]))

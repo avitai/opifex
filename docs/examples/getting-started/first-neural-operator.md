@@ -56,26 +56,31 @@ returns channels-first `(N, 1, H, W)` input/output arrays. (`create_darcy_loader
 wraps the same generator in datarax train/val pipelines for batched training.)
 
 ```python
+import jax
 import numpy as np
 
 from opifex.data.sources import generate_darcy
 
+# One split of the seed's key gives three independent keys, so no test sample repeats a
+# training sample.
+train_key, test_key_32, test_key_64 = jax.random.split(jax.random.key(42), 3)
+
 
 # Each split is a separate generation at its own resolution, as channels-first
 # ``(N, 1, H, W)`` arrays.
-def _generate(n_samples: int, resolution: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
-    data = generate_darcy(n_samples=n_samples, resolution=resolution, seed=seed)
+def _generate(n_samples: int, resolution: int, key: jax.Array) -> tuple[np.ndarray, np.ndarray]:
+    data = generate_darcy(n_samples=n_samples, resolution=resolution, key=key)
     return data["input"], data["output"]
 
 
 # Training data at low resolution.
-X_train, Y_train = _generate(1000, 32, 42)
+X_train, Y_train = _generate(1000, 32, train_key)
 
 # Test data at the SAME resolution.
-X_test_32, Y_test_32 = _generate(100, 32, 42 + 1000)
+X_test_32, Y_test_32 = _generate(100, 32, test_key_32)
 
 # Test data at a HIGHER resolution - for zero-shot super-resolution!
-X_test_64, Y_test_64 = _generate(100, 64, 42 + 2000)
+X_test_64, Y_test_64 = _generate(100, 64, test_key_64)
 ```
 
 **Terminal Output:**

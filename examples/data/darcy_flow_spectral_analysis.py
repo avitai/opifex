@@ -192,7 +192,9 @@ def analyze_darcy_spectral_properties(
         # channels-first ``(N, 1, H, W)``; drop the channel axis for the 2D
         # spectral analysis below.
         start_time = time.time()
-        data = generate_darcy(n_samples=min(n_samples, 100), resolution=resolution, seed=seed)
+        data = generate_darcy(
+            n_samples=min(n_samples, 100), resolution=resolution, key=jax.random.key(seed)
+        )
         train_inputs = jnp.asarray(data["input"][:, 0])
         train_outputs = jnp.asarray(data["output"][:, 0])
         generation_time = time.time() - start_time

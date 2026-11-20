@@ -220,20 +220,23 @@ UNO config: hidden=64, 5-layer Fourier U (Rahman et al. 2022)
 
 Opifex provides `generate_darcy`, which generates Darcy flow equation data
 (permeability-to-pressure mapping) as channels-first arrays
-(`{"input": (n, 1, H, W), "output": (n, 1, H, W)}`); sample `i` of a call is drawn from
-`seed + i`. We generate the training and test samples in one call and split them. Since
+(`{"input": (n, 1, H, W), "output": (n, 1, H, W)}`); a call splits its `key` into one key
+per sample. We generate the training and test samples in one call and split them. Since
 UNO works channels-last, we move the channel axis to the end once, at the data boundary.
 
 ```python
 # generate_darcy returns channels-first {"input": (n, 1, H, W), "output": (n, 1, H, W)};
 # UNO (and its grid embedding, eval, and visualization) work channels-last, so
 # we move the channel axis to the end once here, at the data boundary.
-def _generate(n_samples, grid, first_seed):
-    data = generate_darcy(n_samples=n_samples, resolution=grid, seed=first_seed)
+def _generate(n_samples, grid, key):
+    data = generate_darcy(n_samples=n_samples, resolution=grid, key=key)
     return np.moveaxis(data["input"], 1, -1), np.moveaxis(data["output"], 1, -1)
 
 
-X_all, Y_all = _generate(N_TRAIN + N_TEST, RESOLUTION, SEED)
+# One split of the seed's key: the train/test samples and the high-resolution test set
+# come from independent keys, so no sample repeats one already seen.
+data_key, high_resolution_key = jax.random.split(jax.random.key(SEED))
+X_all, Y_all = _generate(N_TRAIN + N_TEST, RESOLUTION, data_key)
 X_train, Y_train = X_all[:N_TRAIN], Y_all[:N_TRAIN]
 X_test, Y_test = X_all[N_TRAIN:], Y_all[N_TRAIN:]
 
@@ -449,9 +452,8 @@ model, and compare against the real high-resolution solutions.
 target_resolution = RESOLUTION * 2
 print(f"Testing zero-shot super-resolution: {RESOLUTION} -> {target_resolution}")
 
-# Generate a real high-resolution Darcy test set (true solves). Its seeds follow every
-# training and test seed, so no sample repeats one already seen.
-x_high, y_high = _generate(N_TEST, target_resolution, SEED + N_TRAIN + N_TEST)
+# Generate a real high-resolution Darcy test set (true solves) from its own key.
+x_high, y_high = _generate(N_TEST, target_resolution, high_resolution_key)
 x_high_n = jnp.array((x_high - x_mean) / x_std)  # train-fitted normalization
 y_high_jnp = jnp.array(y_high)
 

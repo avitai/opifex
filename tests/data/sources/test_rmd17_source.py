@@ -231,11 +231,11 @@ def test_pipeline_batches_deterministic_under_fixed_seed(synthetic_rmd17_npz: Pa
 
 def test_unknown_molecule_fails_fast() -> None:
     with pytest.raises(ValueError, match="Unknown molecule"):
-        RMD17Config(molecule="not_a_real_molecule")
+        RMD17Config(molecule="not_a_real_molecule", seed=0)
 
 
 def test_known_molecule_is_accepted() -> None:
-    config = RMD17Config(molecule="aspirin")
+    config = RMD17Config(molecule="aspirin", seed=0)
     assert config.molecule == "aspirin"
 
 

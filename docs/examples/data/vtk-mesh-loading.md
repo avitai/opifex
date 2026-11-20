@@ -50,6 +50,7 @@ from opifex.data.sources.scientific import VTKMeshConfig, create_vtk_mesh_loader
 loader = create_vtk_mesh_loader(
     VTKMeshConfig(directory=mesh_dir, node_features=("velocity",)),
     batch_size=3,
+    seed=0,
 )
 batch = loader.step()   # node_positions (3, 144, 3), node_mask (3, 144), edge_index (3, 2, 770) ...
 ```

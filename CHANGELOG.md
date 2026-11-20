@@ -40,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fit_collocation_surrogate` takes no `rngs`, which it never read. The ADVI, Pathfinder
   and SVGD backends take their keys through `substrax.rng.key_from` instead of probing the
   `nnx.Rngs` (`rngs-probe`).
+- **Breaking:** the data loaders (`create_{burgers,darcy,diffusion,navier_stokes,
+  shallow_water}_loader`, `create_rmd17_loader`, `create_pdebench_loader`,
+  `create_vtk_mesh_loader`), `RMD17Config` (now keyword-only) and `ExecutionConfig` require
+  `seed`, and the PDE generators (`generate_*`) require a keyword-only `key`, split into one
+  key per sample. The loaders generate from their seed's `data` stream and shuffle from its
+  `shuffle` stream (`substrax.rng.rngs_from_seed`). Per-sample keys were `PRNGKey(seed + i)`,
+  so seeds `s` and `s + 1` shared all but one sample; every generated dataset changes.
+  `OperatorExecutor` requires its `ExecutionConfig`. `BenchmarkRunner` takes a keyword-only
+  `seed`, from which every run generates its data and initialises its operator;
+  `opifex-benchmark --seed` passes it. Before, the CLI wrote `--seed` into the benchmark
+  configuration and nothing read it, so every benchmark ran on seed 42 (`seed-literal`).
 - `benchmark_with_prefetching` draws no random operands: the two it drew were overwritten
   from the pool buffers and never read, and its prefetch payload, whose values nothing reads,
   is zeros.

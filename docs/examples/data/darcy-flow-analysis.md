@@ -31,7 +31,7 @@ consistency, and resolution scaling guides computational budget allocation.
 
 | neuraloperator (PyTorch) | Opifex (JAX) |
 |--------------------------|--------------|
-| `torch.utils.data.DataLoader(dataset)` | `generate_darcy(n_samples=, resolution=, seed=)` |
+| `torch.utils.data.DataLoader(dataset)` | `generate_darcy(n_samples=, resolution=, key=)` |
 | Manual `torch.meshgrid` for coordinates | `GridEmbedding2D(in_channels=, grid_boundaries=)` |
 | `torch.gradient()` (limited) | `jnp.gradient(field, axis=)` (NumPy-compatible) |
 | Manual per-sample loop | Single vmapped on-device batch |
@@ -92,9 +92,11 @@ Generate datasets at multiple resolutions using Opifex's vmapped on-device gener
 `(n, 1, H, W)` fields, which is split into a per-sample list for analysis:
 
 ```python
+import jax
+
 from opifex.data.sources import generate_darcy
 
-data = generate_darcy(n_samples=100, resolution=64, seed=42)
+data = generate_darcy(n_samples=100, resolution=64, key=jax.random.key(42))
 samples = [
     {"input": data["input"][i], "output": data["output"][i]}
     for i in range(100)
@@ -226,7 +228,7 @@ constant batch usually indicates the resolution or sample count was misconfigure
 
 **Solution**: Generate a smaller number of high-resolution samples:
 ```python
-data = generate_darcy(n_samples=10, resolution=256, seed=42)
+data = generate_darcy(n_samples=10, resolution=256, key=jax.random.key(42))
 ```
 
 #### NaN values in gradient analysis

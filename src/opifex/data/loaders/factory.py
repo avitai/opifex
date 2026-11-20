@@ -4,6 +4,10 @@ Each ``create_*_loader`` generates a dataset eagerly via jit+vmap
 (:mod:`opifex.data.sources.pde_generation`) and serves it through datarax
 ``MemorySource`` + ``Pipeline``, returning a :class:`PDELoaders` (train + val)
 — the same datarax pattern as :func:`opifex.data.sources.rmd17_source.create_rmd17_loader`.
+Each loader takes an integer ``seed`` and derives its keys from named streams with
+``substrax.rng.rngs_from_seed``: the dataset is generated from the ``data`` stream's key and
+the training order from the ``shuffle`` stream's, so each is independent of the others and two
+seeds' datasets share no sample.
 The dataset contract is uniform: each batch is ``{"input": (b, C_in, *spatial),
 "output": (b, C_out, *spatial)}`` (channels-first), the operator being
 conditioning -> final-time solution.
@@ -16,7 +20,7 @@ from dataclasses import dataclass
 import numpy as np  # noqa: TC002  # runtime dependency, not type-only: keep the import eager
 from datarax.pipeline import Pipeline
 from datarax.sources import MemorySource, MemorySourceConfig
-from flax import nnx
+from substrax.rng import rngs_from_seed
 
 from opifex.data.sources.pde_generation import (
     generate_burgers,
@@ -55,13 +59,13 @@ def _build_pipeline(
     source = MemorySource(
         MemorySourceConfig(shuffle=shuffle),
         data=data,
-        rngs=nnx.Rngs(shuffle=seed),
+        rngs=rngs_from_seed(seed, ("shuffle",)),
     )
     return Pipeline(
         source=source,
         stages=[],
         batch_size=batch_size,
-        rngs=nnx.Rngs(seed),
+        rngs=rngs_from_seed(seed),
         drop_last=drop_last,
     )
 
@@ -84,9 +88,7 @@ def _make_loaders(
         train=_build_pipeline(
             train, batch_size=batch_size, shuffle=True, seed=seed, drop_last=True
         ),
-        val=_build_pipeline(
-            val, batch_size=batch_size, shuffle=False, seed=seed + 1, drop_last=False
-        ),
+        val=_build_pipeline(val, batch_size=batch_size, shuffle=False, seed=seed, drop_last=False),
         n_train=n_train,
         n_val=n_val,
         resolution=resolution,
@@ -101,7 +103,7 @@ def create_burgers_loader(
     viscosity_range: tuple[float, float] = (0.1, 0.1),
     time_final: float = 1.0,
     val_fraction: float = 0.2,
-    seed: int = 42,
+    seed: int,
 ) -> PDELoaders:
     """Create train/val datarax pipelines for the 1D Burgers operator-learning task."""
     data = generate_burgers(
@@ -109,7 +111,7 @@ def create_burgers_loader(
         resolution=resolution,
         viscosity_range=viscosity_range,
         time_final=time_final,
-        seed=seed,
+        key=rngs_from_seed(seed, ("data",)).data(),
     )
     return _make_loaders(
         data, batch_size=batch_size, val_fraction=val_fraction, seed=seed, resolution=resolution
@@ -124,7 +126,7 @@ def create_darcy_loader(
     coeff_range: tuple[float, float] = (0.1, 1.0),
     field_type: str = "smooth",
     val_fraction: float = 0.2,
-    seed: int = 42,
+    seed: int,
 ) -> PDELoaders:
     """Create train/val datarax pipelines for the 2D Darcy-flow operator-learning task."""
     data = generate_darcy(
@@ -132,7 +134,7 @@ def create_darcy_loader(
         resolution=resolution,
         coeff_range=coeff_range,
         field_type=field_type,
-        seed=seed,
+        key=rngs_from_seed(seed, ("data",)).data(),
     )
     return _make_loaders(
         data, batch_size=batch_size, val_fraction=val_fraction, seed=seed, resolution=resolution
@@ -147,7 +149,7 @@ def create_diffusion_loader(
     diffusion_range: tuple[float, float] = (0.01, 0.1),
     advection_range: tuple[float, float] = (-1.0, 1.0),
     val_fraction: float = 0.2,
-    seed: int = 42,
+    seed: int,
 ) -> PDELoaders:
     """Create train/val datarax pipelines for the 2D diffusion-advection task."""
     data = generate_diffusion(
@@ -155,7 +157,7 @@ def create_diffusion_loader(
         resolution=resolution,
         diffusion_range=diffusion_range,
         advection_range=advection_range,
-        seed=seed,
+        key=rngs_from_seed(seed, ("data",)).data(),
     )
     return _make_loaders(
         data, batch_size=batch_size, val_fraction=val_fraction, seed=seed, resolution=resolution
@@ -170,7 +172,7 @@ def create_navier_stokes_loader(
     viscosity_range: tuple[float, float] = (0.001, 0.01),
     time_range: tuple[float, float] = (0.0, 1.0),
     val_fraction: float = 0.2,
-    seed: int = 42,
+    seed: int,
 ) -> PDELoaders:
     """Create train/val datarax pipelines for the 2D Navier-Stokes task."""
     data = generate_navier_stokes(
@@ -178,7 +180,7 @@ def create_navier_stokes_loader(
         resolution=resolution,
         viscosity_range=viscosity_range,
         time_range=time_range,
-        seed=seed,
+        key=rngs_from_seed(seed, ("data",)).data(),
     )
     return _make_loaders(
         data, batch_size=batch_size, val_fraction=val_fraction, seed=seed, resolution=resolution
@@ -191,10 +193,14 @@ def create_shallow_water_loader(
     resolution: int = 64,
     batch_size: int = 32,
     val_fraction: float = 0.2,
-    seed: int = 42,
+    seed: int,
 ) -> PDELoaders:
     """Create train/val datarax pipelines for the 2D shallow-water task."""
-    data = generate_shallow_water(n_samples=n_samples, resolution=resolution, seed=seed)
+    data = generate_shallow_water(
+        n_samples=n_samples,
+        resolution=resolution,
+        key=rngs_from_seed(seed, ("data",)).data(),
+    )
     return _make_loaders(
         data, batch_size=batch_size, val_fraction=val_fraction, seed=seed, resolution=resolution
     )

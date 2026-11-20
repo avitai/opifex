@@ -186,7 +186,7 @@ def per_sample(key):
         num_steps=250, num_snapshots=NUM_TIME - 1,
     )
 
-keys = jax.vmap(jax.random.PRNGKey)(seed + jnp.arange(n_samples))
+keys = jax.random.split(key, n_samples)
 trajectories = jax.jit(jax.vmap(per_sample))(keys)  # (n, nt, nx)
 ```
 

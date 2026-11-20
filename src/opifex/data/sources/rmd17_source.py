@@ -44,8 +44,8 @@ from pathlib import Path
 import numpy as np
 from datarax.pipeline import Pipeline
 from datarax.sources import MemorySource, MemorySourceConfig
-from flax import nnx
 from numpy.typing import DTypeLike  # noqa: TC002
+from substrax.rng import rngs_from_seed
 
 
 logger = logging.getLogger(__name__)
@@ -76,7 +76,7 @@ _DOWNLOAD_TIMEOUT_SECONDS: int = 600
 _DOWNLOAD_CHUNK_BYTES: int = 1 << 20  # 1 MiB
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RMD17Config:
     """Immutable configuration for an rMD17 loader.
 
@@ -96,7 +96,7 @@ class RMD17Config:
     n_train: int = 1000
     n_val: int = 1000
     batch_size: int = 32
-    seed: int = 42
+    seed: int
     shuffle: bool = True
     data_dir: Path | None = None
     split_index: int = 1
@@ -417,8 +417,9 @@ def _build_pipeline(
 
     The datarax ``Pipeline`` names each batch's records with the source's
     ``record_indices_at`` and gathers them with ``get_records``; shuffling is a
-    property of the ``MemorySource`` (a keyed bijection per epoch, drawn from the
-    pipeline's ``nnx.Rngs``). No transform stages are attached — the records
+    property of the ``MemorySource`` (a keyed bijection per epoch, drawn from the seed's
+    ``shuffle`` stream, which ``substrax.rng.rngs_from_seed`` derives from the seed and the
+    stream's name, as the PDE loaders do). No transform stages are attached — the records
     are emitted as ``{"positions", "energy", "forces"}`` batches.
 
     Args:
@@ -439,13 +440,13 @@ def _build_pipeline(
     source = MemorySource(
         MemorySourceConfig(shuffle=shuffle),
         data=subset,
-        rngs=nnx.Rngs(shuffle=seed),
+        rngs=rngs_from_seed(seed, ("shuffle",)),
     )
     return Pipeline(
         source=source,
         stages=[],
         batch_size=batch_size,
-        rngs=nnx.Rngs(seed),
+        rngs=rngs_from_seed(seed),
     )
 
 
@@ -455,7 +456,7 @@ def create_rmd17_loader(
     n_train: int = 1000,
     n_val: int = 1000,
     batch_size: int = 32,
-    seed: int = 42,
+    seed: int,
     shuffle: bool = True,
     data_dir: Path | None = None,
     split_index: int = 1,

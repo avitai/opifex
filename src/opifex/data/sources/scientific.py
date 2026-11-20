@@ -398,7 +398,7 @@ def create_pdebench_loader(
     config: PDEBenchConfig,
     *,
     batch_size: int,
-    seed: int = 0,
+    seed: int,
 ) -> Pipeline:
     """Build a datarax ``Pipeline`` over a :class:`PDEBenchSource` (canonical loader pattern).
 
@@ -715,7 +715,7 @@ def create_vtk_mesh_loader(
     config: VTKMeshConfig,
     *,
     batch_size: int,
-    seed: int = 0,
+    seed: int,
 ) -> Pipeline:
     """Build a datarax ``Pipeline`` over a :class:`VTKMeshSource` (canonical loader pattern).
 
