@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and annotating are separate operations: an operator the runner discovered gets its
   `operator_type` from this call, never from a second `register_operator` of the same name.
 
+### Fixed
+
+- `opifex.core.quantum.ao_layout`, `opifex.data`, `opifex.benchmarking.qh9` and
+  `opifex.neural.quantum.hamiltonian` import with numpy 2.5. Their jaxtyping annotations
+  wrapped numpy's `NDArray[...]` (`Int[NDArray[np.int64], " n"]`), which numpy 2.5 defines
+  as a generic type alias that jaxtyping 0.3.11 cannot unpack, so the import raised
+  `TypeError: issubclass() arg 1 must be a class`. They now use jaxtyping's documented numpy
+  array type with the dtype in the jaxtyping class (`Int64[np.ndarray, " n"]`), which also
+  makes a runtime check refuse an array of another dtype.
+
 ## [0.2.12] - 2026-11-18
 
 ### Added

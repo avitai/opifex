@@ -56,7 +56,7 @@ from collections.abc import Sequence  # noqa: TC003
 
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Bool, Float, Int  # noqa: TC002
+from jaxtyping import Bool, Float64, Int, Int32, Int64  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
 
 from opifex.core.quantum.ao_layout import block_validity_mask, FULL_ORBITALS, ORBITAL_MASK
@@ -71,7 +71,7 @@ logger = logging.getLogger(__name__)
 
 
 def _atom_ao_offsets(
-    atomic_numbers: Int[NDArray[np.integer], " n_atoms"],
+    atomic_numbers: Int[np.ndarray, " n_atoms"],
 ) -> NDArray[np.int64]:
     """Return the ``(n_atoms + 1,)`` cumulative AO offsets of each atom's block.
 
@@ -117,14 +117,14 @@ def _scatter_block(
 
 
 def cut_fock_to_blocks(
-    atomic_numbers: Int[NDArray[np.int32], " n_atoms"],
-    fock: Float[NDArray[np.float64], "n_ao n_ao"],
+    atomic_numbers: Int32[np.ndarray, " n_atoms"],
+    fock: Float64[np.ndarray, "n_ao n_ao"],
 ) -> tuple[
-    Float[NDArray[np.float64], "n_atoms 14 14"],
-    Bool[NDArray[np.bool_], "n_atoms 14 14"],
-    Float[NDArray[np.float64], "n_edges 14 14"],
-    Bool[NDArray[np.bool_], "n_edges 14 14"],
-    Int[NDArray[np.int64], "2 n_edges"],
+    Float64[np.ndarray, "n_atoms 14 14"],
+    Bool[np.ndarray, "n_atoms 14 14"],
+    Float64[np.ndarray, "n_edges 14 14"],
+    Bool[np.ndarray, "n_edges 14 14"],
+    Int64[np.ndarray, "2 n_edges"],
 ]:
     r"""Cut a spherical def2-SVP Fock matrix into QHNet per-atom/per-edge blocks.
 
@@ -193,13 +193,13 @@ def cut_fock_to_blocks(
 
 
 def reconstruct_fock_from_blocks(
-    atomic_numbers: Int[NDArray[np.int32], " n_atoms"],
-    diagonal_blocks: Float[NDArray[np.float64], "n_atoms 14 14"],
-    diagonal_mask: Bool[NDArray[np.bool_], "n_atoms 14 14"],
-    off_diagonal_blocks: Float[NDArray[np.float64], "n_edges 14 14"],
-    off_diagonal_mask: Bool[NDArray[np.bool_], "n_edges 14 14"],
-    edge_index: Int[NDArray[np.int64], "2 n_edges"],
-) -> Float[NDArray[np.float64], "n_ao n_ao"]:
+    atomic_numbers: Int32[np.ndarray, " n_atoms"],
+    diagonal_blocks: Float64[np.ndarray, "n_atoms 14 14"],
+    diagonal_mask: Bool[np.ndarray, "n_atoms 14 14"],
+    off_diagonal_blocks: Float64[np.ndarray, "n_edges 14 14"],
+    off_diagonal_mask: Bool[np.ndarray, "n_edges 14 14"],
+    edge_index: Int64[np.ndarray, "2 n_edges"],
+) -> Float64[np.ndarray, "n_ao n_ao"]:
     r"""Scatter masked blocks back into the dense spherical Fock matrix.
 
     Inverse of :func:`cut_fock_to_blocks` (no symmetrisation: each directed edge

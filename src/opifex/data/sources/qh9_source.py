@@ -69,8 +69,7 @@ from pathlib import Path  # noqa: TC003
 
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Float, Int  # noqa: TC002
-from numpy.typing import NDArray  # noqa: TC002
+from jaxtyping import Float64, Int32, Int64  # noqa: TC002
 
 from opifex.core.quantum.ao_layout import ao_permutation, native_ao_count, PYSCF_DEF2SVP
 from opifex.core.quantum.molecular_system import ANGSTROM_TO_BOHR, MolecularSystem
@@ -104,9 +103,9 @@ class QH9Example:
 
     molecule_id: int
     system: MolecularSystem
-    fock: Float[NDArray[np.float64], "n_ao n_ao"]
-    native_fock: Float[NDArray[np.float64], "n_ao n_ao"]
-    atomic_numbers: Int[NDArray[np.int32], " n_atoms"]
+    fock: Float64[np.ndarray, "n_ao n_ao"]
+    native_fock: Float64[np.ndarray, "n_ao n_ao"]
+    atomic_numbers: Int32[np.ndarray, " n_atoms"]
 
     @property
     def n_atoms(self) -> int:
@@ -131,9 +130,9 @@ class QH9Data:
     """
 
     examples: tuple[QH9Example, ...]
-    train_indices: Int[NDArray[np.int64], " n_train"]
-    val_indices: Int[NDArray[np.int64], " n_val"]
-    test_indices: Int[NDArray[np.int64], " n_test"]
+    train_indices: Int64[np.ndarray, " n_train"]
+    val_indices: Int64[np.ndarray, " n_val"]
+    test_indices: Int64[np.ndarray, " n_test"]
 
     @property
     def n_examples(self) -> int:
@@ -147,9 +146,9 @@ class QH9Data:
 
 
 def matrix_transform_def2svp(
-    matrix: Float[NDArray[np.float64], "n_ao n_ao"],
-    atomic_numbers: Int[NDArray[np.int32], " n_atoms"],
-) -> Float[NDArray[np.float64], "n_ao n_ao"]:
+    matrix: Float64[np.ndarray, "n_ao n_ao"],
+    atomic_numbers: Int32[np.ndarray, " n_atoms"],
+) -> Float64[np.ndarray, "n_ao n_ao"]:
     r"""Reorder a QH9-native Fock matrix into PySCF def2-SVP spherical ordering.
 
     NumPy convention transform for QH9 Fock matrices (Yu et al. 2023,
@@ -279,9 +278,9 @@ def qh9_random_split(
     *,
     seed: int = _SPLIT_SEED,
 ) -> tuple[
-    Int[NDArray[np.int64], " n_train"],
-    Int[NDArray[np.int64], " n_val"],
-    Int[NDArray[np.int64], " n_test"],
+    Int64[np.ndarray, " n_train"],
+    Int64[np.ndarray, " n_val"],
+    Int64[np.ndarray, " n_test"],
 ]:
     """Reproduce the QH9-Stable random ``0.8 / 0.1 / 0.1`` split.
 

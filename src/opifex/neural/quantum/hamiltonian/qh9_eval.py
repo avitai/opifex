@@ -53,7 +53,7 @@ import jax.numpy as jnp
 import numpy as np
 import orbax.checkpoint as ocp
 from flax import nnx
-from jaxtyping import Array, Float, Int  # noqa: TC002
+from jaxtyping import Array, Float, Float64, Int, Int32  # noqa: TC002
 from numpy.typing import NDArray  # noqa: TC002
 
 from opifex.core.quantum.ao_layout import ao_permutation, BACK2PYSCF
@@ -70,7 +70,7 @@ _OVERLAP_EIGENVALUE_FLOOR: float = 1e-8
 
 def to_pyscf_internal_ordering(
     fock: Float[Array, "n_ao n_ao"],
-    atomic_numbers: Sequence[int] | Int[NDArray[np.int32], " n_atoms"],
+    atomic_numbers: Sequence[int] | Int32[np.ndarray, " n_atoms"],
 ) -> Float[Array, "n_ao n_ao"]:
     r"""Reorder an opifex-spherical Fock into PySCF's internal spherical AO order.
 
@@ -147,8 +147,8 @@ def _overlap_cached(
 
 
 def overlap_matrix_def2svp(
-    atomic_numbers: Int[NDArray[np.int32], " n_atoms"] | Sequence[int],
-    positions_bohr: Float[NDArray[np.float64], "n_atoms 3"],
+    atomic_numbers: Int32[np.ndarray, " n_atoms"] | Sequence[int],
+    positions_bohr: Float64[np.ndarray, "n_atoms 3"],
 ) -> Float[Array, "n_ao n_ao"]:
     r"""Return the PySCF def2-SVP spherical AO overlap ``S`` at a QH9 geometry.
 
@@ -173,7 +173,7 @@ def overlap_matrix_def2svp(
     return jnp.asarray(_overlap_cached(numbers, positions))
 
 
-def occupied_orbital_count(atomic_numbers: Int[NDArray[np.int32], " n_atoms"]) -> int:
+def occupied_orbital_count(atomic_numbers: Int32[np.ndarray, " n_atoms"]) -> int:
     """Number of doubly-occupied orbitals of a closed-shell neutral molecule.
 
     ``n_occ = sum(Z) / 2`` for these closed-shell neutral QH9 molecules.
@@ -264,8 +264,8 @@ def hamiltonian_mae(
 def evaluate_fock(
     predicted_fock: Float[Array, "n_ao n_ao"],
     target_fock: Float[Array, "n_ao n_ao"],
-    atomic_numbers: Int[NDArray[np.int32], " n_atoms"],
-    positions: Float[NDArray[np.float64], "n_atoms 3"],
+    atomic_numbers: Int32[np.ndarray, " n_atoms"],
+    positions: Float64[np.ndarray, "n_atoms 3"],
     n_electrons: int,
 ) -> dict[str, Float[Array, ""]]:
     r"""QH9 evaluation metrics for one molecule's predicted vs. target Fock.
@@ -349,8 +349,8 @@ def _complete_directed_edges(n_atoms: int) -> Int[Array, "2 n_edges"]:
 
 def predict_fock(
     predictor: BlockHamiltonianPredictor,
-    atomic_numbers: Int[NDArray[np.int32], " n_atoms"],
-    positions_bohr: Float[NDArray[np.float64], "n_atoms 3"],
+    atomic_numbers: Int32[np.ndarray, " n_atoms"],
+    positions_bohr: Float64[np.ndarray, "n_atoms 3"],
 ) -> Float[Array, "n_ao n_ao"]:
     r"""Assemble a single molecule's predicted dense Fock from the block predictor.
 
