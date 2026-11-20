@@ -82,6 +82,8 @@ Available fields (with defaults): `horizon=10`, `control_dim=2`, `state_dim=4`, 
 
 ```python
 import jax.numpy as jnp
+from flax import nnx
+
 from opifex.optimization.control import MPCConfig, DifferentiableMPC
 
 config = MPCConfig(
@@ -90,7 +92,7 @@ config = MPCConfig(
     state_dim=2,
     objective_weights={"state": 1.0, "control": 0.1},
 )
-mpc = DifferentiableMPC(config=config)
+mpc = DifferentiableMPC(config=config, rngs=nnx.Rngs(0))
 
 # Damped oscillator: x_dot = A x + B u
 A = jnp.array([[0.0, 1.0], [-1.0, -0.5]])
@@ -164,6 +166,7 @@ trajectory = model.predict_trajectory(jnp.zeros(4), jnp.ones((10, 2)))  # (11, 4
 mpc = DifferentiableMPC(
     config=MPCConfig(horizon=10, control_dim=2, state_dim=4),
     dynamics_model=model,
+    rngs=nnx.Rngs(0),
 )
 ```
 
@@ -214,6 +217,8 @@ print(result.solution, bool(result.converged))   # -> ~[1., 1.] True
 
 ```python
 import jax.numpy as jnp
+from flax import nnx
+
 from opifex.optimization.control import RecedingHorizonController
 
 controller = RecedingHorizonController(
@@ -222,6 +227,7 @@ controller = RecedingHorizonController(
     state_dim=4,
     control_dim=2,
     sampling_time=0.1,
+    rngs=nnx.Rngs(0),
 )
 
 # One control step
@@ -247,6 +253,8 @@ Passing `safety_critical=True` makes the controller use a `SafetyCriticalMPC` in
 
 ```python
 import jax.numpy as jnp
+from flax import nnx
+
 from opifex.optimization.control import SafetyCriticalMPC, ControlBarrier
 
 safe_mpc = SafetyCriticalMPC(
@@ -256,6 +264,7 @@ safe_mpc = SafetyCriticalMPC(
     safety_barriers=True,
     emergency_control=True,
     backup_policy=True,
+    rngs=nnx.Rngs(0),
 )
 
 # A control barrier function returns a value that is >= 0 in the safe set.

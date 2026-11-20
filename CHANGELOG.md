@@ -69,6 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `optimistix_minimise`, `WarmStartingStrategy.get_warm_start_params` and
   `MetaOptimizer.get_warm_start_params` require a keyword-only `key`. They fell back to
   keys 0 and 42, so every warm start drew the same perturbation or initialisation.
+- **Breaking:** `DifferentiableMPC`, `SafetyCriticalMPC` and `RecedingHorizonController`
+  require a keyword-only `rngs`, from which the default `PredictiveModel` is initialised;
+  it was built from key 42 for every controller.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

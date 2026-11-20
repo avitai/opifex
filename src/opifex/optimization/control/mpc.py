@@ -427,6 +427,8 @@ class DifferentiableMPC(nnx.Module):
         config: MPCConfig,
         dynamics_model: PredictiveModel | None = None,
         constraint_projector: ConstraintProjector | None = None,
+        *,
+        rngs: nnx.Rngs,
     ) -> None:
         self.config = config
         self.horizon = config.horizon
@@ -435,11 +437,10 @@ class DifferentiableMPC(nnx.Module):
 
         # Create default predictive model if not provided
         if dynamics_model is None:
-            key = jax.random.PRNGKey(42)
             self.predictive_model = PredictiveModel(
                 state_dim=config.state_dim,
                 control_dim=config.control_dim,
-                rngs=nnx.Rngs(key),
+                rngs=rngs,
             )
         else:
             self.predictive_model = dynamics_model
@@ -596,10 +597,12 @@ class SafetyCriticalMPC(DifferentiableMPC):
         safety_barriers: bool = True,
         emergency_control: bool = True,
         backup_policy: bool = True,
+        *,
+        rngs: nnx.Rngs,
         **kwargs,
     ) -> None:
         config = MPCConfig(horizon=horizon, control_dim=control_dim, state_dim=state_dim, **kwargs)
-        super().__init__(config)
+        super().__init__(config, rngs=rngs)
 
         self.safety_barriers = safety_barriers
         self.emergency_control = emergency_control
@@ -695,6 +698,8 @@ class RecedingHorizonController(nnx.Module):
         control_dim: int = 2,
         sampling_time: float = 0.1,
         safety_critical: bool = False,
+        *,
+        rngs: nnx.Rngs,
     ) -> None:
         self.mpc_horizon = mpc_horizon
         self.control_horizon = control_horizon
@@ -707,10 +712,10 @@ class RecedingHorizonController(nnx.Module):
 
         if safety_critical:
             self.mpc = SafetyCriticalMPC(
-                horizon=mpc_horizon, control_dim=control_dim, state_dim=state_dim
+                horizon=mpc_horizon, control_dim=control_dim, state_dim=state_dim, rngs=rngs
             )
         else:
-            self.mpc = DifferentiableMPC(config)
+            self.mpc = DifferentiableMPC(config, rngs=rngs)
 
     def compute_control(
         self, current_state: jnp.ndarray, reference_trajectory: jnp.ndarray
