@@ -32,6 +32,17 @@ source activate.sh
 uv run python scripts/run_pdebench_comparison.py
 ```
 
+### check_every_module_imports.py
+
+Imports every `opifex` module with the interpreter that runs it and fails on any import error,
+skipping only a module whose missing dependency is a declared optional root. The clean-environment
+build check runs it over the installed wheel; `tests/test_capabilities.py` runs it over the
+repository's environment.
+
+```bash
+python scripts/check_every_module_imports.py
+```
+
 ## Common Workflows
 
 ### Initial Setup

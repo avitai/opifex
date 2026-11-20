@@ -52,10 +52,13 @@ jobs:
       - name: Test clean-environment import
         run: |
           uv venv test_venv --seed
-          # --refresh: a fresh install reads PyPI, not the restored cache. The import reaches
-          # the numerical stack: `import opifex` alone never loads flax.nnx.
-          VIRTUAL_ENV=test_venv uv pip install --refresh dist/*.whl
-          test_venv/bin/python -c "import opifex, opifex.core.training.trainer; print(f'opifex {opifex.__version__} imported OK')"
+          # --refresh: a fresh install reads PyPI, not the restored cache, so the walk meets
+          # the dependency versions a user installing the wheel gets rather than the lock's.
+          # The dev and test extras are the ones the locked unit-test job installs, so the
+          # walk skips the same optional root there and here.
+          wheel=$(ls dist/*.whl)
+          VIRTUAL_ENV=test_venv uv pip install --refresh "${wheel}[dev,test]"
+          test_venv/bin/python scripts/check_every_module_imports.py
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

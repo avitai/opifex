@@ -5,9 +5,10 @@ package's public namespace. Nothing registers at import time, so importing a pac
 changes no global state, and a name declared twice is refused when the catalogue is built.
 """
 
+import importlib
 import subprocess
 import sys
-import textwrap
+from pathlib import Path
 from types import MappingProxyType
 
 import pytest
@@ -54,22 +55,9 @@ class TestLookup:
         assert next(iter(DISCOVERY_CAPABILITIES)) in message
 
 
-#: Third-party roots a module may import at module level while only some extras install
-#: them. Today that is ``ase`` alone, for ``opifex.deployment.ase_calculator``, which
-#: subclasses ``ase.calculators.calculator.Calculator`` and so cannot defer the import.
-#: ``pyscf`` is not here because ``qh9_eval`` imports it inside a function, which no
-#: import-time walk reaches.
-#:
-#: **The list is deliberately this short.** A module that newly imports an optional
-#: dependency at module level will fail this test rather than be skipped, which is the
-#: point: the skip is keyed to the name that was missing, never to the module that failed.
-OPTIONAL_THIRD_PARTY_ROOTS = ("ase",)
-
-#: A walk returning fewer modules than this is not walking the tree, and the test would
-#: pass by importing almost nothing. A chosen round number well under the 601 modules
-#: measured, not a snapshot of that count -- it exists to catch a broken walk, not to
-#: track the package's size.
-MINIMUM_MODULES_WALKED = 100
+CHECK_EVERY_MODULE_IMPORTS = (
+    Path(__file__).resolve().parents[1] / "scripts" / "check_every_module_imports.py"
+)
 
 
 def test_importing_every_package_registers_nothing() -> None:
@@ -84,42 +72,18 @@ def test_importing_every_package_registers_nothing() -> None:
     ``opifex.deployment.ase_calculator``.
 
     A module that cannot be imported cannot register anything either, so skipping it
-    serves this test's claim. The skip is keyed to the **missing root**, so a
-    ``ModuleNotFoundError`` naming an ``opifex`` module, or any other import failure, still
-    fails -- and so does a missing third-party root outside
-    :data:`OPTIONAL_THIRD_PARTY_ROOTS`.
+    serves this test's claim. The walk is ``scripts/check_every_module_imports.py``, which
+    the clean-environment build check runs over the installed wheel too; it skips a module
+    only for a missing optional root, so a ``ModuleNotFoundError`` naming an ``opifex``
+    module, or any other import failure, still fails.
     """
-    snippet = textwrap.dedent(
-        f"""
-        import importlib, pkgutil, opifex
-        optional = {OPTIONAL_THIRD_PARTY_ROOTS!r}
-        walked, imported, skipped = 0, 0, []
-        for info in pkgutil.walk_packages(opifex.__path__, "opifex."):
-            walked += 1
-            try:
-                importlib.import_module(info.name)
-            except ModuleNotFoundError as missing:
-                root = (missing.name or "").split(".")[0]
-                if root not in optional:
-                    raise
-                skipped.append(info.name + " <- " + root)
-                continue
-            imported += 1
-        assert not hasattr(importlib.import_module("opifex.uncertainty"), "UQRegistry")
-        print("walked", walked, "imported", imported, "skipped", ",".join(skipped) or "-")
-        """
-    )
     completed = subprocess.run(
-        [sys.executable, "-c", snippet], capture_output=True, text=True, check=True, timeout=600
+        [sys.executable, str(CHECK_EVERY_MODULE_IMPORTS)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=600,
     )
-
-    report = completed.stdout.split()
-    walked, imported, skipped = int(report[1]), int(report[3]), report[5]
-    assert walked >= MINIMUM_MODULES_WALKED, (
-        f"the walk reached only {walked} modules, so it is not measuring the package; "
-        "a walk that imports almost nothing passes this test for the wrong reason"
-    )
-    assert imported + (0 if skipped == "-" else len(skipped.split(","))) == walked, (
-        f"{walked} walked but {imported} imported and {skipped} skipped do not account "
-        "for each other"
-    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.splitlines()[-1].startswith("walked "), completed.stdout
+    assert not hasattr(importlib.import_module("opifex.uncertainty"), "UQRegistry")
