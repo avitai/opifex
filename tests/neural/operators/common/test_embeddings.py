@@ -7,8 +7,10 @@ including JAX compatibility, different input configurations, and performance val
 import jax
 import jax.numpy as jnp
 import pytest
+from flax import nnx
 
 from opifex.neural.operators.common.embeddings import (
+    FunctionEmbedding,
     GridEmbedding2D,
     GridEmbeddingND,
     regular_grid_2d,
@@ -559,3 +561,16 @@ class TestUtilityFunctions:
 
         assert jnp.allclose(grid_x_jit, grid_x_regular, rtol=1e-6)
         assert jnp.allclose(grid_y_jit, grid_y_regular, rtol=1e-6)
+
+
+class TestFunctionEmbedding:
+    """``FunctionEmbedding`` projects channels with weights drawn from the caller's ``rngs``."""
+
+    def test_the_projection_follows_the_rngs(self) -> None:
+        x = jnp.ones((5, 2))
+        first = FunctionEmbedding(2, 3, rngs=nnx.Rngs(0))(x)
+        again = FunctionEmbedding(2, 3, rngs=nnx.Rngs(0))(x)
+        other = FunctionEmbedding(2, 3, rngs=nnx.Rngs(1))(x)
+        assert first.shape == (5, 3)
+        assert jnp.array_equal(first, again)
+        assert not jnp.array_equal(first, other)

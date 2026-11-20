@@ -265,7 +265,7 @@ class TestBenchmarkingUtilities:
     def test_benchmark_tensorly_integration(self):
         """Test TensorLy integration benchmarking."""
         try:
-            results = benchmark_tensorly_integration()
+            results = benchmark_tensorly_integration(key=jax.random.key(0))
 
             # Should return a dictionary with results
             assert isinstance(results, dict)
@@ -283,7 +283,7 @@ class TestBenchmarkingUtilities:
     def test_benchmark_rejects_nonpositive_num_trials(self):
         """num_trials < 1 must fail fast before the timing loop runs."""
         with pytest.raises(ValueError, match="num_trials must be >= 1"):
-            benchmark_tensorly_integration(num_trials=0)
+            benchmark_tensorly_integration(num_trials=0, key=jax.random.key(0))
 
     def test_performance_comparison(self):
         """Test performance comparison between methods."""

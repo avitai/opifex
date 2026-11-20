@@ -651,8 +651,10 @@ def benchmark_tensorly_integration(
     tensor_shape: Sequence[int] = (32, 64, 48),
     rank: float = 0.1,
     num_trials: int = 5,
+    *,
+    key: jax.Array,
 ) -> dict:
-    """Benchmark TensorLy integration performance."""
+    """Benchmark TensorLy integration performance on a Gaussian tensor drawn from ``key``."""
     if num_trials < 1:
         raise ValueError(f"num_trials must be >= 1, got {num_trials}")
     if not TENSORLY_AVAILABLE:
@@ -670,7 +672,6 @@ def benchmark_tensorly_integration(
     }
 
     # Benchmark decomposition time
-    key = jax.random.PRNGKey(42)
     test_tensor = jax.random.normal(key, tensor_shape)
 
     # TensorLy Tucker decomposition. The first trial establishes ``core``/``factors``
