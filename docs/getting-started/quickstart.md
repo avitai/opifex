@@ -33,7 +33,7 @@ bc_fn = lambda x: jnp.zeros(x.shape[:-1])
 # 2. Create model and solve
 model = StandardMLP(layer_sizes=[1, 32, 32, 1], activation="tanh", rngs=nnx.Rngs(42))
 solver = PINNSolver(model)
-result = solver.solve(geometry, residual_fn, bc_fn, PINNConfig(num_iterations=1000, print_every=0))
+result = solver.solve(geometry, residual_fn, bc_fn, PINNConfig(num_iterations=1000, print_every=0, seed=0))
 
 print(f"Final loss: {result.final_loss:.2e}")
 print(f"Training time: {result.training_time:.1f}s")
