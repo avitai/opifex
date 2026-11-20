@@ -66,6 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its points from it and takes no `bbox` argument (it raised `TracerBoolConversionError`
   before, because it vmapped `contains`). `validate_implementation`, which failed on a
   correct implementation and was tested by nothing, is removed.
+- **Breaking:** `optimistix_minimise`, `WarmStartingStrategy.get_warm_start_params` and
+  `MetaOptimizer.get_warm_start_params` require a keyword-only `key`. They fell back to
+  keys 0 and 42, so every warm start drew the same perturbation or initialisation.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

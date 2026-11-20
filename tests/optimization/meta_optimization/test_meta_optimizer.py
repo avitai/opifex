@@ -1,5 +1,6 @@
 """Tests for the integrated MetaOptimizer system."""
 
+import jax
 import jax.numpy as jnp
 import pytest
 from flax import nnx
@@ -102,7 +103,7 @@ class TestWarmStarting:
         features = jnp.array([0.5, 0.5])
 
         opt.store_optimization_result(params, features)
-        warm_params = opt.get_warm_start_params(features, target_shape=(3,))
+        warm_params = opt.get_warm_start_params(features, target_shape=(3,), key=jax.random.key(0))
 
         assert warm_params.shape == (3,)
 
@@ -112,6 +113,7 @@ class TestWarmStarting:
         warm_params = opt.get_warm_start_params(
             jnp.array([1.0]),
             target_shape=(4,),
+            key=jax.random.key(0),
         )
         assert warm_params.shape == (4,)
 

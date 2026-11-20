@@ -26,7 +26,11 @@ def test_optimistix_bfgs_solves_quadratic_to_optimum() -> None:
     """A real optimistix BFGS solve reaches the quadratic optimum (loss ~ 0)."""
     task = QuadraticTaskFamily(dim=6).sample(jax.random.key(0))
     minimiser, final_loss = optimistix_minimise(
-        task, optx.BFGS(rtol=1e-8, atol=1e-8), task.init(jax.random.key(1)), max_steps=200
+        task,
+        optx.BFGS(rtol=1e-8, atol=1e-8),
+        task.init(jax.random.key(1)),
+        max_steps=200,
+        key=jax.random.key(2),
     )
     assert minimiser.shape == (6,)
     assert float(final_loss) < 1e-6

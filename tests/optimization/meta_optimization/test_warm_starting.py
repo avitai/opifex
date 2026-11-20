@@ -1,5 +1,6 @@
 """Tests for warm-starting optimization strategies."""
 
+import jax
 import jax.numpy as jnp
 
 from opifex.optimization.meta_optimization.warm_starting import WarmStartingStrategy
@@ -34,7 +35,7 @@ class TestParameterTransfer:
         prev_params = jnp.ones((4,))
         features = jnp.ones((2,))
 
-        result = ws.get_warm_start_params(prev_params, features)
+        result = ws.get_warm_start_params(prev_params, features, key=jax.random.key(0))
         assert result.shape == prev_params.shape
         # Should be close to 0.9 * 1.0 = 0.9 plus noise (0.1 * Normal(0,1))
         # Use 3-sigma tolerance: 3 * 0.1 = 0.3
@@ -44,8 +45,18 @@ class TestParameterTransfer:
         """Non-transfer strategy returns params unchanged."""
         ws = WarmStartingStrategy(strategy_type="other")
         prev_params = jnp.array([1.0, 2.0, 3.0])
-        result = ws.get_warm_start_params(prev_params, jnp.ones((2,)))
+        result = ws.get_warm_start_params(prev_params, jnp.ones((2,)), key=jax.random.key(0))
         assert jnp.allclose(result, prev_params)
+
+    def test_the_exploration_noise_follows_the_key(self):
+        """Two keys perturb the transferred parameters differently; one key twice, alike."""
+        ws = WarmStartingStrategy(strategy_type="parameter_transfer", adaptation_ratio=0.9)
+        prev_params, features = jnp.ones((4,)), jnp.ones((2,))
+        first = ws.get_warm_start_params(prev_params, features, key=jax.random.key(0))
+        again = ws.get_warm_start_params(prev_params, features, key=jax.random.key(0))
+        other = ws.get_warm_start_params(prev_params, features, key=jax.random.key(1))
+        assert jnp.array_equal(first, again)
+        assert not jnp.array_equal(first, other)
 
 
 class TestOptimizerStateAdaptation:
