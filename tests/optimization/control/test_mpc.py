@@ -50,7 +50,7 @@ class TestDifferentiableMPC:
 
     def test_mpc_initialization(self, mpc_config):
         """Test MPC controller initialization."""
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
 
         assert mpc.horizon == 10
         assert mpc.control_dim == 2
@@ -60,7 +60,7 @@ class TestDifferentiableMPC:
 
     def test_mpc_objective_computation(self, mpc_config, simple_dynamics):
         """Test MPC objective function computation."""
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
 
         # Test trajectory
         states = jnp.ones((10, 4))  # horizon x state_dim
@@ -74,7 +74,7 @@ class TestDifferentiableMPC:
 
     def test_mpc_control_computation(self, mpc_config):
         """Test control action computation."""
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
 
         current_state = jnp.array([1.0, 0.5, 0.0, 0.0])
         reference_trajectory = jnp.zeros((10, 4))
@@ -88,7 +88,7 @@ class TestDifferentiableMPC:
 
     def test_mpc_gradient_computation(self, mpc_config):
         """Test gradient computation for differentiable MPC."""
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
 
         def loss_fn(mpc, state, reference):
             result = mpc.compute_control(state, reference)  # type: ignore[reportCallIssue]
@@ -264,7 +264,7 @@ class TestSafetyCriticalMPC:
 
     def test_safety_critical_mpc_initialization(self, safety_config):
         """Test safety-critical MPC initialization."""
-        mpc = SafetyCriticalMPC(**safety_config)
+        mpc = SafetyCriticalMPC(**safety_config, rngs=nnx.Rngs(0))
 
         assert hasattr(mpc, "control_barriers")
         assert hasattr(mpc, "emergency_controller")
@@ -272,7 +272,7 @@ class TestSafetyCriticalMPC:
 
     def test_control_barrier_function(self, safety_config):
         """Test control barrier function."""
-        mpc = SafetyCriticalMPC(**safety_config)
+        mpc = SafetyCriticalMPC(**safety_config, rngs=nnx.Rngs(0))
 
         # Define safety set: ||x|| <= 1
         def safe_set_constraint(state):
@@ -290,7 +290,7 @@ class TestSafetyCriticalMPC:
 
     def test_emergency_control_activation(self, safety_config):
         """Test emergency control activation."""
-        mpc = SafetyCriticalMPC(**safety_config)
+        mpc = SafetyCriticalMPC(**safety_config, rngs=nnx.Rngs(0))
 
         # Simulate dangerous state
         dangerous_state = jnp.array([1.5, 1.5, 0.0, 0.0])  # Outside safety set
@@ -302,7 +302,7 @@ class TestSafetyCriticalMPC:
 
     def test_backup_policy_usage(self, safety_config):
         """Test backup policy usage."""
-        mpc = SafetyCriticalMPC(**safety_config)
+        mpc = SafetyCriticalMPC(**safety_config, rngs=nnx.Rngs(0))
 
         # Simulate infeasible MPC problem
         state = jnp.array([0.5, 0.5, 0.0, 0.0])
@@ -436,7 +436,7 @@ class TestRecedingHorizonController:
 
     def test_receding_horizon_initialization(self, controller_config):
         """Test receding horizon controller initialization."""
-        controller = RecedingHorizonController(**controller_config)
+        controller = RecedingHorizonController(**controller_config, rngs=nnx.Rngs(0))
 
         assert controller.mpc_horizon == 10
         assert controller.control_horizon == 5
@@ -445,7 +445,7 @@ class TestRecedingHorizonController:
 
     def test_receding_horizon_control(self, controller_config):
         """Test receding horizon control execution."""
-        controller = RecedingHorizonController(**controller_config)
+        controller = RecedingHorizonController(**controller_config, rngs=nnx.Rngs(0))
 
         # Simulation parameters
         simulation_steps = 20
@@ -492,7 +492,7 @@ class TestRecedingHorizonController:
 
     def test_reference_tracking(self, controller_config):
         """Test reference trajectory tracking."""
-        controller = RecedingHorizonController(**controller_config)
+        controller = RecedingHorizonController(**controller_config, rngs=nnx.Rngs(0))
 
         # Define reference trajectory (sinusoidal)
         t = jnp.linspace(0, 2 * jnp.pi, 50)
@@ -520,7 +520,7 @@ class TestMPCIntegration:
             objective_weights={"state": 1.0, "control": 0.1},
         )
 
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
 
         # Test integration
         current_state = jnp.array([0.5, 0.0, 0.0, 0.0])
@@ -541,7 +541,7 @@ class TestMPCIntegration:
             objective_weights={"state": 1.0, "control": 0.1},
         )
 
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
 
         # Test integration
         current_state = jnp.array([0.5, 0.0, 0.0, 0.0])
@@ -570,7 +570,7 @@ class TestMPCBenchmarks:
             objective_weights={"state": 1.0, "control": 0.1},
         )
 
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
 
         # Set linear dynamics
         def linear_dynamics(x, u):
@@ -626,7 +626,7 @@ class TestMPCBenchmarks:
             objective_weights={"state": 1.0, "control": 0.01, "terminal": 10.0},
         )
 
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
         mpc.set_dynamics(cart_pole_dynamics)
 
         # Test stabilization around upright position
@@ -674,7 +674,7 @@ class TestMPCBenchmarks:
             learning_rate=0.0001,  # Reduce learning rate for stability
         )
 
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
         mpc.set_dynamics(quadrotor_dynamics)
 
         # Test position control
@@ -706,7 +706,7 @@ class TestMPCPerformance:
             objective_weights={"state": 1.0, "control": 0.1},
         )
 
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
 
         current_state = jnp.array([1.0, 0.5, 0.0, 0.0])
         reference = jnp.zeros((10, 4))
@@ -729,7 +729,7 @@ class TestMPCPerformance:
             objective_weights={"state": 1.0, "control": 0.1},
         )
 
-        mpc = DifferentiableMPC(config=large_config)
+        mpc = DifferentiableMPC(config=large_config, rngs=nnx.Rngs(0))
 
         current_state = jnp.ones(10)
         reference = jnp.zeros((50, 10))
@@ -750,7 +750,7 @@ class TestMPCPerformance:
             objective_weights={"state": 1.0, "control": 0.1},
         )
 
-        mpc = DifferentiableMPC(config=mpc_config)
+        mpc = DifferentiableMPC(config=mpc_config, rngs=nnx.Rngs(0))
 
         # Batch of initial states
         batch_size = 32
@@ -782,7 +782,7 @@ class TestTheResultCarriesNoWallClock:
 
     @staticmethod
     def _controller() -> DifferentiableMPC:
-        return DifferentiableMPC(MPCConfig(horizon=5, control_dim=2, state_dim=4))
+        return DifferentiableMPC(MPCConfig(horizon=5, control_dim=2, state_dim=4), rngs=nnx.Rngs(0))
 
     def test_the_result_has_no_timing_field(self) -> None:
         assert "computation_time" not in MPCResult._fields

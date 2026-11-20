@@ -185,15 +185,21 @@ optimized = platform.optimize_for_production(model, workload)
 ### Control System
 
 ```python
-from opifex.optimization.control import DifferentiableMPC, SystemIdentifier
+import jax.numpy as jnp
+from flax import nnx
 
-# Learn system dynamics
-system_id = SystemIdentifier(model=dynamics_model)
-trained_model = system_id.fit(state_data, input_data)
+from opifex.optimization.control import DifferentiableMPC, MPCConfig
 
-# Create MPC controller
-mpc = DifferentiableMPC(system_model=trained_model, config=mpc_config)
-control_action = mpc.solve(current_state, reference_trajectory)
+config = MPCConfig(horizon=15, control_dim=1, state_dim=2)
+mpc = DifferentiableMPC(config=config, rngs=nnx.Rngs(0))
+
+# Damped oscillator dynamics: x_next = A x + B u
+A = jnp.array([[0.0, 1.0], [-1.0, -0.5]])
+B = jnp.array([[0.0], [1.0]])
+mpc.set_dynamics(lambda x, u: A @ x + B @ u)
+
+result = mpc.compute_control(jnp.array([1.0, 0.0]), jnp.zeros((15, 2)))
+control_action = result.control_action  # the first action of the optimised sequence
 ```
 
 ## Performance Characteristics
