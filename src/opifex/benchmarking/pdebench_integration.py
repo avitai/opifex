@@ -176,31 +176,37 @@ class PDEBenchLoader:
             ValueError: If ``dataset_name`` is not supported.
             FileNotFoundError: If no real PDEBench HDF5 file is found for the
                 dataset and ``allow_synthetic`` is ``False``.
+            NotImplementedError: If a real PDEBench HDF5 file is found; reading one is
+                not implemented.
         """
         if dataset_name not in self.supported_datasets:
             raise ValueError(f"Unsupported dataset: {dataset_name}")
 
         real_data_path = self._real_data_path(dataset_name)
-        if real_data_path is None:
-            if not allow_synthetic:
-                raise FileNotFoundError(
-                    f"No real PDEBench HDF5 file found for dataset {dataset_name!r} under "
-                    f"{self.data_root}. Download the PDEBench data files first, or pass "
-                    "allow_synthetic=True to generate clearly-flagged synthetic data "
-                    "(metadata['is_synthetic'] == True) for testing only."
-                )
-            warnings.warn(
-                f"Returning SYNTHETIC data for PDEBench dataset {dataset_name!r}: no real "
-                f"HDF5 file was found under {self.data_root}. This data does NOT reflect the "
-                "true PDE solution and must not be used for reported benchmark numbers. "
-                "Metadata is flagged with is_synthetic=True.",
-                UserWarning,
-                stacklevel=2,
+        if real_data_path is not None:
+            raise NotImplementedError(
+                f"Found {real_data_path} for PDEBench dataset {dataset_name!r}, but reading "
+                "PDEBench HDF5 files is not implemented; it is refused rather than replaced "
+                "with synthetic data."
             )
+        if not allow_synthetic:
+            raise FileNotFoundError(
+                f"No real PDEBench HDF5 file found for dataset {dataset_name!r} under "
+                f"{self.data_root}. Download the PDEBench data files first, or pass "
+                "allow_synthetic=True to generate clearly-flagged synthetic data "
+                "(metadata['is_synthetic'] == True) for testing only."
+            )
+        warnings.warn(
+            f"Returning SYNTHETIC data for PDEBench dataset {dataset_name!r}: no real "
+            f"HDF5 file was found under {self.data_root}. This data does NOT reflect the "
+            "true PDE solution and must not be used for reported benchmark numbers. "
+            "Metadata is flagged with is_synthetic=True.",
+            UserWarning,
+            stacklevel=2,
+        )
 
-        # Generate synthetic data matching PDEBench dataset characteristics. Real
-        # HDF5 loading is gated above (fail-fast); reaching here means the caller
-        # explicitly opted into synthetic data.
+        # Generate synthetic data matching PDEBench dataset characteristics; reaching here
+        # means no real file exists and the caller opted into synthetic data.
         dataset_config = self._dataset_configs[dataset_name]
 
         # Generate synthetic data based on dataset characteristics
