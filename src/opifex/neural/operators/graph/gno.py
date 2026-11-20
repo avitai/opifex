@@ -39,7 +39,6 @@ class GraphNeuralOperator(nnx.Module):
             activation: Activation function
             rngs: Random number generators
         """
-        super().__init__()
         self.node_dim = node_dim
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -129,7 +128,6 @@ class MessagePassingLayer(nnx.Module):
             activation: Activation function
             rngs: Random number generators
         """
-        super().__init__()
         self.node_dim = node_dim
         self.edge_dim = edge_dim
         self.hidden_dim = hidden_dim
@@ -258,7 +256,6 @@ class MollifiedGNO(nnx.Module):
             activation: Activation function.
             rngs: Random number generators.
         """
-        super().__init__()
         self.smoothing_radius = smoothing_radius
 
         # Base GNO for message passing

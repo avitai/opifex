@@ -42,7 +42,6 @@ class FourierEnhancedDeepONet(nnx.Module):
             activation: Activation function name
             rngs: Random number generators
         """
-        super().__init__()
         self.branch_sizes = branch_sizes
         self.trunk_sizes = trunk_sizes
         self.fourier_modes = fourier_modes

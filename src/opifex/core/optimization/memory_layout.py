@@ -156,7 +156,6 @@ class OptimizedConvolution(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.kernel_size = (
@@ -202,7 +201,6 @@ class OptimizedLinear(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.in_features = in_features
         self.out_features = out_features
 

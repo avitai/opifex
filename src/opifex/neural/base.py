@@ -85,7 +85,6 @@ class StandardMLP(nnx.Module):
             kernel_init: Kernel initialization function (callable)
             bias_init: Bias initialization function (callable)
         """
-        super().__init__()
 
         # Store configuration
         self.layer_sizes = layer_sizes

@@ -97,7 +97,6 @@ class TemperatureScaling(nnx.Module):
             constraint_strength: Strength of physics constraint enforcement
             rngs: Random number generators
         """
-        super().__init__()
 
         self.physics_constraints = physics_constraints
         self.adaptive = adaptive
@@ -404,7 +403,6 @@ class PlattScaling(nnx.Module):
         Args:
             rngs: Random number generators
         """
-        super().__init__()
 
         # Learnable scaling parameters for sigmoid: P(y=1|f) = 1/(1+exp(A*f+B))
         self.a = nnx.Param(nnx.initializers.constant(-1.0)(rngs.params(), ()))
@@ -465,7 +463,6 @@ class IsotonicRegression(nnx.Module):
             n_bins: Number of bins for isotonic regression
             rngs: Random number generators
         """
-        super().__init__()
         self.n_bins = n_bins
 
         # Calibration mapping (confidence -> probability)
@@ -587,7 +584,6 @@ class CalibrationTools(nnx.Module):
         Args:
             rngs: Random number generators
         """
-        super().__init__()
         # Retained so the Platt / isotonic helpers can instantiate the
         # canonical calibrator modules they delegate to.
         self.rngs = rngs

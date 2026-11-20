@@ -33,7 +33,6 @@ class SensorOptimization(nnx.Module):
             optimization_method: Method for sensor optimization
             rngs: Random number generators
         """
-        super().__init__()
         self.num_sensors = num_sensors
         self.spatial_dim = spatial_dim
         self.optimization_method = optimization_method

@@ -56,7 +56,6 @@ class PhysicsInformedOperator(nnx.Module):
             use_bias: Whether to use bias in linear layers
             rngs: Random number generators (keyword-only)
         """
-        super().__init__()
 
         self.layer_sizes = layer_sizes
         self.physics_type = physics_type

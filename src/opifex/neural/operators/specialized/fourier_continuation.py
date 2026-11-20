@@ -42,8 +42,6 @@ class FourierContinuationExtender(nnx.Module):
         taper_width: float = 0.1,
         smooth_order: int = 8,
     ) -> None:
-        super().__init__()
-
         self.extension_type = extension_type
         self.extension_length = extension_length
         self.taper_width = taper_width
@@ -366,8 +364,6 @@ class FourierBoundaryHandler(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
-
         self.continuation_methods = continuation_methods
         self.extension_length = extension_length
 

@@ -92,7 +92,6 @@ class OperatorNetwork(nnx.Module):
             config: Configuration dictionary for the operator
             rngs: Random number generators
         """
-        super().__init__()
         self.operator_type = operator_type
         self.config = config
 

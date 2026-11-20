@@ -47,7 +47,6 @@ class AdaptiveDeepONet(nnx.Module):
             activation: Activation function name
             rngs: Random number generators
         """
-        super().__init__()
         self.base_latent_dim = base_latent_dim
         self.num_resolution_levels = num_resolution_levels
         self.adaptive_latent_scaling = adaptive_latent_scaling

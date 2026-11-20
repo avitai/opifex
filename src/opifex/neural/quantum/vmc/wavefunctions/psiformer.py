@@ -94,7 +94,6 @@ class _MultiHeadSelfAttention(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the bias-free Q/K/V and output projections."""
-        super().__init__()
         self.num_heads = num_heads
         self.head_dim = head_dim
         self._scale = 1.0 / jnp.sqrt(jnp.asarray(head_dim, dtype=jnp.float64))
@@ -154,7 +153,6 @@ class _AttentionLayer(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the attention sublayer, the tanh MLP and optional LayerNorms."""
-        super().__init__()
         self.use_layer_norm = use_layer_norm
         self.attention = _MultiHeadSelfAttention(
             feature_dim=feature_dim,
@@ -228,7 +226,6 @@ class PsiFormer(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the embedding, self-attention stack, orbitals and envelopes."""
-        super().__init__()
         if num_heads <= 0 or head_dim <= 0:
             raise ValueError(
                 "num_heads and head_dim must be positive; got "

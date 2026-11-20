@@ -59,8 +59,6 @@ class PODDeepONet(nnx.Module):
         activation: str = "gelu",
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
-
         n_locations, n_modes = pod_basis.shape
 
         # Validate: branch output dim must equal number of POD modes

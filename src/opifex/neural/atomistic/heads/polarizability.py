@@ -82,7 +82,6 @@ class PolarizabilityHead(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the per-atom isotropic/anisotropic scalar MLP."""
-        super().__init__()
         width = hidden_dim if hidden_dim is not None else feature_dim
         # Two invariant scalar channels per atom: isotropic s_i and anisotropic q_i.
         n_channels = 1 if isotropic_only else 2

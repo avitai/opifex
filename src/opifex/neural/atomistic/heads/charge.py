@@ -69,7 +69,6 @@ class ChargeHead(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the per-atom partial-charge MLP."""
-        super().__init__()
         width = hidden_dim if hidden_dim is not None else feature_dim
         self.hidden = nnx.Linear(feature_dim, width, rngs=rngs)
         self.readout = nnx.Linear(width, 1, rngs=rngs)

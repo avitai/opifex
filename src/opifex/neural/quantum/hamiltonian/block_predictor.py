@@ -207,7 +207,6 @@ class BlockHamiltonianPredictor(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the embedding, conv trunk, refinement stack and block heads."""
-        super().__init__()
         self.config = config if config is not None else BlockHamiltonianConfig()
         self.hidden_irreps = Irreps(self.config.hidden_irreps)
         self._validate_config()

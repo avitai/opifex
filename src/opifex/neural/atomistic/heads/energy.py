@@ -56,7 +56,6 @@ class EnergyHead(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the per-atom energy MLP and store the optional scale-shift."""
-        super().__init__()
         width = hidden_dim if hidden_dim is not None else feature_dim
         dtype = default_float_dtype()
         self.hidden = nnx.Linear(feature_dim, width, param_dtype=dtype, rngs=rngs)

@@ -415,8 +415,6 @@ class TensorLyEnhancedDecomposition(nnx.Module):
         tensorly_max_iter: int = 50,
         tensorly_tolerance: float = 1e-8,
     ) -> None:
-        super().__init__()
-
         self.tensor_shape = tensor_shape
         self.rank = rank
         self.decomposition_type = decomposition_type

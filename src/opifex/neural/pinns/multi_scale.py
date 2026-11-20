@@ -51,7 +51,6 @@ class MultiScalePINN(nnx.Module):
             activation: Activation function
             rngs: Random number generators
         """
-        super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.scales = scales
@@ -265,7 +264,6 @@ class SimplePINN(nnx.Module):
             activation: Activation function (default: tanh, good for PINNs)
             rngs: Random number generators
         """
-        super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.activation = activation

@@ -221,7 +221,6 @@ class Gate(nnx.Module):
             gate_act: Activation for the gate scalars. Default
                 :func:`jax.nn.sigmoid`.
         """
-        super().__init__()
         self.irreps_in = Irreps(irreps_in)
         self._even_act = even_act
         self._odd_act = odd_act
@@ -271,7 +270,6 @@ class NormGate(nnx.Module):
         Raises:
             ValueError: If ``irreps`` has no scalar channel.
         """
-        super().__init__()
         self.irreps = Irreps(irreps)
         self._num_scalars = sum(mul for mul, irrep in self.irreps.blocks if irrep.l == 0)
         self._num_vectors = sum(mul for mul, irrep in self.irreps.blocks if irrep.l > 0)

@@ -56,7 +56,6 @@ class TensorizedSpectralConvolution(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.modes = tuple(modes)

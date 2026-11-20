@@ -45,7 +45,6 @@ class EquivariantLinear(nnx.Module):
             rngs: Random number generators (keyword-only); ``rngs.params()``
                 seeds the weight blocks.
         """
-        super().__init__()
         self.irreps_in = Irreps(irreps_in)
         self.irreps_out = Irreps(irreps_out)
 

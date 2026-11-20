@@ -90,7 +90,6 @@ class TuckerDecomposition(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Initialise the Tucker core and factor matrices for the given tensor shape."""
-        super().__init__()
         self.tensor_shape = tuple(tensor_shape)
         self.out_channels = tensor_shape[0]
         self.in_channels = tensor_shape[1]
@@ -164,7 +163,6 @@ class CPDecomposition(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Initialise the CP rank-one factor matrices for the given tensor shape."""
-        super().__init__()
         self.tensor_shape = tuple(tensor_shape)
         self.out_channels = tensor_shape[0]
         self.in_channels = tensor_shape[1]
@@ -232,7 +230,6 @@ class TensorTrainDecomposition(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Initialise the tensor-train cores for the given tensor shape."""
-        super().__init__()
         self.tensor_shape = tuple(tensor_shape)
         self.out_channels = tensor_shape[0]
         self.in_channels = tensor_shape[1]

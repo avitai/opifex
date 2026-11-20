@@ -75,7 +75,6 @@ class SphericalHarmonicConvolution(nnx.Module):
             mmax: Maximum azimuthal order (if ``None``, uses ``lmax``).
             rngs: Random number generator state.
         """
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.lmax = lmax
@@ -155,7 +154,6 @@ class SphericalFourierNeuralOperator(nnx.Module):
                 (``"legendre-gauss"``).
             rngs: Random number generator state.
         """
-        super().__init__()
         self.lmax = lmax
         self.mmax = mmax if mmax is not None else lmax
         self.num_layers = num_layers

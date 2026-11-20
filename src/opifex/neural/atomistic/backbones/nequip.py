@@ -167,7 +167,6 @@ class _RadialNetwork(nnx.Module):
 
     def __init__(self, config: NequIPConfig, num_weights: int, *, rngs: nnx.Rngs) -> None:
         """Build the two-layer bias-free radial MLP."""
-        super().__init__()
         dtype = default_float_dtype()
         self.hidden = nnx.Linear(
             config.num_radial_basis,
@@ -235,7 +234,6 @@ class _ConvolutionLayer(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the interaction submodules (gated, or product basis if correlation>1)."""
-        super().__init__()
         self.node_irreps = node_irreps
         self.hidden_irreps = hidden_irreps
         self._num_species = len(config.species)
@@ -395,7 +393,6 @@ class NequIP(nnx.Module):
 
     def __init__(self, *, config: NequIPConfig | None = None, rngs: nnx.Rngs) -> None:
         """Build the embedding, edge SH layout, radial basis and convolution layers."""
-        super().__init__()
         self.config = config if config is not None else NequIPConfig()
         if self.config.correlation < 1:
             raise ValueError(f"correlation must be >= 1, got {self.config.correlation}.")

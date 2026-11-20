@@ -108,7 +108,6 @@ class FermiNet(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the equivariant streams, orbital projections and envelopes."""
-        super().__init__()
         if len(hidden_one) != len(hidden_two):
             raise ValueError(
                 "hidden_one and hidden_two must have the same number of layers; "

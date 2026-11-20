@@ -52,7 +52,6 @@ class LocalFourierLayer(nnx.Module):
             mixing_weight: Weight for combining spectral and local branches
             rngs: Random number generator state
         """
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.modes = tuple(modes)
@@ -204,7 +203,6 @@ class LocalFourierNeuralOperator(nnx.Module):
             activation: Activation function
             rngs: Random number generator state
         """
-        super().__init__()
         self.num_layers = num_layers
         self.use_residual_connections = use_residual_connections
         self.activation = activation

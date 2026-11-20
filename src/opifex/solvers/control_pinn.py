@@ -69,7 +69,6 @@ class ControlPINN(nnx.Module):
             activation: Activation function for hidden layers.
             rngs: Random number generators.
         """
-        super().__init__()
         self.config = config
         self.activation = activation
 
