@@ -72,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `DifferentiableMPC`, `SafetyCriticalMPC` and `RecedingHorizonController`
   require a keyword-only `rngs`, from which the default `PredictiveModel` is initialised;
   it was built from key 42 for every controller.
+- **Breaking:** `FunctionEmbedding` requires `rngs` (its projection was initialised from
+  `nnx.Rngs(0)`), and `benchmark_tensorly_integration` requires a keyword-only `key` for
+  its test tensor (it was key 42).
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

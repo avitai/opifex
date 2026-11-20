@@ -249,13 +249,13 @@ class FunctionEmbedding(EmbeddingBase):
     architectures, supporting various coordinate systems and transformations.
     """
 
-    def __init__(self, in_channels: int, out_channels: int) -> None:
+    def __init__(self, in_channels: int, out_channels: int, *, rngs: nnx.Rngs) -> None:
         super().__init__()
         self.in_channels = in_channels
         self._out_channels = out_channels
 
         # Linear projection for function embedding
-        self.projection = nnx.Linear(in_channels, out_channels, rngs=nnx.Rngs(0))
+        self.projection = nnx.Linear(in_channels, out_channels, rngs=rngs)
 
     @property
     def out_channels(self) -> int:
