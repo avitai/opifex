@@ -613,12 +613,10 @@ class SystemDynamicsModel(nnx.Module):
         if model_type == "linear":
             # Linear system: x_{k+1} = A*x_k + B*u_k
             self.A_matrix = nnx.Param(
-                jax.random.normal(rngs.params(), (state_dim, state_dim)) * 0.1,
-                trainable=True,
+                jax.random.normal(rngs.params(), (state_dim, state_dim)) * 0.1
             )
             self.B_matrix = nnx.Param(
-                jax.random.normal(rngs.params(), (state_dim, input_dim)) * 0.1,
-                trainable=True,
+                jax.random.normal(rngs.params(), (state_dim, input_dim)) * 0.1
             )
 
         elif model_type == "nonlinear":
