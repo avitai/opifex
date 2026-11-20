@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Requires `calibrax[publication]>=0.1.21`, whose `Registry.register` refuses a name the
   registry already holds with `DuplicateRegistrationError` (a `ValueError`, exported from
   `calibrax.core`) instead of replacing the item registered first.
+- `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
+  `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
+  a taken name raises `DuplicateRegistrationError` and keeps the class registered first.
+  The opifex copies of that check are removed, so the error is that subclass of
+  `ValueError` and its message reads `'<name>' is already registered in <Registry>; remove
+  it first to replace it.` `ServableModelRegistry` still refuses a class that is not an
+  `nnx.Module` subclass with `TypeError`.
 
 ## [0.2.13] - 2026-11-19
 

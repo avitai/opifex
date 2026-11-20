@@ -6,24 +6,19 @@ process cannot trust a free-form import path, so the registry name is the
 cross-process contract: registering a class makes it reconstructable, and
 loading an unregistered name fails fast with an actionable error.
 
-Mirrors :mod:`opifex.core.quantum.registry`, which also reuses
-``calibrax.core.registry.SingletonRegistry`` and layers two policies on top:
-duplicate-registration rejection (registrations are canonical) and a
-:meth:`require` error that lists the available names. The ``@register_servable_model``
-class-decorator self-registers at import time, so importing a model module
-makes it discoverable for deserialization.
+The registry is a ``calibrax.core.registry.SingletonRegistry``, which refuses a
+name it already holds with ``DuplicateRegistrationError``, so registrations are
+canonical. Opifex adds two checks of its own: only :class:`flax.nnx.Module`
+subclasses register, and :meth:`require` lists the available names. The
+``@register_servable_model`` class-decorator self-registers at import time, so
+importing a model module makes it discoverable for deserialization.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 from calibrax.core.registry import SingletonRegistry
 from flax import nnx
-
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 _M = TypeVar("_M", bound=type[nnx.Module])
@@ -32,27 +27,23 @@ _M = TypeVar("_M", bound=type[nnx.Module])
 class ServableModelRegistry(SingletonRegistry[type[nnx.Module]]):
     """Singleton registry mapping a name to a servable ``nnx.Module`` class.
 
-    Extends CalibraX's :class:`SingletonRegistry` with duplicate-rejection and
-    an actionable :meth:`require` error, matching the other Opifex per-family
-    registries.
+    Extends CalibraX's :class:`SingletonRegistry` with an ``nnx.Module`` check
+    on registration and an actionable :meth:`require` error, matching the other
+    Opifex per-family registries.
     """
 
     def register(self, name: str, item: type[nnx.Module]) -> None:
-        """Register ``item`` under ``name``, rejecting duplicate names.
+        """Register ``item`` under ``name``.
+
+        A name already registered is refused by :class:`SingletonRegistry` with
+        ``DuplicateRegistrationError``.
 
         Raises:
             TypeError: If ``item`` is not an :class:`flax.nnx.Module` subclass.
-            ValueError: If ``name`` is already registered (registrations are
-                canonical; ``calibrax`` would silently overwrite).
         """
         if not (isinstance(item, type) and issubclass(item, nnx.Module)):
             raise TypeError(
                 f"Servable model {name!r} must be an nnx.Module subclass, got {item!r}."
-            )
-        if name in self:
-            raise ValueError(
-                f"Servable model {name!r} is already registered. Registrations are "
-                "canonical -- use require()/get() to read, or choose a new name."
             )
         super().register(name, item)
 

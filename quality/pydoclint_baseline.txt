@@ -101,8 +101,6 @@ src/opifex/core/quantum/protocols.py
     DOC304: Class `RadiusNeighborList`: Class docstring has an argument/parameter section; please put it in the __init__() docstring
 --------------------
 src/opifex/core/quantum/registry.py
-    DOC101: Method `_AtomisticRegistry.register`: Docstring contains fewer arguments than in function signature.
-    DOC103: Method `_AtomisticRegistry.register`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [item: type, name: str].
     DOC101: Method `_AtomisticRegistry.require`: Docstring contains fewer arguments than in function signature.
     DOC103: Method `_AtomisticRegistry.require`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [name: str].
     DOC201: Method `_AtomisticRegistry.require` does not have a return section in docstring

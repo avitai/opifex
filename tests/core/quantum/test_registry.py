@@ -1,16 +1,15 @@
 r"""Tests for the per-family atomistic registries and ``register_*`` decorators.
 
-The registries mirror ``src/opifex/uncertainty/registry.py`` (which wraps
-``calibrax.core.registry.SingletonRegistry``): in-process name-keyed lookup with
-duplicate-rejection and an actionable ``require()`` error listing available
-names. Tests reset each singleton for isolation.
+Each registry is a ``calibrax.core.registry.SingletonRegistry``: in-process
+name-keyed lookup that refuses a name it already holds, plus an actionable
+``require()`` error listing available names. Tests reset each singleton for
+isolation.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+from collections.abc import Iterator
 
 import pytest
+from calibrax.core import DuplicateRegistrationError
 
 from opifex.core.quantum.registry import (
     AtomisticModelRegistry,
@@ -20,10 +19,6 @@ from opifex.core.quantum.registry import (
     register_backbone,
     register_property_head,
 )
-
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
 
 
 @pytest.fixture(autouse=True)
@@ -84,16 +79,18 @@ class TestRegistration:
 
 
 class TestPolicies:
-    def test_duplicate_registration_rejected(self) -> None:
+    def test_duplicate_registration_is_refused_and_keeps_the_first(self) -> None:
         @register_backbone("collide")
-        class _First:  # pyright: ignore[reportUnusedClass]
+        class _First:
             pass
 
-        with pytest.raises(ValueError, match="already registered"):
+        with pytest.raises(DuplicateRegistrationError, match="'collide' is already registered"):
 
             @register_backbone("collide")
             class _Second:  # pyright: ignore[reportUnusedClass]
                 pass
+
+        assert BackboneRegistry().require("collide") is _First
 
     def test_require_unknown_lists_available(self) -> None:
         @register_property_head("present")
