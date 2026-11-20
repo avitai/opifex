@@ -16,10 +16,8 @@ The module exposes:
 
 The tests cover:
 
-1. ``BayesianSpectralConvolution`` regression — the canonical
-   ``deterministic`` flag / per-call ``rngs`` pattern is preserved (no
-   regression to the old ``training`` / ``sample`` kwargs that
-   Phase 3 removed).
+1. ``BayesianSpectralConvolution`` built with ``deterministic=True`` starts in
+   evaluation mode and returns its posterior mean until ``.train()``.
 2. CASpec forward shape parity with BSC under deterministic mode.
 3. ``cakf_refine`` returns a posterior with a non-empty low-rank
    factor when ``max_iter > 0``; the factor shrinks variance towards
@@ -39,20 +37,15 @@ from opifex.neural.operators.fno.bayesian import (
 )
 
 
-def test_bayesian_spectral_convolution_preserves_deterministic_kwarg() -> None:
-    """Phase-3 regression: ``deterministic`` is on ``__init__`` and ``__call__``.
-
-    No legacy ``training`` / ``sample`` kwargs are present.
-    """
-    rngs = nnx.Rngs(0)
+def test_a_spectral_layer_built_in_evaluation_mode_returns_its_posterior_mean() -> None:
+    """``deterministic=True`` at construction starts the layer in evaluation mode."""
     bsc = BayesianSpectralConvolution(
-        in_channels=2, out_channels=2, modes=(2,), deterministic=True, rngs=rngs
+        in_channels=2, out_channels=2, modes=(2,), deterministic=True, rngs=nnx.Rngs(0)
     )
-    assert hasattr(bsc, "deterministic")
-    assert bsc.deterministic is True
-    # legacy attribute names introduced by Phase-3-removed pattern must NOT exist.
-    assert not hasattr(bsc, "training")
-    assert not hasattr(bsc, "sample")
+    x = jax.random.normal(jax.random.key(1), (3, 2, 8))
+    assert jnp.array_equal(bsc(x), bsc(x, deterministic=True))
+    bsc.train()
+    assert not jnp.array_equal(bsc(x), bsc(x))
 
 
 def test_caspec_forward_shape_matches_bsc_on_1d_input() -> None:
@@ -62,7 +55,6 @@ def test_caspec_forward_shape_matches_bsc_on_1d_input() -> None:
         in_channels=2,
         out_channels=3,
         modes=(2,),
-        deterministic=True,
         rngs=rngs,
     )
     # BSC's 1D forward convention: (batch, channels, length).
@@ -75,7 +67,7 @@ def test_caspec_cakf_refine_returns_factor_with_max_iter_columns() -> None:
     """After ``cakf_refine``, the low-rank factor has ``max_iter`` columns."""
     rngs = nnx.Rngs(2)
     caspec = ComputationAwareSpectralConvolution(
-        in_channels=1, out_channels=1, modes=(2,), deterministic=True, rngs=rngs
+        in_channels=1, out_channels=1, modes=(2,), rngs=rngs
     )
     # Flatten the BSC mean parameters into a vector for the CAKF dimension.
     flat_dim = caspec.flat_parameter_dim
@@ -99,7 +91,7 @@ def test_caspec_cakf_refine_shrinks_posterior_mean_toward_observation() -> None:
     """With ``H = I`` and small noise, the posterior mean moves toward the observation."""
     rngs = nnx.Rngs(3)
     caspec = ComputationAwareSpectralConvolution(
-        in_channels=1, out_channels=1, modes=(2,), deterministic=True, rngs=rngs
+        in_channels=1, out_channels=1, modes=(2,), rngs=rngs
     )
     flat_dim = caspec.flat_parameter_dim
     target = jnp.full((flat_dim,), 2.5)
@@ -119,7 +111,7 @@ def test_caspec_forward_is_jit_compatible() -> None:
     """CASpec's deterministic forward compiles under ``nnx.jit``."""
     rngs = nnx.Rngs(4)
     caspec = ComputationAwareSpectralConvolution(
-        in_channels=1, out_channels=1, modes=(2,), deterministic=True, rngs=rngs
+        in_channels=1, out_channels=1, modes=(2,), rngs=rngs
     )
     x = jax.random.normal(jax.random.PRNGKey(5), (2, 1, 8))
 

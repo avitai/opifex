@@ -18,19 +18,11 @@ from substrax.testing.nnx_rules import findings
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _LIBRARY = ("src/opifex",)
-_RULES = (
-    "noop-super-init",
-    "trainable-metadata",
-    "salted-hash",
-    "rngs-fallback",
-    "rngs-probe",
-    "seed-literal",
-)
 
 
 def test_library_code_has_no_unexempted_site() -> None:
-    """Every rule holds over ``src/opifex``, exemptions aside."""
-    found = findings(_REPO_ROOT, _LIBRARY, rules=_RULES)
+    """Every rule substrax ships holds over ``src/opifex``, exemptions aside."""
+    found = findings(_REPO_ROOT, _LIBRARY)
     assert found == [], "\n".join(f"{f.path}:{f.line} [{f.rule}] {f.source}" for f in found)
 
 

@@ -43,12 +43,10 @@ class BayesianLinear(nnx.Module):
     Weight and bias each carry a ``(mean, log-variance)`` posterior; sampling
     uses the reparameterization trick.
 
-    Mode handling follows the :class:`nnx.Dropout` convention: the module
-    holds a ``self.deterministic`` flag that the NNX ``train()`` and
-    inference-mode methods flip via ``set_attributes`` recursion. Sampling
-    is enabled when the resolved mode is non-deterministic AND ``rngs`` is
-    supplied. A per-call ``deterministic`` keyword overrides the module
-    flag for one call site (mirrors ``nnx.Dropout.__call__``).
+    Mode handling follows :class:`nnx.Dropout`: the layer holds a ``deterministic``
+    attribute that ``.train()``, ``.eval()`` and ``nnx.view(layer, deterministic=...)``
+    (through :meth:`set_view`) set. A per-call ``deterministic`` keyword overrides it for
+    one call, as ``nnx.Dropout.__call__`` does.
     """
 
     def __init__(
@@ -56,15 +54,14 @@ class BayesianLinear(nnx.Module):
         in_features: int,
         out_features: int,
         prior_std: float = 1.0,
-        deterministic: bool = False,
         *,
+        deterministic: bool | None = False,  # substrax-allow: mode-flag-default: as nnx.Dropout
         rngs: nnx.Rngs,
     ) -> None:
         """Initialize variational parameters; ``rngs`` initializes parameters only.
 
-        ``deterministic`` defaults to ``False`` so the module ships in
-        training (sampling) mode; switch the module to inference mode to
-        disable sampling globally.
+        ``deterministic`` starts at ``False``, so the layer samples, as :class:`nnx.Dropout`
+        does; ``.eval()``, ``.train()`` and ``nnx.view`` set it.
         """
         if prior_std <= 0.0:
             raise ValueError(f"prior_std must be > 0; got {prior_std!r}.")
@@ -127,6 +124,16 @@ class BayesianLinear(nnx.Module):
 
         return jnp.dot(x, weight.T) + bias
 
+    def set_view(self, deterministic: bool | None = None) -> None:
+        """Set the mode for ``nnx.view``, as :meth:`nnx.Dropout.set_view` does.
+
+        Args:
+            deterministic: ``True`` returns the posterior mean, ``False`` samples weights;
+                ``None`` leaves the mode unchanged.
+        """
+        if deterministic is not None:
+            self.deterministic = deterministic
+
     def kl_divergence(self) -> jax.Array:
         """Total KL divergence (weights + bias) under the layer's diagonal Gaussian prior."""
         weight_kl = diagonal_gaussian_kl(
@@ -179,15 +186,14 @@ class BayesianSpectralConvolution(nnx.Module):
         out_channels: int,
         modes: tuple[int, ...],
         prior_std: float = 1.0,
-        deterministic: bool = False,
         *,
+        deterministic: bool | None = False,  # substrax-allow: mode-flag-default: as nnx.Dropout
         rngs: nnx.Rngs,
     ) -> None:
         """Initialize complex weight posteriors; ``rngs`` initializes parameters only.
 
-        ``deterministic`` follows the :class:`nnx.Dropout` convention; ships
-        in non-deterministic (sampling) mode and is flipped by the NNX
-        inference-mode toggle via ``set_attributes`` recursion.
+        ``deterministic`` starts at ``False``, so the layer samples, as :class:`nnx.Dropout`
+        does; ``.eval()``, ``.train()`` and ``nnx.view`` set it.
         """
         if prior_std <= 0.0:
             raise ValueError(f"prior_std must be > 0; got {prior_std!r}.")
@@ -259,6 +265,16 @@ class BayesianSpectralConvolution(nnx.Module):
             weights = self._sample_weights(key)
 
         return _spectral_convolve(x, weights, modes=self.modes)
+
+    def set_view(self, deterministic: bool | None = None) -> None:
+        """Set the mode for ``nnx.view``, as :meth:`nnx.Dropout.set_view` does.
+
+        Args:
+            deterministic: ``True`` returns the posterior mean, ``False`` samples weights;
+                ``None`` leaves the mode unchanged.
+        """
+        if deterministic is not None:
+            self.deterministic = deterministic
 
     def _mean_weights(self) -> tuple[jax.Array, ...]:
         """Return posterior-mean complex weights (no sampling)."""

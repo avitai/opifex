@@ -139,7 +139,7 @@ class TestProbabilisticPINN:
         x = random.normal(key, (5, 2))
         y_true = random.normal(key, (5, 16))  # Match output dimension
 
-        loss = pinn.robust_loss(x, y_true, noise_scale=0.01)
+        loss = pinn.robust_loss(x, y_true, noise_scale=0.01, rngs=nnx.Rngs(noise=1))
 
         assert isinstance(loss, jax.Array)
         assert loss.shape == ()
@@ -152,8 +152,8 @@ class TestProbabilisticPINN:
         x = random.normal(key, (5, 2))
         y_true = random.normal(key, (5, 16))
 
-        loss1 = pinn.robust_loss(x, y_true, noise_scale=0.001)
-        loss2 = pinn.robust_loss(x, y_true, noise_scale=0.1)
+        loss1 = pinn.robust_loss(x, y_true, noise_scale=0.001, rngs=nnx.Rngs(noise=1))
+        loss2 = pinn.robust_loss(x, y_true, noise_scale=0.1, rngs=nnx.Rngs(noise=1))
 
         # Higher noise should generally lead to higher loss
         assert isinstance(loss1, jax.Array)

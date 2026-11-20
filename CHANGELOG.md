@@ -124,6 +124,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `NeuralXCSpec.from_functional` splits an evaluation view of the functional
   (`nnx.view(..., deterministic=True)`), so the SCF evaluates the functional without dropout
   whatever mode the caller's module is in, and the caller's module is left unchanged.
+- **Breaking:** the Bayesian layers and PINNs follow flax's mode handling. `BayesianLinear`
+  and `BayesianSpectralConvolution` take `deterministic` keyword-only, as `nnx.Dropout` does,
+  and gain `set_view`, so `nnx.view(layer, deterministic=True)` returns the posterior mean.
+  `ProbabilisticPINN` (whose `deterministic` was stored and never read) and
+  `ComputationAwareSpectralConvolution` (whose forward always used the mean) take no
+  `deterministic` argument; `ProbabilisticPINN.__call__` and `MultiFidelityPINN.__call__` take
+  none either: `.eval()` or `nnx.view(pinn, deterministic=True)` gives the posterior mean,
+  `.train()` samples. Neither PINN keeps a reference to the caller's `nnx.Rngs`: each
+  `BayesianLinear` samples from the stream it forks at construction, and
+  `ProbabilisticPINN.robust_loss` takes `rngs`. A stored `nnx.Rngs` had a key drawn by every
+  `nnx.view`, and the view failed under `jax.jvp`.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

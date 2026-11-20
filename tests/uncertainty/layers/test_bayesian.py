@@ -334,3 +334,34 @@ def test_bayesian_spectral_refuses_rngs_without_a_posterior_stream() -> None:
 
     with pytest.raises(MissingRngStreamError, match="BayesianSpectralConvolution"):
         layer(x, rngs=nnx.Rngs(params=0))
+
+
+# ---------------------------------------------------------------------------
+# Mode: nnx.view and .eval()/.train(), as for flax's nnx.Dropout
+# ---------------------------------------------------------------------------
+
+
+def test_an_evaluation_view_returns_the_posterior_mean() -> None:
+    layer = _make_layer()
+    x = jnp.ones((2, 4))
+    view = nnx.view(layer, deterministic=True)
+    assert jnp.array_equal(view(x), layer(x, deterministic=True))
+    # The view leaves the caller's layer in its own (sampling) mode.
+    assert not jnp.array_equal(layer(x), layer(x))
+
+
+def test_eval_and_train_switch_the_layer_between_mean_and_samples() -> None:
+    layer = _make_layer()
+    x = jnp.ones((2, 4))
+    layer.eval()
+    assert jnp.array_equal(layer(x), layer(x, deterministic=True))
+    layer.train()
+    assert not jnp.array_equal(layer(x), layer(x))
+
+
+def test_a_spectral_evaluation_view_returns_the_posterior_mean() -> None:
+    layer = _make_spectral_2d()
+    x = jnp.ones((1, 2, 8, 8))
+    view = nnx.view(layer, deterministic=True)
+    assert jnp.array_equal(view(x), layer(x, deterministic=True))
+    assert not jnp.array_equal(layer(x), layer(x))

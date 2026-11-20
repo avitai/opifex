@@ -5,9 +5,9 @@ Houses the FNO-flavoured Bayesian spectral-convolution variants:
 * :class:`BayesianSpectralConvolution` — re-exported from the canonical
   :mod:`opifex.uncertainty.layers.bayesian` (variational
   diagonal-Gaussian posterior over the complex spectral weights;
-  Li et al. 2021 spectral block with a Phase-3-compliant
-  ``deterministic`` flag + per-call ``rngs`` pattern).
-* :class:`ComputationAwareSpectralConvolution` — Task 10.4 sibling
+  Li et al. 2021 spectral block; its mode follows ``.train()``,
+  ``.eval()`` and ``nnx.view`` as :class:`nnx.Dropout`'s does).
+* :class:`ComputationAwareSpectralConvolution` — a sibling
   whose uncertainty over the spectral weights is maintained as a
   *low-rank CAKF posterior* (Pförtner+ 2024 arXiv:2405.08971;
   Wenger+ 2023 CAGP precursor, arXiv:2306.07879) rather than a
@@ -93,8 +93,6 @@ class ComputationAwareSpectralConvolution(nnx.Module):
             underlying BSC's variational kernel and adopted here as
             the prior marginal-covariance scale ``prior_std² · I`` for
             CAKF.
-        deterministic: Forwarded to the underlying BSC; defaults to
-            ``False`` so the sampling toggle is consistent with BSC.
         rngs: Caller-owned ``nnx.Rngs`` for parameter init.
     """
 
@@ -104,7 +102,6 @@ class ComputationAwareSpectralConvolution(nnx.Module):
         out_channels: int,
         modes: tuple[int, ...],
         prior_std: float = 1.0,
-        deterministic: bool = False,
         *,
         rngs: nnx.Rngs,
     ) -> None:
@@ -113,14 +110,12 @@ class ComputationAwareSpectralConvolution(nnx.Module):
             out_channels=out_channels,
             modes=modes,
             prior_std=prior_std,
-            deterministic=deterministic,
             rngs=rngs,
         )
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.modes = modes
         self.prior_std = prior_std
-        self.deterministic = deterministic
         self.flat_parameter_dim = int(self._count_flat_parameters())
         # Initialise the CAKF posterior at the prior: zero mean + empty factor.
         self.cakf_mean = nnx.Variable(jnp.zeros(self.flat_parameter_dim))
