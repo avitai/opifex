@@ -166,7 +166,7 @@ def _train_one(
             optimizer="adamw", learning_rate=5e-3, weight_decay=1e-4
         ),
     )
-    trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(seed))
+    trainer = Trainer(model=model, config=config)
     trained, _ = trainer.fit(train_data=(x_train_n, y_train_n))
     return trained
 

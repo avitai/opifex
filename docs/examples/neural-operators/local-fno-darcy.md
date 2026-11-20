@@ -269,7 +269,7 @@ config = TrainingConfig(
     verbose=True,
     loss_config=LossConfig(loss_type="relative_l2"),
 )
-trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(42))
+trainer = Trainer(model=model, config=config)
 trained_model, metrics = trainer.fit(
     train_data=(jnp.array(X_train_n), jnp.array(Y_train_n)),
     val_data=(jnp.array(X_test_n), jnp.array(Y_test_n)),

@@ -50,7 +50,7 @@ this workflow:
 | Manual `torch.meshgrid` for positional encoding | `GridEmbedding2D(in_channels=, grid_boundaries=)` |
 | Custom Darcy dataset / loader | `create_darcy_loader(n_samples=, resolution=, ...)` |
 | `LpLoss(d=2, p=2)` (relative) | `LossConfig(loss_type="relative_l2")` |
-| `trainer.train(train_loader, epochs)` | `Trainer(model, config, rngs).fit(train_data, val_data)` |
+| `trainer.train(train_loader, epochs)` | `Trainer(model, config).fit(train_data, val_data)` |
 | `AdamW(lr, weight_decay)` + LR schedule | `OptimizationConfig(optimizer="adamw", weight_decay=, schedule_type=...)` |
 | Manual training loop with `loss.backward()` | Automatic JIT-compiled training loop via `Trainer.fit()` |
 
@@ -391,7 +391,7 @@ config = TrainingConfig(
     ),
 )
 
-trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(SEED))
+trainer = Trainer(model=model, config=config)
 
 trained_model, metrics = trainer.fit(
     train_data=(jnp.array(X_train_n), jnp.array(Y_train_n)),

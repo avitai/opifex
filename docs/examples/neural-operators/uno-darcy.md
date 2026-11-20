@@ -42,7 +42,7 @@ compares:
 |--------------------------|--------------|
 | `UNO(in_channels, out_channels, hidden_channels, uno_out_channels, uno_n_modes, uno_scalings, ...)` | `create_uno(in_channels=, out_channels=, hidden_channels=, uno_out_channels=, uno_n_modes=, uno_scalings=, rngs=)` |
 | `torch.utils.data.DataLoader(dataset)` | `create_darcy_loader(n_samples=, batch_size=, resolution=)` (datarax `PDELoaders`); this example trains from arrays (`generate_darcy`) |
-| `trainer = Trainer(model, ...)` then `trainer.train(...)` | `Trainer(model=, config=, rngs=)` then `trainer.fit(train_data, val_data)` |
+| `trainer = Trainer(model, ...)` then `trainer.train(...)` | `Trainer(model=, config=)` then `trainer.fit(train_data, val_data)` |
 | `model.eval(); with torch.no_grad(): ...` | `trained_model(x, deterministic=True)` |
 | Manual `torch.meshgrid` for grid embeddings | `GridEmbedding2D(in_channels=, grid_boundaries=)` |
 | Direct inference at a new resolution (Fourier-domain resize) | Same -- feed a finer grid straight through the trained model |
@@ -374,7 +374,6 @@ config = TrainingConfig(
 trainer = Trainer(
     model=model,
     config=config,
-    rngs=nnx.Rngs(SEED),
 )
 
 print(f"Optimizer: Adam (lr={LEARNING_RATE}), loss: relative L2")

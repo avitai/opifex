@@ -35,7 +35,7 @@ If you are familiar with the neuraloperator library, here is how Opifex TFNO com
 | `TFNO(n_modes, hidden_channels, factorization='tucker')`    | `create_tucker_fno(modes=, hidden_channels=, rank=, rngs=)` |
 | Manual factorization configuration                          | Built-in `rank` parameter controls compression            |
 | `tensorly` backend for decompositions                       | Native JAX tensor operations                              |
-| `trainer.train(train_loader, epochs)`                       | `Trainer(model, config, rngs).fit(train_data, val_data)`  |
+| `trainer.train(train_loader, epochs)`                       | `Trainer(model, config).fit(train_data, val_data)`  |
 
 **Key differences:**
 
@@ -245,7 +245,7 @@ config = TrainingConfig(
     loss_config=LossConfig(loss_type="relative_l2"),
 )
 
-trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(42))
+trainer = Trainer(model=model, config=config)
 trained_model, metrics = trainer.fit(train_data, val_data)
 ```
 

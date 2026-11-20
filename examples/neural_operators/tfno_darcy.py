@@ -212,7 +212,7 @@ def main() -> dict[str, float | int]:
         verbose=True,
         loss_config=LossConfig(loss_type="relative_l2"),
     )
-    trainer = Trainer(model=tfno_model, config=config, rngs=nnx.Rngs(SEED))
+    trainer = Trainer(model=tfno_model, config=config)
 
     print(f"Optimizer: Adam (lr={LEARNING_RATE}), loss: relative L2")
     print("Starting training...")

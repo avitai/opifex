@@ -78,15 +78,6 @@ class TestTrainerInitialization:
         assert trainer.state is not None
         assert trainer.optimizer is not None
 
-    def test_initialization_with_rngs(self, mock_model):
-        """Test initialization with custom RNGs."""
-        config = TrainingConfig(num_epochs=10)
-        rngs = nnx.Rngs(42)
-        trainer = Trainer(mock_model, config, rngs=rngs)
-
-        assert trainer.model is mock_model
-        assert trainer.rngs is rngs
-
     def test_initialization_with_physics_config(self, mock_model, temp_checkpoint_dir):
         """Test initialization with physics configuration."""
         boundary_config = BoundaryConfig(weight=1.0, enforce=True)

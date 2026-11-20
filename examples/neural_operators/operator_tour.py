@@ -352,7 +352,7 @@ def main() -> dict[str, float | int]:
             verbose=False,
             loss_config=LossConfig(loss_type="relative_l2"),
         )
-        trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(SEED))
+        trainer = Trainer(model=model, config=config)
 
         start = time.time()
         trained_model, metrics = trainer.fit(

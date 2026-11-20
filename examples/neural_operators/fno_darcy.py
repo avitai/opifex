@@ -331,7 +331,6 @@ def main() -> dict[str, float | int]:
     trainer = Trainer(
         model=model,
         config=config,
-        rngs=nnx.Rngs(seed),
     )
 
     print(f"Optimizer: AdamW (lr={learning_rate}, weight_decay={weight_decay})")

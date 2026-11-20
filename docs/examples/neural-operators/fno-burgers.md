@@ -39,7 +39,7 @@ this workflow:
 |--------------------------|--------------|
 | `FNO1d(modes, width)` | `FourierNeuralOperator(modes=, hidden_channels=, in_channels=1, out_channels=1, spatial_dims=1)` |
 | `torch.utils.data.DataLoader` | `create_burgers_loader(resolution=, viscosity_range=, val_fraction=)` |
-| Manual training loop | `Trainer(model, config, rngs).fit(train_data, val_data)` |
+| Manual training loop | `Trainer(model, config).fit(train_data, val_data)` |
 | `torch.optim.AdamW(model.parameters())` | `optax.adamw()` (handled internally by `Trainer`) |
 
 **Key differences:**
@@ -311,7 +311,7 @@ config = TrainingConfig(
     ),
 )
 
-trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(seed))
+trainer = Trainer(model=model, config=config)
 trained_model, metrics = trainer.fit(
     train_data=(jnp.array(x_train_n), jnp.array(y_train_n)),
     val_data=(jnp.array(x_test_n), jnp.array(y_test_n)),

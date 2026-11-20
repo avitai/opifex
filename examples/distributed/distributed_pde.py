@@ -325,7 +325,7 @@ def main() -> dict[str, float | int]:
         ),
         distributed_config=distributed_config,
     )
-    trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(seed))
+    trainer = Trainer(model=model, config=config)
     print("Trainer created with distributed config")
 
     print()

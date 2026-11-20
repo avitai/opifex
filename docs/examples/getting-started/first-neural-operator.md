@@ -147,7 +147,6 @@ from opifex.core.training import Trainer, OptimizationConfig, TrainingConfig
 trainer = Trainer(
     model=model,
     config=TrainingConfig(num_epochs=200, optimization_config=OptimizationConfig(learning_rate=1e-2), batch_size=32),
-    rngs=nnx.Rngs(42),
 )
 
 trained_model, metrics = trainer.fit(
