@@ -93,20 +93,17 @@ class PODDeepONet(nnx.Module):
     def __call__(
         self,
         branch_input: jax.Array,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Forward pass.
 
         Args:
             branch_input: Branch network input ``(B, input_dim)``.
-            deterministic: If True, disable dropout.
 
         Returns:
             Output ``(B, n_locations)``.
         """
         # Branch: (B, input_dim) -> (B, n_modes)
-        coeffs = self.branch_net(branch_input, deterministic=deterministic)
+        coeffs = self.branch_net(branch_input)
 
         # Combine: coeffs @ basis.T -> (B, n_locations)
         # coeffs: (B, n_modes), basis: (n_locations, n_modes)

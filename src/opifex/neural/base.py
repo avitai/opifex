@@ -35,7 +35,7 @@ class StandardMLP(nnx.Module):
     Fully compliant with Flax NNX best practices including:
     - Proper RNG handling with keyword-only rngs parameter
     - Modern activation functions (GELU default, configurable)
-    - Efficient dropout strategies with deterministic control
+    - Dropout switched by the module's mode, ``.train()`` or ``.eval()``
     - Custom initialization strategies following NNX patterns
     - Automatic differentiation with JAX
     - Performance-optimized state management
@@ -127,8 +127,6 @@ class StandardMLP(nnx.Module):
     def __call__(
         self,
         x: jax.Array,
-        *,
-        deterministic: bool = False,
     ) -> jax.Array:
         """Forward pass through the network.
 
@@ -137,8 +135,6 @@ class StandardMLP(nnx.Module):
 
         Args:
             x: Input array of shape (batch_size, input_dim)
-            deterministic: Whether to apply dropout
-                (False for training, True for inference)
 
         Returns:
             Output array of shape (batch_size, output_dim)
@@ -153,11 +149,11 @@ class StandardMLP(nnx.Module):
                 x = self.activation_fn(x)
 
                 # Apply dropout after activation for hidden layers
-                if self.dropout is not None and not deterministic:
-                    x = self.dropout(x, deterministic=deterministic)
+                if self.dropout is not None:
+                    x = self.dropout(x)
 
         # Apply final dropout if requested (useful for transformer-style architectures)
-        if self.apply_final_dropout and self.dropout is not None and not deterministic:
-            x = self.dropout(x, deterministic=deterministic)
+        if self.apply_final_dropout and self.dropout is not None:
+            x = self.dropout(x)
 
         return x

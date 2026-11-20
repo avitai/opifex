@@ -125,15 +125,12 @@ class FourierEnhancedDeepONet(nnx.Module):
         self,
         branch_input: jax.Array,
         trunk_input: jax.Array,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Apply Fourier-Enhanced DeepONet.
 
         Args:
             branch_input: Function values at sensor locations (batch, branch_input_dim)
             trunk_input: Query coordinates (batch, num_locations, trunk_input_dim)
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Function values at query locations (batch, num_locations)
@@ -151,9 +148,9 @@ class FourierEnhancedDeepONet(nnx.Module):
 
             # Combine original and spectral features
             branch_combined = jnp.concatenate([branch_input, branch_spectral_flat], axis=-1)
-            branch_encoding = self.branch_net(branch_combined, deterministic=deterministic)
+            branch_encoding = self.branch_net(branch_combined)
         else:
-            branch_encoding = self.branch_net(branch_input, deterministic=deterministic)
+            branch_encoding = self.branch_net(branch_input)
 
         # Process trunk input with optional spectral enhancement
         trunk_input_flat = trunk_input.reshape(batch_size * num_locations, trunk_dim)
@@ -170,9 +167,9 @@ class FourierEnhancedDeepONet(nnx.Module):
 
             # Combine original and spectral features
             trunk_combined = jnp.concatenate([trunk_input_flat, trunk_spectral_flat], axis=-1)
-            trunk_encoding_flat = self.trunk_net(trunk_combined, deterministic=deterministic)
+            trunk_encoding_flat = self.trunk_net(trunk_combined)
         else:
-            trunk_encoding_flat = self.trunk_net(trunk_input_flat, deterministic=deterministic)
+            trunk_encoding_flat = self.trunk_net(trunk_input_flat)
 
         trunk_encoding = trunk_encoding_flat.reshape(
             batch_size, num_locations, self.branch_sizes[-1]

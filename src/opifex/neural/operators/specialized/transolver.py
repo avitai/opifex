@@ -208,14 +208,11 @@ class PhysicsAttention(nnx.Module):
     def __call__(
         self,
         x: jax.Array,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Apply physics attention.
 
         Args:
             x: Input tensor of shape ``(B, N, C)``.
-            deterministic: If True, disable dropout.
 
         Returns:
             Output tensor of shape ``(B, N, C)``.
@@ -249,7 +246,7 @@ class PhysicsAttention(nnx.Module):
 
         dots = jnp.matmul(q, k.transpose(0, 1, 3, 2)) * self.scale
         attn = jax.nn.softmax(dots, axis=-1)
-        if self.dropout is not None and not deterministic:
+        if self.dropout is not None:
             attn = self.dropout(attn)
         out_slice = jnp.matmul(attn, v)  # (B, H, G, D)
 
@@ -362,23 +359,20 @@ class TransolverBlock(nnx.Module):
     def __call__(
         self,
         x: jax.Array,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Forward pass.
 
         Args:
             x: Input tensor ``(B, N, hidden_dim)``.
-            deterministic: If True, disable dropout.
 
         Returns:
             ``(B, N, hidden_dim)`` or ``(B, N, out_dim)`` if last layer.
         """
         x = as_compute_array(x, self.compute_dtype)
         # Pre-norm attention + residual
-        x = self.attn(self.ln_1(x), deterministic=deterministic) + x
+        x = self.attn(self.ln_1(x)) + x
         # Pre-norm FFN + residual
-        x = self.ffn(self.ln_2(x), deterministic=deterministic) + x
+        x = self.ffn(self.ln_2(x)) + x
 
         if self.last_layer:
             return self.out_proj(self.ln_3(x)).astype(self.compute_dtype)
@@ -463,15 +457,12 @@ class Transolver(nnx.Module):
         self,
         x: jax.Array,
         fx: jax.Array | None = None,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Forward pass.
 
         Args:
             x: Spatial coordinates ``(B, N, space_dim)``.
             fx: Function values ``(B, N, fun_dim)`` or ``None``.
-            deterministic: If True, disable dropout.
 
         Returns:
             Predictions ``(B, N, out_dim)``.
@@ -482,14 +473,14 @@ class Transolver(nnx.Module):
         h = jnp.concatenate([x, fx], axis=-1) if fx is not None else x
 
         # Project to hidden dimension
-        h = self.preprocess(h, deterministic=deterministic)
+        h = self.preprocess(h)
 
         # Add learnable placeholder bias
         h = h + self.placeholder.value.astype(self.compute_dtype)[None, None, :]
 
         # Pass through Transolver blocks
         for block in self.blocks:
-            h = block(h, deterministic=deterministic)
+            h = block(h)
 
         return h.astype(self.compute_dtype)
 

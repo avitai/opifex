@@ -84,7 +84,7 @@ class TestPODDeepONet:
             rngs=rngs,
         )
         branch_input = jax.random.normal(rngs.params(), (2, 100))
-        branch_out = model.branch_net(branch_input, deterministic=True)
+        branch_out = model.branch_net(branch_input)
         assert branch_out.shape[-1] == pod_basis.shape[1]
 
     def test_mismatched_modes_raises(self, rngs, pod_basis):
@@ -243,8 +243,8 @@ class TestPODDeepONetAdvanced:
             rngs=rngs,
         )
         x = jax.random.normal(rngs.params(), (2, 100))
-        out1 = model(x, deterministic=True)
-        out2 = model(x, deterministic=True)
+        out1 = model(x)
+        out2 = model(x)
         assert jnp.allclose(out1, out2)
 
     def test_mean_changes_output(self, rngs, pod_basis):
@@ -422,11 +422,11 @@ class TestPODDeepONetAdvanced:
         )
         x = jax.random.normal(rngs.params(), (2, 100))
 
-        eager_out = model(x, deterministic=True)
+        eager_out = model(x)
 
         @nnx.jit
         def jitted_forward(m, x):
-            return m(x, deterministic=True)
+            return m(x)
 
         jit_out = jitted_forward(model, x)
         assert jnp.allclose(eager_out, jit_out, atol=1e-5)

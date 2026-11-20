@@ -2,9 +2,9 @@
 
 A single tested implementation of "apply a function over an array in chunks",
 replacing the batched-evaluation loop that was copy-pasted across the
-neural-operator examples. Callers compose anything model-specific (a
-``deterministic=True`` flag, a fixed DeepONet trunk, output un-normalisation)
-by passing an appropriate callable.
+neural-operator examples. Callers compose anything model-specific (an
+evaluation view, ``nnx.view(model, deterministic=True)``, a fixed DeepONet trunk,
+output un-normalisation) by passing an appropriate callable.
 """
 
 from __future__ import annotations
