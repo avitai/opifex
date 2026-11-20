@@ -137,7 +137,6 @@ class VPINN(nnx.Module):
             param_dtype: Parameter storage dtype for neural network layers.
             rngs: Random number generators.
         """
-        super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.config = config or VPINNConfig()

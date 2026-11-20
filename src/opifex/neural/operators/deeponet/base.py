@@ -61,7 +61,6 @@ class DeepONet(nnx.Module):
             use_bias: Whether to use bias in linear layers
             rngs: Random number generators (keyword-only)
         """
-        super().__init__()
 
         # Validate that branch and trunk have same output dimension
         if branch_sizes[-1] != trunk_sizes[-1]:
@@ -257,7 +256,6 @@ class MultiFidelityDeepONet(nnx.Module):
             fusion_strategy: How to combine fidelities ('linear', 'nonlinear')
             rngs: Random number generators (keyword-only)
         """
-        super().__init__()
 
         self.branch_sizes = branch_sizes
         self.trunk_sizes = trunk_sizes

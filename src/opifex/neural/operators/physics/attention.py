@@ -36,7 +36,6 @@ class PhysicsAwareAttention(nnx.Module):
             dropout_rate: Dropout rate for attention weights
             rngs: Random number generators
         """
-        super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
@@ -163,7 +162,6 @@ class PhysicsCrossAttention(nnx.Module):
             dropout_rate: Dropout rate for attention weights
             rngs: Random number generators
         """
-        super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads

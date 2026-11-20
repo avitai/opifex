@@ -79,7 +79,6 @@ class LoRALinear(nnx.Module):
         rngs: nnx.Rngs | None = None,
     ) -> None:
         """Store the base layer and create the zero-``B`` / small-``A`` factors."""
-        super().__init__()
         if rank <= 0:
             raise ValueError(f"LoRA rank must be a positive integer, got {rank}.")
         in_features = base.in_features

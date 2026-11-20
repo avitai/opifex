@@ -91,7 +91,6 @@ class _MessageBlock(nnx.Module):
 
     def __init__(self, config: PaiNNConfig, *, rngs: nnx.Rngs) -> None:
         """Build the scalar feature MLP and the radial filter-generating linear."""
-        super().__init__()
         feature_dim = config.feature_dim
         dtype = default_float_dtype()
         self.scalar_hidden = nnx.Linear(feature_dim, feature_dim, param_dtype=dtype, rngs=rngs)
@@ -146,7 +145,6 @@ class _UpdateBlock(nnx.Module):
 
     def __init__(self, config: PaiNNConfig, *, rngs: nnx.Rngs) -> None:
         """Build the equivariant vector linears ``U, V`` and the gated scalar MLP."""
-        super().__init__()
         feature_dim = config.feature_dim
         dtype = default_float_dtype()
         # Bias-free linear maps over the channel axis keep equivariance (no l-mix).
@@ -205,7 +203,6 @@ class PaiNN(nnx.Module):
 
     def __init__(self, *, config: PaiNNConfig | None = None, rngs: nnx.Rngs) -> None:
         """Build the atomic-number embedding, radial basis and interaction blocks."""
-        super().__init__()
         self.config = config if config is not None else PaiNNConfig()
         self.embedding = nnx.Embed(
             num_embeddings=_MAX_ATOMIC_NUMBER + 1,

@@ -218,7 +218,6 @@ class HamiltonianBlockExpansion(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the expansion paths and the embedding -> (weights, bias) MLP."""
-        super().__init__()
         self.feature_irreps = Irreps(feature_irreps)
         self.embed_dim = int(embed_dim)
         paths, num_path_weight, num_bias = _build_paths(self.feature_irreps)

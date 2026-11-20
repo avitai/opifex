@@ -81,7 +81,6 @@ class MultiPhysicsDeepONet(nnx.Module):
             activation: Activation function
             rngs: Random number generators
         """
-        super().__init__()
         self.num_physics_systems = num_physics_systems
         self.use_attention = use_attention
         self.latent_dim = latent_dim

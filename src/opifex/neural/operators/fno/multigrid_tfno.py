@@ -97,8 +97,6 @@ class MultiGridTuckerDecomposition(nnx.Module):
         use_tensorly_init: bool = True,
         memory_optimal_contractions: bool = True,
     ) -> None:
-        super().__init__()
-
         self.tensor_shape = tensor_shape  # (in_channels, out_channels, *spatial_modes)
         self.use_complex = use_complex
         self.adaptive_rank_learning = adaptive_rank_learning
@@ -591,8 +589,6 @@ class AdaptiveRankMultiGridTFNO(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
-
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.hidden_channels = hidden_channels

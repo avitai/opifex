@@ -126,7 +126,6 @@ class MeanFieldGaussian(nnx.Module):
                 deviation ``sigma_y`` of the Gaussian likelihood; learnable via
                 ``log_observation_std``. Must be positive.
         """
-        super().__init__()
         if prior_std <= 0.0:
             raise ValueError(f"prior_std must be positive; got {prior_std!r}.")
         if observation_noise <= 0.0:
@@ -349,7 +348,6 @@ class UncertaintyEncoder(nnx.Module):
                 for mean and log_std).
             rngs: Random number generator state.
         """
-        super().__init__()
 
         # Build encoder layers
         layers = []
@@ -406,7 +404,6 @@ class AmortizedVariationalFramework(nnx.Module):
             variational_config: Configuration for variational inference.
             rngs: Random number generator state.
         """
-        super().__init__()
 
         self.base_model = base_model
         self.config = variational_config

@@ -65,7 +65,6 @@ class ChannelMLP(nnx.Module):
             activation: Non-linearity applied between hidden layers.
             rngs: Random number generators (keyword-only).
         """
-        super().__init__()
         self.activation = activation
         hidden = hidden_channels if hidden_channels is not None else in_channels
         widths = [in_channels] + [hidden] * (n_layers - 1) + [out_channels]
@@ -122,7 +121,6 @@ class UNOBlock(nnx.Module):
             activation: Block non-linearity.
             rngs: Random number generators (keyword-only).
         """
-        super().__init__()
         self.scaling = tuple(float(s) for s in scaling)
         self.activation = activation
         self.spectral_conv = SpectralConvResize(
@@ -227,7 +225,6 @@ class UNeuralOperator(nnx.Module):
         Raises:
             ValueError: If the per-layer list lengths do not match ``n_layers``.
         """
-        super().__init__()
         for name, seq in (
             ("uno_out_channels", uno_out_channels),
             ("uno_n_modes", uno_n_modes),

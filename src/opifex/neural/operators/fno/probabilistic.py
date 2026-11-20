@@ -113,7 +113,6 @@ class ProbabilisticFourierNeuralOperator(nnx.Module):
                 "log_variance_floor must be strictly below log_variance_ceiling; "
                 f"got floor={log_variance_floor!r}, ceiling={log_variance_ceiling!r}."
             )
-        super().__init__()
         self.out_channels = out_channels
         self.log_variance_floor = log_variance_floor
         self.log_variance_ceiling = log_variance_ceiling

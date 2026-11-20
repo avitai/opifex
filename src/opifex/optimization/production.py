@@ -164,7 +164,6 @@ class AdaptiveJAXOptimizer(nnx.Module):
             memory_efficiency_target: Target memory efficiency (0-1 scale)
             cache_size: Number of optimization strategies to cache
         """
-        super().__init__()
         self.performance_threshold = performance_threshold
         self.memory_efficiency_target = memory_efficiency_target
         self.optimization_cache: dict[str, OptimizedModel] = {}
@@ -372,7 +371,6 @@ class IntelligentGPUMemoryManager(nnx.Module):
             gc_trigger_threshold: Memory usage threshold to trigger GC (0-1)
             pool_sizes: Memory pool sizes as {pool_name: (min_size_mb, max_size_mb)}
         """
-        super().__init__()
         self.fragmentation_threshold = fragmentation_threshold
         self.gc_trigger_threshold = gc_trigger_threshold
 
@@ -468,7 +466,6 @@ class HybridPerformancePlatform(nnx.Module):
         physics_domain: PhysicsDomain = PhysicsDomain.GENERAL,
         target_latency_ms: float = 0.5,
     ) -> None:
-        super().__init__()
         self.jit_optimizer = jit_optimizer or AdaptiveJAXOptimizer()
         self.memory_manager = memory_manager or IntelligentGPUMemoryManager()
         self.physics_domain = physics_domain

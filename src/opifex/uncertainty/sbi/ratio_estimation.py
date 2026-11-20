@@ -66,7 +66,6 @@ class _RatioClassifier(nnx.Module):
 
     def __init__(self, theta_dim: int, x_dim: int, hidden_dim: int, *, rngs: nnx.Rngs) -> None:
         """Build a three-layer MLP mapping concatenated ``(theta, x)`` to a logit."""
-        super().__init__()
         in_dim = theta_dim + x_dim
         self.linear1 = nnx.Linear(in_features=in_dim, out_features=hidden_dim, rngs=rngs)
         self.linear2 = nnx.Linear(in_features=hidden_dim, out_features=hidden_dim, rngs=rngs)

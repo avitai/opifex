@@ -107,7 +107,6 @@ class LaplaceLayer(nnx.Module):
         param_dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.num_poles = num_poles
@@ -274,7 +273,6 @@ class LaplaceNeuralOperator(nnx.Module):
         param_dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.hidden_channels = hidden_channels

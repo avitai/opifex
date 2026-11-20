@@ -51,7 +51,6 @@ class MeshGraphNet(nnx.Module):
         activation: Callable[[jax.Array], jax.Array] = nnx.gelu,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         _validate_config(
             node_input_dim=node_input_dim,
             edge_input_dim=edge_input_dim,

@@ -40,7 +40,6 @@ class PhysicsInformedPriors(nnx.Module):
             rngs: Random number generators
 
         """
-        super().__init__()
 
         self.conservation_laws = conservation_laws
         self.boundary_conditions = boundary_conditions
@@ -240,7 +239,6 @@ class ConservationLawPriors(nnx.Module):
             rngs: Random number generators
 
         """
-        super().__init__()
 
         self.conservation_laws = conservation_laws
         self.uncertainty_scale = uncertainty_scale
@@ -458,7 +456,6 @@ class DomainSpecificPriors(nnx.Module):
             rngs: Random number generators
 
         """
-        super().__init__()
 
         self.domain = domain
         self.correlation_structure = correlation_structure
@@ -668,7 +665,6 @@ class HierarchicalBayesianFramework(nnx.Module):
             rngs: Random number generators
 
         """
-        super().__init__()
 
         self.hierarchy_levels = hierarchy_levels
         self.level_dimensions = level_dimensions
@@ -835,7 +831,6 @@ class PhysicsAwareUncertaintyPropagation(nnx.Module):
             rngs: Random number generators
 
         """
-        super().__init__()
 
         self.conservation_laws = conservation_laws
         self.constraint_tolerance = constraint_tolerance

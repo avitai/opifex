@@ -64,7 +64,6 @@ class MultiHeadAttention(nnx.Module):
             dropout_rate: Dropout rate for attention weights
             rngs: Random number generators for initialization
         """
-        super().__init__()
         self.features = features
         self.num_heads = num_heads
         self.head_dim = features // num_heads
@@ -158,7 +157,6 @@ class DensityFeatureExtractor(nnx.Module):
             use_advanced_features: Whether to include advanced physics features
             rngs: Random number generators for initialization
         """
-        super().__init__()
         self.feature_dim = feature_dim
         self.use_advanced_features = use_advanced_features
 
@@ -292,7 +290,6 @@ class NeuralXCFunctional(nnx.Module):
             dropout_rate: Dropout rate for regularization
             rngs: Random number generators
         """
-        super().__init__()
         self.hidden_sizes = hidden_sizes
         self.use_attention = use_attention
         self.use_advanced_features = use_advanced_features

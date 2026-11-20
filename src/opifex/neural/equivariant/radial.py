@@ -42,7 +42,6 @@ class BesselBasis(nnx.Module):
             rngs: Unused (the basis has no learnable parameters); accepted for a
                 uniform constructor signature across equivariant modules.
         """
-        super().__init__()
         if num_basis < 1:
             raise ValueError(f"num_basis must be >= 1, got {num_basis}")
         if cutoff <= 0.0:
@@ -85,7 +84,6 @@ class GaussianBasis(nnx.Module):
             rngs: Unused (no learnable parameters); accepted for a uniform
                 constructor signature.
         """
-        super().__init__()
         if num_basis < 2:
             raise ValueError(f"num_basis must be >= 2, got {num_basis}")
         if cutoff <= 0.0:
@@ -128,7 +126,6 @@ class PiecewiseLinearBasis(nnx.Module):
             cutoff: Support radius ``r_c`` (positive).
             rngs: Unused (the basis is parameter-free); accepted for interface uniformity.
         """
-        super().__init__()
         del rngs
         if num_basis < 1:
             raise ValueError(f"num_basis must be >= 1, got {num_basis}")

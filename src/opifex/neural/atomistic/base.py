@@ -69,7 +69,6 @@ class AtomisticModel(nnx.Module):
         max_edges: int,
     ) -> None:
         """Store the backbone, heads, neighbour-list builder and edge bound."""
-        super().__init__()
         if _ENERGY_HEAD_NAME not in heads:
             raise ValueError(
                 "AtomisticModel requires an 'energy' head; conservative "

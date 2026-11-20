@@ -203,7 +203,6 @@ class FusedFourierLayer(nnx.Module):
             activation: Activation function
             rngs: Random number generators
         """
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.modes = modes
@@ -264,7 +263,6 @@ class FusionOptimizedOperator(nnx.Module):
     """Base class for fusion-optimized neural operators."""
 
     def __init__(self) -> None:
-        super().__init__()
         self.fusion_enabled = True
         self.target_layout = self._detect_optimal_layout()
 

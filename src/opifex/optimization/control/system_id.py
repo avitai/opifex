@@ -62,8 +62,6 @@ class SystemIdentifier(nnx.Module):
         rngs: nnx.Rngs,
         dtype: jnp.dtype = jnp.float32,
     ) -> None:
-        super().__init__()
-
         self.state_dim = state_dim
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -606,8 +604,6 @@ class SystemDynamicsModel(nnx.Module):
         rngs: nnx.Rngs,
         dtype: jnp.dtype = jnp.float32,
     ) -> None:
-        super().__init__()
-
         self.model_type = model_type
         self.state_dim = state_dim
         self.input_dim = input_dim

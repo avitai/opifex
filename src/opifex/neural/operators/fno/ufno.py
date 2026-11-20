@@ -37,7 +37,6 @@ class UFNOEncoderBlock(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.modes = tuple(modes)
@@ -133,7 +132,6 @@ class UFNODecoderBlock(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.modes = tuple(modes)
         self.activation = activation
 
@@ -224,7 +222,6 @@ class UFourierNeuralOperator(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.num_levels = num_levels
         self.modes = tuple(modes)
         self.activation = activation

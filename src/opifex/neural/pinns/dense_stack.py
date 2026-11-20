@@ -64,7 +64,6 @@ class DenseStack(nnx.Module):
                 ``compute_dtype`` is ``None``.
             rngs: Random number generators for parameter initialisation.
         """
-        super().__init__()
         self.activation = activation
         self._compute_dtype = None if compute_dtype is None else canonicalize_dtype(compute_dtype)
         resolved_param_dtype = None if compute_dtype is None else canonicalize_dtype(param_dtype)

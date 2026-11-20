@@ -40,7 +40,6 @@ class ResourceOrchestrator(nnx.Module):
                 (currently unused)
             rngs: Random number generators for neural network initialization
         """
-        super().__init__()
         self.optimization_objective = optimization_objective
 
         # Neural network for resource allocation optimization

@@ -57,7 +57,6 @@ class SelfInteractionLayer(nnx.Module):
 
     def __init__(self, irreps: Irreps | str, *, rngs: nnx.Rngs) -> None:
         """Build the projections, the self tensor product and the norm gates."""
-        super().__init__()
         self.irreps = Irreps(irreps)
         self.gate_left = NormGate(self.irreps, rngs=rngs)
         self.gate_right = NormGate(self.irreps, rngs=rngs)

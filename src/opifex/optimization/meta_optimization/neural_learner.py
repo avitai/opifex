@@ -71,8 +71,6 @@ class LearnToOptimize(nnx.Module):
         if meta_network_layers is None:
             meta_network_layers = [128, 64, 32]
 
-        super().__init__()
-
         self.meta_network_layers = meta_network_layers
         self.base_optimizer = base_optimizer
         self.meta_learning_rate = meta_learning_rate

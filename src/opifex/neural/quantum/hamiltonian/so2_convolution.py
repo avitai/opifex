@@ -243,7 +243,6 @@ class SO2Linear(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the per-order SO(2) mixing weights and the static column plans."""
-        super().__init__()
         self.irreps_in = Irreps(irreps_in)
         self.irreps_out = Irreps(irreps_out)
         self.max_order = max_order
@@ -369,7 +368,6 @@ class SO2EdgeConvolution(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the per-order SO(2) mixing and record the static order cap."""
-        super().__init__()
         if sh_lmax < 0:
             raise ValueError(f"sh_lmax must be non-negative, got {sh_lmax}")
         self.irreps_in1 = Irreps(irreps_in)
@@ -447,7 +445,6 @@ class SO2ConvolutionLayer(nnx.Module):
         self, node_irreps: Irreps, sh_lmax: int, config: NequIPConfig, *, rngs: nnx.Rngs
     ) -> None:
         """Build the SO(2) edge convolution, radial network and self-interaction."""
-        super().__init__()
         self.node_irreps = node_irreps
         self._gate_irreps = _gate_input_irreps(node_irreps)
         self.so2_conv = SO2EdgeConvolution(
@@ -519,7 +516,6 @@ class SO2PairInteractionLayer(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the concat SO(2) coupling, radial modulation and output gate."""
-        super().__init__()
         if sh_lmax < 0:
             raise ValueError(f"sh_lmax must be non-negative, got {sh_lmax}")
         self.irreps = Irreps(irreps)

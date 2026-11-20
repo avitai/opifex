@@ -86,7 +86,6 @@ class MultiTaskEnergyHead(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build one independent :class:`EnergyHead` per task label."""
-        super().__init__()
         if not task_names:
             raise ValueError("MultiTaskEnergyHead requires at least one task name.")
         if len(set(task_names)) != len(task_names):

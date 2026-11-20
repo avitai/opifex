@@ -108,7 +108,6 @@ class ComputationAwareSpectralConvolution(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self._bsc = _BayesianSpectralConvolution(
             in_channels=in_channels,
             out_channels=out_channels,

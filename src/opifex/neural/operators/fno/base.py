@@ -55,7 +55,6 @@ class FourierSpectralConvolution(nnx.Module):
             modes: Number of Fourier modes to use
             rngs: Random number generators (keyword-only)
         """
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.modes = modes
@@ -150,7 +149,6 @@ class FourierLayer(nnx.Module):
                 Tucker ratio, or ratio of ``min(shape)`` for CP/TT); defaults to 0.5.
             rngs: Random number generators (keyword-only)
         """
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.modes = modes
@@ -499,7 +497,6 @@ class SpectralConvResize(nnx.Module):
             n_modes: Number of retained Fourier modes ``(modes_h, modes_w)``.
             rngs: Random number generators (keyword-only).
         """
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.modes_h, self.modes_w = int(n_modes[0]), int(n_modes[1])
@@ -614,7 +611,6 @@ class FourierNeuralOperator(nnx.Module):
                 which spectral weights are allocated per layer.
             rngs: Random number generators (keyword-only)
         """
-        super().__init__()
         self.out_channels = out_channels
         self.hidden_channels = hidden_channels
         self.modes = modes

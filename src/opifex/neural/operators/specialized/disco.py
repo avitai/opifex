@@ -112,7 +112,6 @@ class DiscreteContinuousConv2d(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Precompute the quadrature filter and initialise the per-basis channel weights."""
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.num_basis = num_basis

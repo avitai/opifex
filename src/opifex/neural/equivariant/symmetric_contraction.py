@@ -63,7 +63,6 @@ class SymmetricContraction(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the per-order ``U`` constants and per-element weight parameters."""
-        super().__init__()
         if correlation < 1:
             raise ValueError(f"correlation must be >= 1, got {correlation}.")
         self.irreps_in = Irreps(irreps_in)

@@ -92,7 +92,6 @@ class _InteractionBlock(nnx.Module):
 
     def __init__(self, config: SchNetConfig, *, rngs: nnx.Rngs) -> None:
         """Build the filter-generating MLP and the atomwise update MLP."""
-        super().__init__()
         feature_dim = config.feature_dim
         dtype = default_float_dtype()
         self.atomwise_in = nnx.Linear(feature_dim, feature_dim, param_dtype=dtype, rngs=rngs)
@@ -152,7 +151,6 @@ class SchNet(nnx.Module):
 
     def __init__(self, *, config: SchNetConfig | None = None, rngs: nnx.Rngs) -> None:
         """Build the atomic-number embedding, radial basis and interaction blocks."""
-        super().__init__()
         self.config = config if config is not None else SchNetConfig()
         self.embedding = nnx.Embed(
             num_embeddings=_MAX_ATOMIC_NUMBER + 1,

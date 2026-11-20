@@ -119,7 +119,6 @@ class PhysicsAttention(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.num_heads = num_heads
         self.dim_head = dim_head
         self.slice_num = slice_num
@@ -304,7 +303,6 @@ class TransolverBlock(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.last_layer = last_layer
         self.compute_dtype = canonicalize_dtype(compute_dtype)
         self.param_dtype = canonicalize_dtype(param_dtype)
@@ -412,7 +410,6 @@ class Transolver(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ) -> None:
-        super().__init__()
         self.config = config
         self.compute_dtype = canonicalize_dtype(compute_dtype)
         self.param_dtype = canonicalize_dtype(param_dtype)

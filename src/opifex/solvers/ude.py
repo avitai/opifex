@@ -68,7 +68,6 @@ class NeuralODE(nnx.Module):
             config: Solver configuration.
             rngs: Random number generators.
         """
-        super().__init__()
         self.net = net
         self.state_dim = state_dim
         self.config = config or UDEConfig()
@@ -157,7 +156,6 @@ class UDESolver(nnx.Module):
             config: Solver configuration.
             rngs: Random number generators.
         """
-        super().__init__()
         self.known_dynamics_fn = known_dynamics_fn
         self.neural_residual = neural_residual
         self.state_dim = state_dim
@@ -270,7 +268,6 @@ def create_ude(
         """MLP for the neural residual term."""
 
         def __init__(self, layers, activation) -> None:
-            super().__init__()
             self.layers = nnx.List(layers)
             self.activation = activation
 

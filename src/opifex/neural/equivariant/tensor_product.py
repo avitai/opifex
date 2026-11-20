@@ -92,7 +92,6 @@ class FullyConnectedTensorProduct(nnx.Module):
             rngs: Random number generators (keyword-only); ``rngs.params()``
                 seeds the path weights.
         """
-        super().__init__()
         self.irreps_in1 = Irreps(irreps_in1)
         self.irreps_in2 = Irreps(irreps_in2)
         self.irreps_out = Irreps(irreps_out)
@@ -257,7 +256,6 @@ class ChannelwiseTensorProduct(nnx.Module):
         Raises:
             ValueError: If the inputs and output do not share one multiplicity.
         """
-        super().__init__()
         self.irreps_in1 = Irreps(irreps_in1)
         self.irreps_in2 = Irreps(irreps_in2)
         self.irreps_out = Irreps(irreps_out)

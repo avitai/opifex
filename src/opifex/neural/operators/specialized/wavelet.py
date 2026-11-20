@@ -54,7 +54,6 @@ class WaveletNeuralOperator(nnx.Module):
             use_learnable_wavelets: Whether to use learnable wavelet bases
             rngs: Random number generators
         """
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.hidden_channels = hidden_channels

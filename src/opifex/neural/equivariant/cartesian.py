@@ -347,7 +347,6 @@ class CartesianLinear(nnx.Module):
             rngs: Random number generators (keyword-only); ``rngs.params()``
                 seeds the three weight matrices.
         """
-        super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         key = rngs.params()

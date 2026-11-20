@@ -134,7 +134,6 @@ class _IntegerEmbedding(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the learned table or the fixed random Fourier frequencies."""
-        super().__init__()
         if feature_dim % 2 != 0:
             raise ValueError(f"feature_dim {feature_dim} must be even for conditioning")
         self.embedding_type = embedding_type
@@ -199,7 +198,6 @@ class ChargeSpinConditioning(nnx.Module):
         rngs: nnx.Rngs,
     ) -> None:
         """Build the charge / spin embeddings and the mixing linear."""
-        super().__init__()
         self.config = config if config is not None else ChargeSpinConditioningConfig()
         feature_dim = self.config.feature_dim
         embedding_type = self.config.embedding_type
