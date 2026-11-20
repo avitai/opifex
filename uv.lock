@@ -4342,10 +4342,10 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.10.0" },
     { name = "sqlalchemy", marker = "extra == 'platform'", specifier = ">=2.0.0" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'platform'", specifier = ">=2.0.0" },
-    { name = "substrax", specifier = ">=0.1.31" },
-    { name = "substrax", extras = ["mlflow"], marker = "extra == 'mlflow'", specifier = ">=0.1.31" },
-    { name = "substrax", extras = ["modal"], marker = "extra == 'dev'", specifier = ">=0.1.31" },
-    { name = "substrax", extras = ["notebooks", "testing"], marker = "extra == 'test'", specifier = ">=0.1.31" },
+    { name = "substrax", specifier = ">=0.1.32" },
+    { name = "substrax", extras = ["mlflow"], marker = "extra == 'mlflow'", specifier = ">=0.1.32" },
+    { name = "substrax", extras = ["modal"], marker = "extra == 'dev'", specifier = ">=0.1.32" },
+    { name = "substrax", extras = ["notebooks", "testing"], marker = "extra == 'test'", specifier = ">=0.1.32" },
     { name = "tensorboard-plugin-profile", marker = "extra == 'profiling'", specifier = ">=2.20.6" },
     { name = "tensorflow", marker = "extra == 'profiling'", specifier = ">=2.20.0" },
     { name = "tensorly", specifier = ">=0.9.0" },
@@ -6074,7 +6074,7 @@ wheels = [
 
 [[package]]
 name = "substrax"
-version = "0.1.31"
+version = "0.1.32"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "etils", extra = ["epath"] },
@@ -6086,9 +6086,9 @@ dependencies = [
     { name = "orbax-checkpoint" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ae/81/637538c599f84da82e8783edb9d9924a9cab07a3c3bb9720eed7c8a6d4cc/substrax-0.1.31.tar.gz", hash = "sha256:198418c9f0f8b8d9ed37cfb11e9a5f4eb62c4548e995464b0123255a78fadef7", size = 218007, upload-time = "2026-11-19T20:34:15.45Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/f8/8328df8a07d258ed0dd252fb6087054886c51e9d66fb897ac7d2c8846153/substrax-0.1.32.tar.gz", hash = "sha256:4fb742b0b5a5dfdc74c2985978b1effae7ab3d69f22ba80243c8d669e5cbb06c", size = 218271, upload-time = "2026-11-20T23:33:07.366Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e5/48/f2eaf31476087b6d9172b911680e7146b9bc7a29b702d484b0f95f227453/substrax-0.1.31-py3-none-any.whl", hash = "sha256:ff267c4f54bd1e71fb9f9a37547e3f30ba06e1f4177e2b4aecf2ec82917e8ba1", size = 262921, upload-time = "2026-11-19T20:34:13.437Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/a7/a00db2deebcbd10632b1cba3bd2144cd758c2006418e966f4e0733e4869a/substrax-0.1.32-py3-none-any.whl", hash = "sha256:ac1d79f027247f916277e622597d660dd36d8d4c8a129a0994403f80936496f5", size = 263186, upload-time = "2026-11-20T23:33:05.79Z" },
 ]
 
 [package.optional-dependencies]

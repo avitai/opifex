@@ -12,11 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Requires `calibrax[publication]>=0.1.21`, whose `Registry.register` refuses a name the
   registry already holds with `DuplicateRegistrationError` (a `ValueError`, exported from
   `calibrax.core`) instead of replacing the item registered first.
-- Requires `substrax>=0.1.31` (and its `modal`, `mlflow`, `notebooks` and `testing` extras at
+- Requires `substrax>=0.1.32` (and its `modal`, `mlflow`, `notebooks` and `testing` extras at
   that floor). `substrax.testing.gradients.check_parameter_gradients` and
   `check_input_gradients`, used by the solver gradient tests, compare against finite
-  differences along a direction of unit norm; before 0.1.31 the step grew with the square root
-  of the parameter count.
+  differences along a direction of unit norm (before 0.1.31 the step grew with the square root
+  of the parameter count), with a step of 1e-6 (0.1.32; it was 1e-4).
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.
