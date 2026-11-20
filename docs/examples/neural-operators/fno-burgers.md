@@ -38,7 +38,7 @@ this workflow:
 | NeuralOperator (PyTorch) | Opifex (JAX) |
 |--------------------------|--------------|
 | `FNO1d(modes, width)` | `FourierNeuralOperator(modes=, hidden_channels=, in_channels=1, out_channels=1, spatial_dims=1)` |
-| `torch.utils.data.DataLoader` | `create_burgers_loader(resolution=, viscosity_range=, val_fraction=)` |
+| `torch.utils.data.DataLoader` | `create_burgers_loader(resolution=, viscosity_range=, val_fraction=, seed=)` |
 | Manual training loop | `Trainer(model, config).fit(train_data, val_data)` |
 | `torch.optim.AdamW(model.parameters())` | `optax.adamw()` (handled internally by `Trainer`) |
 

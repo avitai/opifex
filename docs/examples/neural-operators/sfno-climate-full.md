@@ -33,7 +33,7 @@ Conservation-aware training is a key feature of this example. By configuring `Co
 | `SphericalConv(in_ch, out_ch, modes)` | Spherical spectral convolution via `lmax` parameter |
 | Manual conservation loss implementation | `ConservationConfig(laws=["energy", "mass"])` built into `Trainer` |
 | `trainer.train(epochs=100)` | `Trainer(model, config).fit(train_data, val_data)` |
-| `torch.DataLoader(dataset)` | `create_shallow_water_loader()` (datarax) |
+| `torch.DataLoader(dataset)` | `create_shallow_water_loader(seed=)` (datarax) |
 
 **Key differences:**
 
