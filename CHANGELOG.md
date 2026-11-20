@@ -91,6 +91,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `v` as parameters do not restore.
 - **Breaking:** `PINNConfig` requires `seed`, and `PINNSolver.solve` requires its `config`;
   a call without one sampled its collocation points from seed 42.
+- `ScientificComputingIntegrator.comprehensive_scientific_validation` stamps its result
+  with `time.time()`; its `timestamp` was a uniform draw from key 0 times 1000, the same
+  value on every call.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

@@ -6,6 +6,7 @@ and conservation checking for the Version 7.4 Production Optimization system.
 Part of: Hybrid Performance Platform + Intelligent Edge + Adaptive Optimization
 """
 
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
@@ -852,7 +853,7 @@ class ScientificComputingIntegrator:
 
         results = {
             "domain": self.domain.value,
-            "timestamp": jax.random.uniform(jax.random.PRNGKey(0)) * 1000,  # Simplified timestamp
+            "timestamp": time.time(),
         }
 
         # Physics profiling
