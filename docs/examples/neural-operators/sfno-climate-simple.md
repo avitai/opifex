@@ -35,7 +35,7 @@ a spherical neural operator.
 | `SFNO(spectral_transform, ...)` | `create_climate_sfno(in_channels=, out_channels=, lmax=, rngs=)` |
 | Manual spherical harmonics setup | Built-in SHT with configurable `lmax` |
 | `torch.DataLoader(dataset)` | `create_shallow_water_loader()` (datarax) |
-| `trainer.train(epochs=N)` | `Trainer(model, config, rngs).fit(train_data)` |
+| `trainer.train(epochs=N)` | `Trainer(model, config).fit(train_data)` |
 | Manual `torch.meshgrid` for sphere | Spherical grid handled internally by SFNO |
 | `model.to(device)` | Automatic device placement via JAX |
 
@@ -256,7 +256,6 @@ config = TrainingConfig(
 trainer = Trainer(
     model=model,
     config=config,
-    rngs=nnx.Rngs(SEED),
 )
 
 trained_model, metrics = trainer.fit(

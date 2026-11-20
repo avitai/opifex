@@ -72,25 +72,21 @@ class Trainer(nnx.Module):
     Args:
         model: The neural network model to train
         config: Training configuration (composable)
-        rngs: Optional RNG state for reproducibility
     """
 
     def __init__(
         self,
         model: nnx.Module,
         config: TrainingConfig,
-        rngs: nnx.Rngs | None = None,
     ) -> None:
         """Initialize the trainer.
 
         Args:
             model: Neural network model to train
             config: Training configuration with optional physics configs
-            rngs: Optional RNG state
         """
         self.model = model
         self.config = config
-        self.rngs = rngs if rngs is not None else nnx.Rngs(0)
 
         # The optimizer is built by substrax from the one owner of its settings; the
         # configured schedule is its learning rate, read back on device for the metrics.
@@ -103,7 +99,6 @@ class Trainer(nnx.Module):
             step=0,
             epoch=0,
             best_loss=float("inf"),
-            rngs=self.rngs,
         )
 
         # The checkpoint store, when a directory is configured; opened lazily by substrax.

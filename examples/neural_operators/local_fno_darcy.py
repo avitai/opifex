@@ -350,7 +350,7 @@ def main() -> dict[str, float | int]:
             loss_config=LossConfig(loss_type="relative_l2"),
             progress_callback=record_loss,
         )
-        trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(SEED))
+        trainer = Trainer(model=model, config=config)
 
         print(f"Training {model_name} (Adam lr={LEARNING_RATE}, relative-L2 loss)...")
         start = time.time()

@@ -153,7 +153,7 @@ def main() -> dict[str, float | int]:
             laws=["energy", "mass"], energy_tolerance=1e-6, energy_monitoring=True
         ),
     )
-    trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(seed))
+    trainer = Trainer(model=model, config=config)
     print(f"Optimizer: Adam (lr={learning_rate}), Conservation: energy, mass")
 
     print("\nStarting training...")

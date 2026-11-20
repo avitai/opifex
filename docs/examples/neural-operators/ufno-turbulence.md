@@ -315,7 +315,7 @@ from opifex.core.training import OptimizationConfig
 config = TrainingConfig(
     num_epochs=num_epochs, optimization_config=OptimizationConfig(learning_rate=learning_rate),
     batch_size=batch_size, verbose=True)
-trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(seed))
+trainer = Trainer(model=model, config=config)
 
 # Register energy conservation as custom loss
 def energy_loss_fn(model, x, y_pred, y_true):

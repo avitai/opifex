@@ -150,7 +150,7 @@ config = TrainingConfig(
     num_epochs=100, optimization_config=OptimizationConfig(learning_rate=1e-3), batch_size=32,
     loss_config=LossConfig(loss_type="relative_l2"),
 )
-trainer = Trainer(model=operator, config=config, rngs=nnx.Rngs(42))
+trainer = Trainer(model=operator, config=config)
 trained_model, _ = trainer.fit(
     train_data=(x_train_norm, y_train_norm),
     val_data=(x_test_norm, y_test_norm),

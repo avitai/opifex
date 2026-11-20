@@ -184,7 +184,7 @@ def main() -> dict[str, float | int]:
         batch_size=batch_size,
         verbose=True,
     )
-    trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(seed))
+    trainer = Trainer(model=model, config=config)
 
     # Register energy conservation as custom loss
     trainer.custom_losses["energy"] = energy_loss_fn

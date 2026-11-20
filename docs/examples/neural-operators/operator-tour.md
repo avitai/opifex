@@ -321,7 +321,7 @@ config = TrainingConfig(
     validation_frequency=10, verbose=False,
     loss_config=LossConfig(loss_type="relative_l2"),
 )
-trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(42))
+trainer = Trainer(model=model, config=config)
 trained_model, metrics = trainer.fit(
     train_data=(X_train_n, Y_train_n),
     val_data=(X_test_n, Y_test_n),

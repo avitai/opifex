@@ -334,7 +334,6 @@ def main() -> dict[str, float | int]:
     trainer = Trainer(
         model=model,
         config=config,
-        rngs=nnx.Rngs(SEED),
     )
 
     start_time = time.time()

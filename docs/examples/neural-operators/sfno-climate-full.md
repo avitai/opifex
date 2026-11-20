@@ -32,7 +32,7 @@ Conservation-aware training is a key feature of this example. By configuring `Co
 | `SFNO(spectral_transform, ...)` | `create_climate_sfno(in_channels=, out_channels=, lmax=, rngs=)` |
 | `SphericalConv(in_ch, out_ch, modes)` | Spherical spectral convolution via `lmax` parameter |
 | Manual conservation loss implementation | `ConservationConfig(laws=["energy", "mass"])` built into `Trainer` |
-| `trainer.train(epochs=100)` | `Trainer(model, config, rngs).fit(train_data, val_data)` |
+| `trainer.train(epochs=100)` | `Trainer(model, config).fit(train_data, val_data)` |
 | `torch.DataLoader(dataset)` | `create_shallow_water_loader()` (datarax) |
 
 **Key differences:**
@@ -48,7 +48,7 @@ Conservation-aware training is a key feature of this example. By configuring `Co
 |-------------|--------------|
 | `FourierNeuralOperatorNet(cfg)` | `create_climate_sfno(in_channels=, out_channels=, lmax=, rngs=)` |
 | Hydra YAML for conservation config | `ConservationConfig(laws=["energy", "mass"])` (pure Python) |
-| `Solver(cfg)` | `Trainer(model, config, rngs)` |
+| `Solver(cfg)` | `Trainer(model, config)` |
 | `DistributedManager()` | `jax.devices()`, automatic device management |
 
 **Key differences:**
@@ -287,7 +287,7 @@ config = TrainingConfig(
     batch_size=BATCH_SIZE, verbose=True,
     conservation_config=ConservationConfig(
         laws=["energy", "mass"], energy_tolerance=1e-6, energy_monitoring=True))
-trainer = Trainer(model=model, config=config, rngs=nnx.Rngs(SEED))
+trainer = Trainer(model=model, config=config)
 
 trained_model, metrics = trainer.fit(
     train_data=(jnp.array(X_train), jnp.array(Y_train)),

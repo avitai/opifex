@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`salted-hash`). Colliding keywords take opposite signs half the time, so cosine scores
   can be negative. Requires `scikit-learn>=1.9.1`, now a declared dependency.
   `AdaptiveJAXOptimizer`'s cache key holds the workload's text instead of its hash.
+- **Breaking:** `Trainer` takes no `rngs` and `TrainingState` has no `rngs` field. Nothing
+  drew from them; a missing `rngs` was replaced by `nnx.Rngs(0)`. A model keeps its own
+  `nnx.Rngs`. Pass `Trainer(model, config)`; the examples and docs are updated.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

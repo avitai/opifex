@@ -218,7 +218,6 @@ class TrainingState:
     optimizer: nnx.Optimizer
     step: int = 0
     epoch: int = 0
-    rngs: nnx.Rngs = field(default_factory=lambda: nnx.Rngs(0))
 
     # Enhanced metrics tracking
     best_loss: float = float("inf")

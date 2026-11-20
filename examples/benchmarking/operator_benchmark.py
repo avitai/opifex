@@ -466,7 +466,7 @@ class NeuralOperatorComparativeStudy:
             verbose=False,
             loss_config=LossConfig(loss_type="relative_l2"),
         )
-        trainer = Trainer(model=operator, config=config, rngs=nnx.Rngs(self.seed))
+        trainer = Trainer(model=operator, config=config)
 
         start_time = time.perf_counter()
         trained_model, _ = trainer.fit(
