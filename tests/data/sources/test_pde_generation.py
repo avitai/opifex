@@ -6,8 +6,8 @@ Written test-first (TDD). Every generator returns the uniform contract
 
 (channels-first, FNO layout) mapping a conditioning field to the FINAL-time
 solution. These tests assert that contract: exact shapes, ``float32`` dtype,
-all-finite values, and determinism (same seed -> identical arrays; different
-seed -> different arrays).
+all-finite values, and determinism (same key -> identical arrays; different
+key -> different arrays that share no sample).
 """
 
 import jax
@@ -54,22 +54,24 @@ def _assert_contract(
 
 
 def _assert_deterministic(generate, kwargs: dict) -> None:
-    """Same seed reproduces arrays; a different seed changes them."""
+    """The same key reproduces the arrays; another key gives samples that share none."""
     first = generate(**kwargs)
     same = generate(**kwargs)
     np.testing.assert_array_equal(first["input"], same["input"])
     np.testing.assert_array_equal(first["output"], same["output"])
 
-    different = generate(**{**kwargs, "seed": kwargs["seed"] + 1})
+    different = generate(**{**kwargs, "key": jax.random.fold_in(kwargs["key"], 1)})
     assert not np.array_equal(first["input"], different["input"])
     assert not np.array_equal(first["output"], different["output"])
+    for sample in first["input"]:
+        assert not any(np.array_equal(sample, other) for other in different["input"])
 
 
 class TestGenerateBurgers:
     """1D Burgers: IC field -> final-time solution, 1 channel each."""
 
     def _kwargs(self) -> dict:
-        return {"n_samples": N_SAMPLES, "resolution": RESOLUTION, "seed": 7}
+        return {"n_samples": N_SAMPLES, "resolution": RESOLUTION, "key": jax.random.key(7)}
 
     def test_contract(self) -> None:
         dataset = generate_burgers(**self._kwargs())
@@ -89,7 +91,7 @@ class TestGenerateDarcy:
     """Darcy: permeability coefficient -> steady solution, 1 channel each."""
 
     def _kwargs(self) -> dict:
-        return {"n_samples": N_SAMPLES, "resolution": RESOLUTION, "seed": 11}
+        return {"n_samples": N_SAMPLES, "resolution": RESOLUTION, "key": jax.random.key(11)}
 
     def test_contract_smooth(self) -> None:
         dataset = generate_darcy(**self._kwargs())
@@ -119,7 +121,7 @@ class TestGenerateDiffusion:
     """Diffusion-advection: IC field -> final state, 1 channel each."""
 
     def _kwargs(self) -> dict:
-        return {"n_samples": N_SAMPLES, "resolution": RESOLUTION, "seed": 13}
+        return {"n_samples": N_SAMPLES, "resolution": RESOLUTION, "key": jax.random.key(13)}
 
     def test_contract(self) -> None:
         dataset = generate_diffusion(**self._kwargs())
@@ -140,7 +142,7 @@ class TestGenerateDiffusion:
         Advection-diffusion on a periodic domain conserves the mean exactly and
         strictly dissipates the L2 norm of every non-constant field when ``D > 0``.
         """
-        dataset = generate_diffusion(n_samples=16)
+        dataset = generate_diffusion(n_samples=16, key=jax.random.key(0))
         initial = dataset["input"].astype(np.float64)
         final = dataset["output"].astype(np.float64)
         assert np.all(np.isfinite(final))
@@ -185,7 +187,7 @@ class TestGenerateNavierStokes:
     """Navier-Stokes: [u0, v0] -> final [u, v], 2 channels each."""
 
     def _kwargs(self) -> dict:
-        return {"n_samples": N_SAMPLES, "resolution": RESOLUTION, "seed": 17}
+        return {"n_samples": N_SAMPLES, "resolution": RESOLUTION, "key": jax.random.key(17)}
 
     def test_contract(self) -> None:
         dataset = generate_navier_stokes(**self._kwargs())
@@ -205,7 +207,7 @@ class TestGenerateShallowWater:
     """Shallow water: [h, u, v] init -> final [h, u, v], 3 channels each."""
 
     def _kwargs(self) -> dict:
-        return {"n_samples": N_SAMPLES, "resolution": RESOLUTION, "seed": 19}
+        return {"n_samples": N_SAMPLES, "resolution": RESOLUTION, "key": jax.random.key(19)}
 
     def test_contract(self) -> None:
         dataset = generate_shallow_water(**self._kwargs())

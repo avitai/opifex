@@ -11,8 +11,10 @@ Every generator returns one uniform contract::
 
 in channels-first (FNO) layout, where ``C`` counts the physical fields.
 
-Per-sample randomness uses ``jax.random.PRNGKey(seed + i)`` so a given
-``(seed, i)`` always yields the same sample. The four JAX-native PDEs
+Every generator takes a ``key`` and splits it into one key per sample with a single
+``jax.random.split`` (the wide key tree the JAX documentation recommends), so a given
+``(key, n_samples)`` always yields the same samples and two independent keys share none.
+The four JAX-native PDEs
 (Burgers, diffusion-advection, Navier-Stokes, shallow water) generate their
 whole batch with a single ``jax.jit(jax.vmap(per_sample_fn))(keys)`` call —
 initial-condition synthesis *and* the time integration run vmapped on-device.
@@ -24,8 +26,7 @@ Python loop over samples.
 The initial-condition / coefficient-field *physics* (the Gaussian/sine/step
 bumps, the thresholded-GRF and smooth log-Fourier permeability, the
 Taylor-Green / shear / random-vortex flows, the shallow-water ``h/u/v`` init)
-is reused from the former per-sample Grain sources, recast here as pure
-functions over a PRNG key.
+is written as pure functions over a PRNG key.
 """
 
 from collections.abc import Callable
@@ -33,6 +34,7 @@ from collections.abc import Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
+from substrax.rng import split_key
 
 from opifex.physics.solvers.darcy import solve_darcy_flow
 from opifex.physics.solvers.navier_stokes import (
@@ -54,11 +56,6 @@ __all__ = [
 ]
 
 
-def _per_sample_keys(seed: int, n_samples: int) -> jax.Array:
-    """Build the stack of per-sample keys ``PRNGKey(seed + i)`` for ``i < n``."""
-    return jax.vmap(jax.random.PRNGKey)(seed + jnp.arange(n_samples))
-
-
 def _stack_float32(batched: jax.Array) -> np.ndarray:
     """Move a device batch to a contiguous ``float32`` NumPy array."""
     return np.asarray(batched, dtype=np.float32)
@@ -66,11 +63,11 @@ def _stack_float32(batched: jax.Array) -> np.ndarray:
 
 def _run_vmapped(
     per_sample_fn: Callable[[jax.Array], jax.Array],
-    seed: int,
+    key: jax.Array,
     n_samples: int,
 ) -> np.ndarray:
-    """Jit+vmap ``per_sample_fn`` over per-sample keys and return float32 NumPy."""
-    keys = _per_sample_keys(seed, n_samples)
+    """Jit+vmap ``per_sample_fn`` over per-sample keys split from ``key``; return float32 NumPy."""
+    keys = split_key(key, n_samples)
     batched = jax.jit(jax.vmap(per_sample_fn))(keys)
     return _stack_float32(batched)
 
@@ -281,7 +278,7 @@ def generate_burgers(
     viscosity_range: tuple[float, float] = (0.1, 0.1),
     time_final: float = 1.0,
     num_steps: int = 200,
-    seed: int = 42,
+    key: jax.Array,
 ) -> dict[str, np.ndarray]:
     """Generate the canonical 1D Burgers operator dataset (IC -> final solution).
 
@@ -297,7 +294,7 @@ def generate_burgers(
         viscosity_range: ``(low, high)`` uniform range for the per-sample viscosity.
         time_final: Integration time; the solution there is the label.
         num_steps: Number of spectral time steps (accuracy/cost trade-off).
-        seed: Base seed; sample ``i`` uses ``PRNGKey(seed + i)``.
+        key: Split into one key per sample.
 
     Returns:
         ``{"input": (n, 1, res), "output": (n, 1, res)}`` float32 arrays.
@@ -318,7 +315,7 @@ def generate_burgers(
         )[-1]
         return jnp.stack([ic, final])  # (2, res): [input, output]
 
-    stacked = _run_vmapped(per_sample, seed, n_samples)  # (n, 2, res)
+    stacked = _run_vmapped(per_sample, key, n_samples)  # (n, 2, res)
     return {"input": stacked[:, 0:1], "output": stacked[:, 1:2]}
 
 
@@ -328,7 +325,7 @@ def generate_darcy(
     resolution: int = 64,
     coeff_range: tuple[float, float] = (0.1, 1.0),
     field_type: str = "smooth",
-    seed: int = 42,
+    key: jax.Array,
 ) -> dict[str, np.ndarray]:
     """Generate a Darcy-flow operator dataset (permeability -> steady solution).
 
@@ -342,7 +339,7 @@ def generate_darcy(
         coeff_range: ``(low, high)`` permeability bounds (smooth scaling range, or
             the two discrete values for ``field_type='binary'``).
         field_type: ``'smooth'`` log-Fourier field, or ``'binary'`` thresholded GRF.
-        seed: Base seed; sample ``i`` uses ``PRNGKey(seed + i)``.
+        key: Split into one key per sample.
 
     Returns:
         ``{"input": (n, 1, res, res), "output": (n, 1, res, res)}`` float32 arrays.
@@ -363,7 +360,7 @@ def generate_darcy(
     kx, ky = jnp.meshgrid(freqs, freqs, indexing="ij")
     grf_filter = ((kx**2 + ky**2 + 9.0) ** (-1.0)).at[0, 0].set(0.0)
 
-    keys = _per_sample_keys(seed, n_samples)
+    keys = split_key(key, n_samples)
     coeff_fields = jax.jit(
         jax.vmap(lambda k: _darcy_coeff(k, resolution, coeff_range, field_type, grf_filter, grid))
     )(keys)
@@ -383,7 +380,7 @@ def generate_diffusion(
     diffusion_range: tuple[float, float] = (0.01, 0.1),
     advection_range: tuple[float, float] = (-1.0, 1.0),
     time_final: float = 1.0,
-    seed: int = 42,
+    key: jax.Array,
 ) -> dict[str, np.ndarray]:
     """Generate a 2D diffusion-advection dataset (IC -> state at ``time_final``).
 
@@ -398,7 +395,7 @@ def generate_diffusion(
         diffusion_range: ``(low, high)`` uniform range for the diffusion coefficient.
         advection_range: ``(low, high)`` uniform range for each advection velocity.
         time_final: Physical time of the output state.
-        seed: Base seed; sample ``i`` uses ``PRNGKey(seed + i)``.
+        key: Split into one key per sample.
 
     Returns:
         ``{"input": (n, 1, res, res), "output": (n, 1, res, res)}`` float32 arrays.
@@ -414,7 +411,7 @@ def generate_diffusion(
         final = solve_advection_diffusion_exact(ic, diffusion, velocity, time_final=time_final)
         return jnp.stack([ic, final])
 
-    stacked = _run_vmapped(per_sample, seed, n_samples)  # (n, 2, res, res)
+    stacked = _run_vmapped(per_sample, key, n_samples)  # (n, 2, res, res)
     return {"input": stacked[:, 0:1], "output": stacked[:, 1:2]}
 
 
@@ -424,7 +421,7 @@ def generate_navier_stokes(
     resolution: int = 64,
     viscosity_range: tuple[float, float] = (0.001, 0.01),
     time_range: tuple[float, float] = (0.0, 1.0),
-    seed: int = 42,
+    key: jax.Array,
 ) -> dict[str, np.ndarray]:
     """Generate a 2D incompressible Navier-Stokes dataset ([u0, v0] -> final [u, v]).
 
@@ -433,7 +430,7 @@ def generate_navier_stokes(
         resolution: Spatial grid resolution.
         viscosity_range: ``(low, high)`` uniform range for the kinematic viscosity.
         time_range: ``(start, end)`` integration window; the end-time slice is the label.
-        seed: Base seed; sample ``i`` uses ``PRNGKey(seed + i)``.
+        key: Split into one key per sample.
 
     Returns:
         ``{"input": (n, 2, res, res), "output": (n, 2, res, res)}`` float32 arrays
@@ -450,7 +447,7 @@ def generate_navier_stokes(
         output_fields = jnp.stack([u_traj[-1], v_traj[-1]])  # (2, res, res)
         return jnp.stack([input_fields, output_fields])  # (2, 2, res, res)
 
-    stacked = _run_vmapped(per_sample, seed, n_samples)  # (n, 2, 2, res, res)
+    stacked = _run_vmapped(per_sample, key, n_samples)  # (n, 2, 2, res, res)
     return {"input": stacked[:, 0], "output": stacked[:, 1]}
 
 
@@ -458,14 +455,14 @@ def generate_shallow_water(
     *,
     n_samples: int,
     resolution: int = 64,
-    seed: int = 42,
+    key: jax.Array,
 ) -> dict[str, np.ndarray]:
     """Generate a 2D shallow-water dataset ([h, u, v] init -> final [h, u, v]).
 
     Args:
         n_samples: Number of samples to generate.
         resolution: Spatial grid resolution.
-        seed: Base seed; sample ``i`` uses ``PRNGKey(seed + i)``.
+        key: Split into one key per sample.
 
     Returns:
         ``{"input": (n, 3, res, res), "output": (n, 3, res, res)}`` float32 arrays
@@ -482,5 +479,5 @@ def generate_shallow_water(
         output_fields = jnp.stack([h_final, u_final, v_final])
         return jnp.stack([input_fields, output_fields])  # (2, 3, res, res)
 
-    stacked = _run_vmapped(per_sample, seed, n_samples)  # (n, 2, 3, res, res)
+    stacked = _run_vmapped(per_sample, key, n_samples)  # (n, 2, 3, res, res)
     return {"input": stacked[:, 0], "output": stacked[:, 1]}

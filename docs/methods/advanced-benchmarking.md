@@ -70,6 +70,7 @@ runner = BenchmarkRunner(
     analyzer=analyzer,
     results_manager=manager,
     output_dir="./benchmark_results",
+    seed=42,  # the data and every operator's initialisation come from it
 )
 
 # Run benchmark suite
@@ -313,6 +314,7 @@ runner = BenchmarkRunner(
     analyzer=analyzer,
     results_manager=manager,
     output_dir="./benchmark_results",
+    seed=42,  # the data and every operator's initialisation come from it
 )
 
 # Run full benchmark suite

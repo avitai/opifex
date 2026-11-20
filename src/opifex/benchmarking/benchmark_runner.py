@@ -100,6 +100,8 @@ class BenchmarkRunner:
         analyzer: AnalysisEngine | None = None,
         results_manager: ResultsManager | None = None,
         output_dir: str | Path | None = None,
+        *,
+        seed: int,
     ) -> None:
         """Initialize benchmark runner with all components.
 
@@ -114,7 +116,10 @@ class BenchmarkRunner:
                 ``$AVITAI_OUTPUT_DIR`` or under the process's temporary output
                 directory, never the working tree. The default evaluator and
                 results manager write under it.
+            seed: Seed every benchmark this runner runs generates its data and
+                initialises its operator from.
         """
+        self.seed = seed
         self.output_dir = resolve_benchmark_output_dir(output_dir)
 
         self.registry = registry or OperatorBenchmarkRegistry()
@@ -475,6 +480,7 @@ class BenchmarkRunner:
             ExecutionConfig(
                 n_epochs=n_epochs,
                 batch_size=batch_size,
+                seed=self.seed,
             )
         )
 
@@ -541,6 +547,7 @@ class BenchmarkRunner:
             batch_size=batch_size,
             resolution=resolution,
             val_fraction=100 / n_samples,
+            seed=self.seed,
         )
         return loaders.train, loaders.val
 

@@ -502,7 +502,7 @@ class TestPDEBenchNormalization:
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True
         )
-        loader = create_pdebench_loader(config, batch_size=4)
+        loader = create_pdebench_loader(config, batch_size=4, seed=0)
         batch = loader.step()
         for field in ("input", "target"):
             values = np.array(batch[field])
@@ -751,7 +751,7 @@ class TestPDEBenchLoader:
         from opifex.data.sources.scientific import PDEBenchConfig
 
         config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
-        loader = create_pdebench_loader(config, batch_size=4)
+        loader = create_pdebench_loader(config, batch_size=4, seed=0)
         assert isinstance(loader, Pipeline)
         batch = loader.step()
         assert batch["input"].shape[0] == 4
@@ -762,7 +762,7 @@ class TestPDEBenchLoader:
         from opifex.data.sources.scientific import PDEBenchConfig
 
         config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
-        loader = create_pdebench_loader(config, batch_size=4)
+        loader = create_pdebench_loader(config, batch_size=4, seed=0)
         b0 = loader.step()
         b1 = loader.step()
         assert b0["input"].shape == b1["input"].shape
@@ -774,7 +774,7 @@ class TestPDEBenchLoader:
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True
         )
-        _assert_epoch_matches_step(lambda: create_pdebench_loader(config, batch_size=4))
+        _assert_epoch_matches_step(lambda: create_pdebench_loader(config, batch_size=4, seed=0))
 
     def test_a_shuffled_loader_serves_each_record_once_per_epoch(
         self, pdebench_hdf5_file: Path
@@ -788,7 +788,10 @@ class TestPDEBenchLoader:
         )
         stored = PDEBenchSource(config, rngs=nnx.Rngs(0)).inputs
         served = np.concatenate(
-            [np.asarray(batch["input"]) for batch in create_pdebench_loader(config, batch_size=4)]
+            [
+                np.asarray(batch["input"])
+                for batch in create_pdebench_loader(config, batch_size=4, seed=0)
+            ]
         )
         rows = [row.tobytes() for row in np.asarray(stored)]
         assert sorted(row.tobytes() for row in served) == sorted(rows)
@@ -1066,7 +1069,7 @@ class TestVTKMeshSource:
         from opifex.data.sources.scientific import create_vtk_mesh_loader, VTKMeshConfig
 
         config = VTKMeshConfig(directory=vtu_directory, node_features=("velocity",))
-        loader = create_vtk_mesh_loader(config, batch_size=2)
+        loader = create_vtk_mesh_loader(config, batch_size=2, seed=0)
         assert isinstance(loader, Pipeline)
         batch = loader.step()
         assert batch["node_positions"].shape[0] == 2
@@ -1076,4 +1079,4 @@ class TestVTKMeshSource:
         from opifex.data.sources.scientific import create_vtk_mesh_loader, VTKMeshConfig
 
         config = VTKMeshConfig(directory=vtu_directory, node_features=("velocity",))
-        _assert_epoch_matches_step(lambda: create_vtk_mesh_loader(config, batch_size=2))
+        _assert_epoch_matches_step(lambda: create_vtk_mesh_loader(config, batch_size=2, seed=0))

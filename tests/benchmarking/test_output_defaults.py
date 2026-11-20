@@ -33,7 +33,7 @@ def output_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def _runner(**kwargs: object) -> BenchmarkRunner:
     with patch("opifex.benchmarking.benchmark_runner.OperatorBenchmarkRegistry") as registry:
         registry.return_value.list_available_operators.return_value = []
-        return BenchmarkRunner(**kwargs)  # pyright: ignore[reportArgumentType]
+        return BenchmarkRunner(seed=0, **kwargs)  # pyright: ignore[reportArgumentType]
 
 
 def test_results_manager_defaults_under_the_output_variable(output_root: Path) -> None:

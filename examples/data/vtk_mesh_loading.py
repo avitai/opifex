@@ -158,6 +158,7 @@ def main() -> dict[str, float | int]:
     loader = create_vtk_mesh_loader(
         VTKMeshConfig(directory=tmp_dir, node_features=("velocity",)),
         batch_size=len(resolutions),
+        seed=0,
     )
     batch = loader.step()
     print("\nPipeline.step() batch shapes:")

@@ -196,6 +196,8 @@ The operator maps a conditioning field (`"input"`) to the **final-time** solutio
 Burgers equation (1D, `C=1`).
 
 ```python
+import jax
+
 from opifex.data.sources import generate_burgers
 
 data = generate_burgers(
@@ -203,7 +205,7 @@ data = generate_burgers(
     resolution=128,
     viscosity_range=(0.1, 0.1),
     time_range=(0.0, 1.0),
-    seed=42,
+    key=jax.random.key(42),
 )
 print(data["input"].shape)   # (1000, 1, 128)
 print(data["output"].shape)  # (1000, 1, 128)
@@ -214,6 +216,8 @@ print(data["output"].shape)  # (1000, 1, 128)
 Darcy flow (2D, `C=1`): permeability `a(x)` → pressure `u(x)`.
 
 ```python
+import jax
+
 from opifex.data.sources import generate_darcy
 
 data = generate_darcy(
@@ -221,7 +225,7 @@ data = generate_darcy(
     resolution=64,
     coeff_range=(0.1, 1.0),
     field_type="smooth",   # or "binary"
-    seed=42,
+    key=jax.random.key(42),
 )
 print(data["input"].shape)   # (1000, 1, 64, 64)
 ```
@@ -232,6 +236,8 @@ Diffusion-advection on the periodic unit square (2D, `C=1`). The output is the e
 Fourier solution at `time_final`, so it has no time-stepping error or stability limit.
 
 ```python
+import jax
+
 from opifex.data.sources import generate_diffusion
 
 data = generate_diffusion(
@@ -240,7 +246,7 @@ data = generate_diffusion(
     diffusion_range=(0.01, 0.1),
     advection_range=(-1.0, 1.0),
     time_final=1.0,
-    seed=42,
+    key=jax.random.key(42),
 )
 ```
 
@@ -249,6 +255,8 @@ data = generate_diffusion(
 Incompressible Navier–Stokes (2D, `C=2` for `(u, v)`).
 
 ```python
+import jax
+
 from opifex.data.sources import generate_navier_stokes
 
 data = generate_navier_stokes(
@@ -256,7 +264,7 @@ data = generate_navier_stokes(
     resolution=64,
     viscosity_range=(0.001, 0.01),
     time_range=(0.0, 1.0),
-    seed=42,
+    key=jax.random.key(42),
 )
 print(data["output"].shape)  # (1000, 2, 64, 64)
 ```
@@ -266,12 +274,14 @@ print(data["output"].shape)  # (1000, 2, 64, 64)
 Shallow water equations (2D, `C=3` for `(h, u, v)`).
 
 ```python
+import jax
+
 from opifex.data.sources import generate_shallow_water
 
 data = generate_shallow_water(
     n_samples=500,
     resolution=64,
-    seed=42,
+    key=jax.random.key(42),
 )
 print(data["output"].shape)  # (500, 3, 64, 64)
 ```
@@ -283,11 +293,12 @@ has been removed; there is no in-pipeline transform replacement. Apply normaliza
 explicitly with `GaussianNormalizer` from `opifex.core.normalization`.
 
 ```python
+import jax
 import jax.numpy as jnp
 from opifex.core.normalization import GaussianNormalizer
 from opifex.data.sources import generate_darcy
 
-data = generate_darcy(n_samples=1000, resolution=64, seed=42)
+data = generate_darcy(n_samples=1000, resolution=64, key=jax.random.key(42))
 inputs = jnp.asarray(data["input"])
 
 # Fit on training data, then normalize / denormalize
@@ -337,12 +348,13 @@ To build a bespoke pipeline, start from a `generate_*` dataset and apply your ow
 preprocessing before batching:
 
 ```python
+import jax
 import jax.numpy as jnp
 from opifex.core.normalization import GaussianNormalizer
 from opifex.data.sources import generate_burgers
 
 # 1. Generate the dataset eagerly
-data = generate_burgers(n_samples=1000, resolution=128, seed=42)
+data = generate_burgers(n_samples=1000, resolution=128, key=jax.random.key(42))
 inputs = jnp.asarray(data["input"])
 outputs = jnp.asarray(data["output"])
 
@@ -393,9 +405,11 @@ for resolution in resolutions:
 Examine generated data directly from a generator (no pipeline needed):
 
 ```python
+import jax
+
 from opifex.data.sources import generate_darcy
 
-data = generate_darcy(n_samples=100, resolution=64, seed=42)
+data = generate_darcy(n_samples=100, resolution=64, key=jax.random.key(42))
 
 print(f"Input shape: {data['input'].shape}")    # (100, 1, 64, 64) permeability
 print(f"Output shape: {data['output'].shape}")  # (100, 1, 64, 64) pressure

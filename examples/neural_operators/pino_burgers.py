@@ -149,7 +149,7 @@ including the initial condition, i.e. exactly the ``nt = NUM_TIME`` time frames.
 
 
 # %%
-def generate_trajectories(n_samples: int, seed: int) -> jax.Array:
+def generate_trajectories(n_samples: int, key: jax.Array) -> jax.Array:
     """Generate ``n_samples`` Burgers space-time trajectories ``u(t, x)``.
 
     Each sample draws a GRF initial condition and integrates the viscous Burgers
@@ -158,7 +158,7 @@ def generate_trajectories(n_samples: int, seed: int) -> jax.Array:
 
     Args:
         n_samples: Number of trajectories to generate.
-        seed: Base seed; sample ``i`` uses ``jax.random.key(seed + i)``.
+        key: Split into one key per sample.
 
     Returns:
         Trajectories of shape ``(n_samples, NUM_TIME, NUM_SPACE)`` including the
@@ -176,7 +176,7 @@ def generate_trajectories(n_samples: int, seed: int) -> jax.Array:
             num_snapshots=NUM_TIME - 1,
         )
 
-    keys = jax.vmap(jax.random.key)(seed + jnp.arange(n_samples))
+    keys = jax.random.split(key, n_samples)
     return jax.jit(jax.vmap(per_sample))(keys)
 
 
@@ -286,8 +286,10 @@ def main() -> dict[str, float | int]:
     # --- Data generation ---
     print()
     print("Generating Burgers space-time trajectories (jit+vmap spectral solver)...")
-    train_traj = np.asarray(generate_trajectories(N_TRAIN, SEED))
-    test_traj = np.asarray(generate_trajectories(N_TEST, SEED + N_TRAIN))
+    # One split of the seed's key: the train and test trajectories come from independent keys.
+    train_key, test_key = jax.random.split(jax.random.key(SEED))
+    train_traj = np.asarray(generate_trajectories(N_TRAIN, train_key))
+    test_traj = np.asarray(generate_trajectories(N_TEST, test_key))
     print(f"Train trajectories: {train_traj.shape}")
     print(f"Test trajectories:  {test_traj.shape}")
 

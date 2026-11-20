@@ -428,7 +428,7 @@ encode the input function, and DeepONet's dot-product landscape plateaus early.
 
 ```python
 # 1. Use enough data (~1000 samples) and epochs (~300)
-train_loader = create_darcy_loader(n_samples=1000, ...)
+train_loader = create_darcy_loader(n_samples=1000, ..., seed=0)
 
 # 2. Gaussian-normalize the branch input and target on the TRAIN split
 X_train_branch_n = (X_train_branch - x_mean) / x_std

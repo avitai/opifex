@@ -247,7 +247,7 @@ def analyze_darcy_flow_dataset(
         # Generate the dataset with the vmapped datarax generator and measure
         # timing. Fields are channels-first ``(1, H, W)``.
         start_time = time.time()
-        data = generate_darcy(n_samples=n_samples, resolution=resolution, seed=42)
+        data = generate_darcy(n_samples=n_samples, resolution=resolution, key=jax.random.key(42))
         samples = [
             {"input": data["input"][i], "output": data["output"][i]} for i in range(n_samples)
         ]

@@ -401,7 +401,7 @@ class TestBenchmarkRunner:
 
     def test_runner_initialization(self):
         """Test benchmark runner initialization."""
-        runner = BenchmarkRunner()
+        runner = BenchmarkRunner(seed=0)
 
         assert runner.registry is not None
         assert runner.evaluator is not None
@@ -419,6 +419,7 @@ class TestBenchmarkRunner:
                 registry=registry,
                 results_manager=results_manager,
                 output_dir=tmpdir,
+                seed=0,
             )
 
             assert runner.registry is registry
@@ -427,7 +428,7 @@ class TestBenchmarkRunner:
     def test_single_benchmark_execution(self):
         """Test single benchmark execution."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            runner = BenchmarkRunner(output_dir=tmpdir)
+            runner = BenchmarkRunner(output_dir=tmpdir, seed=0)
 
             # Add a test benchmark
             benchmark = BenchmarkConfig(
@@ -483,7 +484,7 @@ class TestBenchmarkRunner:
 
     def test_database_update(self):
         """Test benchmark database update."""
-        runner = BenchmarkRunner()
+        runner = BenchmarkRunner(seed=0)
 
         summary = runner.update_benchmark_database()
 
@@ -502,6 +503,7 @@ class TestIntegrationWorkflows:
             runner = BenchmarkRunner(
                 results_manager=ResultsManager(storage_path=tmpdir),
                 output_dir=tmpdir,
+                seed=0,
             )
 
             # Setup test benchmarks
@@ -547,7 +549,7 @@ class TestIntegrationWorkflows:
     def test_domain_specific_workflow(self):
         """Test domain-specific benchmarking workflow."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            runner = BenchmarkRunner(output_dir=tmpdir)
+            runner = BenchmarkRunner(output_dir=tmpdir, seed=0)
 
             # Add multiple fluid dynamics benchmarks
             for i in range(2):

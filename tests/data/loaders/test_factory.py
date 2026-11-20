@@ -95,6 +95,20 @@ def test_same_seed_reproduces_training_order() -> None:
     assert not np.array_equal(same_a, other)
 
 
+def test_adjacent_seeds_generate_disjoint_datasets() -> None:
+    """Seeds ``s`` and ``s + 1`` share no sample.
+
+    Per-sample keys built as ``PRNGKey(seed + i)`` shifted every seed's samples by one onto
+    its neighbour's; the loader derives one data key per seed and splits it.
+    """
+    first = create_darcy_loader(n_samples=6, resolution=16, batch_size=3, val_fraction=0.5, seed=3)
+    second = create_darcy_loader(n_samples=6, resolution=16, batch_size=3, val_fraction=0.5, seed=4)
+    first_inputs = _first_batch(first.val)["input"]
+    second_inputs = _first_batch(second.val)["input"]
+    for sample in first_inputs:
+        assert not any(np.array_equal(sample, other) for other in second_inputs)
+
+
 @pytest.mark.parametrize(("factory", "channels", "spatial_ndim"), _PDE_CASES)
 def test_train_drops_the_ragged_batch_and_val_serves_every_record_once(
     factory, channels, spatial_ndim

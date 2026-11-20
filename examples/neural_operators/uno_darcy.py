@@ -94,8 +94,8 @@ spectral weights to converge.
 ## Data Generation
 
 Opifex provides `generate_darcy`, which generates Darcy flow equation data
-(permeability-to-pressure mapping) as channels-first arrays; sample `i` of a call
-is drawn from `seed + i`. (`create_darcy_loader` wraps it in datarax train/val
+(permeability-to-pressure mapping) as channels-first arrays; a call splits its `key`
+into one key per sample. (`create_darcy_loader` wraps it in datarax train/val
 pipelines for batched streaming.)
 """
 
@@ -249,11 +249,14 @@ def main() -> dict[str, float | int]:
     # generate_darcy returns channels-first {"input": (n, 1, H, W), "output": (n, 1, H, W)};
     # UNO (and its grid embedding, eval, and visualization) work channels-last, so
     # we move the channel axis to the end once here, at the data boundary.
-    def _generate(n_samples: int, grid: int, first_seed: int) -> tuple[np.ndarray, np.ndarray]:
-        data = generate_darcy(n_samples=n_samples, resolution=grid, seed=first_seed)
+    def _generate(n_samples: int, grid: int, key: jax.Array) -> tuple[np.ndarray, np.ndarray]:
+        data = generate_darcy(n_samples=n_samples, resolution=grid, key=key)
         return np.moveaxis(data["input"], 1, -1), np.moveaxis(data["output"], 1, -1)
 
-    x_all, y_all = _generate(n_train + n_test, resolution, seed)
+    # One split of the seed's key: the train/test samples and the high-resolution test set
+    # come from independent keys, so no sample repeats one already seen.
+    data_key, high_resolution_key = jax.random.split(jax.random.key(seed))
+    x_all, y_all = _generate(n_train + n_test, resolution, data_key)
     x_train, y_train = x_all[:n_train], y_all[:n_train]
     x_test, y_test = x_all[n_train:], y_all[n_train:]
 
@@ -355,8 +358,7 @@ def main() -> dict[str, float | int]:
     target_resolution = resolution * 2
     print(f"Testing zero-shot super-resolution: {resolution} -> {target_resolution}")
     print(f"Generating a real {target_resolution}x{target_resolution} Darcy test set...")
-    # Seeds after every training and test seed, so no sample repeats one already seen.
-    x_high, y_high = _generate(n_test, target_resolution, seed + n_train + n_test)
+    x_high, y_high = _generate(n_test, target_resolution, high_resolution_key)
     x_high_n = jnp.array((x_high - x_mean) / x_std)
     y_high_jnp = jnp.array(y_high)
 

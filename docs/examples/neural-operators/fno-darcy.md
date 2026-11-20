@@ -48,7 +48,7 @@ this workflow:
 |--------------------------|--------------|
 | `FNO(n_modes, hidden_channels)` | `FourierNeuralOperator(modes=, hidden_channels=, num_layers=, rngs=)` |
 | Manual `torch.meshgrid` for positional encoding | `GridEmbedding2D(in_channels=, grid_boundaries=)` |
-| Custom Darcy dataset / loader | `create_darcy_loader(n_samples=, resolution=, ...)` |
+| Custom Darcy dataset / loader | `create_darcy_loader(n_samples=, resolution=, ..., seed=)` |
 | `LpLoss(d=2, p=2)` (relative) | `LossConfig(loss_type="relative_l2")` |
 | `trainer.train(train_loader, epochs)` | `Trainer(model, config).fit(train_data, val_data)` |
 | `AdamW(lr, weight_decay)` + LR schedule | `OptimizationConfig(optimizer="adamw", weight_decay=, schedule_type=...)` |

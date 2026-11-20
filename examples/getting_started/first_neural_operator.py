@@ -259,13 +259,16 @@ def main() -> dict[str, float | int]:
     print("Loading Darcy flow data...")
 
     # Each split is a separate generation at its own resolution, as channels-first
-    # ``(N, 1, H, W)`` arrays.
-    def _generate(n_samples: int, resolution: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
-        data = generate_darcy(n_samples=n_samples, resolution=resolution, seed=seed)
+    # ``(N, 1, H, W)`` arrays, from its own key: one split of the seed's key gives three
+    # independent keys, so no test sample repeats a training sample.
+    train_key, test_key_32, test_key_64 = jax.random.split(jax.random.key(SEED), 3)
+
+    def _generate(n_samples: int, resolution: int, key: jax.Array) -> tuple[np.ndarray, np.ndarray]:
+        data = generate_darcy(n_samples=n_samples, resolution=resolution, key=key)
         return data["input"], data["output"]
 
     # Training data at low resolution.
-    X_train, Y_train = _generate(N_TRAIN, TRAIN_RESOLUTION, SEED)
+    X_train, Y_train = _generate(N_TRAIN, TRAIN_RESOLUTION, train_key)
 
     # Normalize data for better training (compute stats from training data)
     X_mean, X_std = X_train.mean(), X_train.std()
@@ -274,12 +277,12 @@ def main() -> dict[str, float | int]:
     Y_train = (Y_train - Y_mean) / Y_std
 
     # Test data at the SAME resolution.
-    X_test_32, Y_test_32 = _generate(N_TEST, TEST_RESOLUTION_1, SEED + 1000)
+    X_test_32, Y_test_32 = _generate(N_TEST, TEST_RESOLUTION_1, test_key_32)
     X_test_32 = (X_test_32 - X_mean) / X_std
     Y_test_32 = (Y_test_32 - Y_mean) / Y_std
 
     # Test data at a HIGHER resolution - for zero-shot super-resolution!
-    X_test_64, Y_test_64 = _generate(N_TEST, TEST_RESOLUTION_2, SEED + 2000)
+    X_test_64, Y_test_64 = _generate(N_TEST, TEST_RESOLUTION_2, test_key_64)
     X_test_64 = (X_test_64 - X_mean) / X_std
     Y_test_64 = (Y_test_64 - Y_mean) / Y_std
 

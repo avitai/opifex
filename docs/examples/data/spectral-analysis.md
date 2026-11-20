@@ -81,9 +81,11 @@ returned channels-first as `(N, 1, H, W)`, so drop the channel axis to obtain th
 `(N, H, W)` fields used for the FFT:
 
 ```python
+import jax
+
 from opifex.data.sources import generate_darcy
 
-data = generate_darcy(n_samples=20, resolution=64, seed=42)
+data = generate_darcy(n_samples=20, resolution=64, key=jax.random.key(42))
 train_inputs = jnp.asarray(data["input"][:, 0])
 train_outputs = jnp.asarray(data["output"][:, 0])
 ```

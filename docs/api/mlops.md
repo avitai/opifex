@@ -35,6 +35,7 @@ Every `Experiment` method is a coroutine.
 import asyncio
 import tempfile
 
+import jax
 import jax.numpy as jnp
 import optax
 from flax import nnx
@@ -51,7 +52,7 @@ from opifex.mlops import (
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 
 tracking_uri = f"file://{tempfile.mkdtemp()}"  # or your tracking server's URI
-data = generate_burgers(n_samples=16, resolution=64)
+data = generate_burgers(n_samples=16, resolution=64, key=jax.random.key(0))
 inputs, targets = jnp.asarray(data["input"]), jnp.asarray(data["output"])
 
 model = FourierNeuralOperator(1, 1, 16, 8, 2, spatial_dims=1, rngs=nnx.Rngs(0))
