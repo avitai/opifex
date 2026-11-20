@@ -117,6 +117,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Transolver` drop the flag they forwarded to it. Transolver defaulted it to `True`, so
   with `dropout_rate > 0` its dropout now runs in training mode; call `.eval()` for
   inference.
+- **Breaking:** `NeuralXCFunctional` and its parts take no `deterministic` argument: the
+  functional's `__call__`, `energy_density_from_sigma`, `xc_potential_components`,
+  `compute_functional_derivative` and `assess_chemical_accuracy`, `DensityFeatureExtractor` and
+  the functional's attention layer. Dropout follows the module's mode (`.train()`/`.eval()`).
+  `NeuralXCSpec.from_functional` splits an evaluation view of the functional
+  (`nnx.view(..., deterministic=True)`), so the SCF evaluates the functional without dropout
+  whatever mode the caller's module is in, and the caller's module is left unchanged.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

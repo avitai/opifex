@@ -181,8 +181,17 @@ class NeuralXCSpec:
 
     @classmethod
     def from_functional(cls, functional: NeuralXCFunctional) -> NeuralXCSpec:
-        """Split a :class:`NeuralXCFunctional` into ``(graphdef, state)``."""
-        graphdef, state = nnx.split(functional)
+        """Split an evaluation view of a :class:`NeuralXCFunctional` into ``(graphdef, state)``.
+
+        The SCF evaluates the functional, not a dropout sample of it, whatever mode the caller's
+        module is in. ``nnx.view(..., deterministic=True)`` gives a view in evaluation mode that
+        shares the caller's arrays and leaves the caller's module unchanged; the split's graphdef
+        carries that mode. ``raise_if_not_found=False`` because a functional built with
+        ``dropout_rate=0`` holds no dropout layer.
+        """
+        graphdef, state = nnx.split(
+            nnx.view(functional, deterministic=True, raise_if_not_found=False)
+        )
         return cls(graphdef=graphdef, state=state)
 
     def merge(self) -> NeuralXCFunctional:

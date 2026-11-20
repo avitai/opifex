@@ -176,7 +176,7 @@ Creating Neural XC Functional...
 
 ```python
 def loss_fn(model, densities, gradients, targets):
-    predictions = model(densities, gradients, deterministic=True)
+    predictions = model(densities, gradients)
     return jnp.mean((predictions - targets) ** 2)
 
 optimizer = nnx.Optimizer(model, optax.adam(1e-3), wrt=nnx.Param)
@@ -208,7 +208,8 @@ Training complete!
 ### Step 4: Evaluate Performance
 
 ```python
-test_predictions = model(test_densities, test_gradients, deterministic=True)
+model.eval()
+test_predictions = model(test_densities, test_gradients)
 
 mse = jnp.mean((test_predictions - test_xc_ref) ** 2)
 r2 = 1 - jnp.sum((test_xc_ref - test_predictions) ** 2) / \
@@ -291,7 +292,7 @@ Physics Constraint Verification:
 ```python
 # Functional derivative for Kohn-Sham equations
 xc_potential = model.compute_functional_derivative(
-    density, gradients, deterministic=True
+    density, gradients
 )
 ```
 
