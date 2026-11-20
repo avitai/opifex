@@ -75,8 +75,6 @@ class PhysicsInformedOperator(nnx.Module):
     def __call__(
         self,
         coordinates: jax.Array,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Apply physics-informed operator.
 
@@ -86,7 +84,6 @@ class PhysicsInformedOperator(nnx.Module):
         Args:
             coordinates: Space-time coordinates
                 Shape: (batch_size, input_dim) or (batch_size, n_points, input_dim)
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Solution field values
@@ -103,7 +100,7 @@ class PhysicsInformedOperator(nnx.Module):
             n_points = None
 
         # Apply neural network
-        solution_flat = self.network(coords_flat, deterministic=deterministic)
+        solution_flat = self.network(coords_flat)
 
         # Reshape back if needed
         if batch_size is not None and n_points is not None:
@@ -116,14 +113,11 @@ class PhysicsInformedOperator(nnx.Module):
     def compute_physics_loss(
         self,
         coordinates: jax.Array,
-        *,
-        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jax.Array:
         """Compute physics-based loss components.
 
         Args:
             coordinates: Space-time coordinates
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Physics loss value
@@ -143,7 +137,7 @@ class PhysicsInformedOperator(nnx.Module):
         def solution_fn(coords_single):
             """Function to differentiate - single point evaluation."""
             coords_batch = coords_single[None, :]  # Add batch dimension
-            solution = self.network(coords_batch, deterministic=True)
+            solution = self.network(coords_batch)
             return solution[0, 0]  # Return scalar value
 
         # Example: Heat equation ∂u/∂t = ∇²u
@@ -204,7 +198,7 @@ class PhysicsInformedOperator(nnx.Module):
 
         # solution shape: (batch, n_points, n_channels); channels are the flux
         # components and axis 1 indexes the spatial grid.
-        solution = self.__call__(coordinates, deterministic=True)
+        solution = self.__call__(coordinates)
         spacing = self._grid_spacing(coordinates)
         return conservation_residual_loss(solution, spatial_axis=1, spacing=spacing)
 
@@ -226,12 +220,12 @@ class PhysicsInformedOperator(nnx.Module):
     def _compute_symmetry_loss(self, coordinates: jax.Array) -> jax.Array:
         """Compute symmetry constraint violation loss."""
         # Example: translational symmetry
-        solution_original = self.__call__(coordinates, deterministic=True)
+        solution_original = self.__call__(coordinates)
 
         # Apply small translation
         if coordinates.shape[-1] >= 1:
             coords_translated = coordinates.at[..., 0].add(0.1)
-            solution_translated = self.__call__(coords_translated, deterministic=True)
+            solution_translated = self.__call__(coords_translated)
 
             # Symmetry violation
             symmetry_violation = solution_original - solution_translated
@@ -242,24 +236,21 @@ class PhysicsInformedOperator(nnx.Module):
         self,
         coordinates: jax.Array,
         target_solution: jax.Array | None = None,
-        *,
-        deterministic: bool = True,
     ) -> dict[str, jax.Array]:
         """Compute total loss combining data and physics components.
 
         Args:
             coordinates: Space-time coordinates
             target_solution: Target solution (optional, for supervised learning)
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Dictionary containing individual loss components and total loss
         """
         # Get prediction
-        solution = self.__call__(coordinates, deterministic=deterministic)
+        solution = self.__call__(coordinates)
 
         # Physics loss
-        physics_loss = self.compute_physics_loss(coordinates, deterministic=deterministic)
+        physics_loss = self.compute_physics_loss(coordinates)
 
         # Data loss (if target provided)
         if target_solution is not None:

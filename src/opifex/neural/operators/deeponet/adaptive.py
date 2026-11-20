@@ -135,7 +135,6 @@ class AdaptiveDeepONet(nnx.Module):
         *,
         resolution_level: int | None = None,
         adaptive_weights: bool = True,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Apply Adaptive DeepONet.
 
@@ -144,7 +143,6 @@ class AdaptiveDeepONet(nnx.Module):
             trunk_input: Query coordinates (batch, num_locations, trunk_input_dim)
             resolution_level: Specific resolution level to use (optional)
             adaptive_weights: Whether to use adaptive weighting
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Function values at query locations (batch, num_locations)
@@ -155,10 +153,8 @@ class AdaptiveDeepONet(nnx.Module):
         # If specific resolution level is requested
         if resolution_level is not None:
             level = min(resolution_level, self.num_resolution_levels - 1)
-            branch_encoding = self.branch_networks[level](branch_input, deterministic=deterministic)
-            trunk_encoding_flat = self.trunk_networks[level](
-                trunk_input_flat, deterministic=deterministic
-            )
+            branch_encoding = self.branch_networks[level](branch_input)
+            trunk_encoding_flat = self.trunk_networks[level](trunk_input_flat)
 
             trunk_encoding = trunk_encoding_flat.reshape(batch_size, num_locations, -1)
 
@@ -169,10 +165,8 @@ class AdaptiveDeepONet(nnx.Module):
         branch_encodings: list[jax.Array] = []
 
         for level in range(self.num_resolution_levels):
-            branch_encoding = self.branch_networks[level](branch_input, deterministic=deterministic)
-            trunk_encoding_flat = self.trunk_networks[level](
-                trunk_input_flat, deterministic=deterministic
-            )
+            branch_encoding = self.branch_networks[level](branch_input)
+            trunk_encoding_flat = self.trunk_networks[level](trunk_input_flat)
 
             # Apply residual connections
             if self.use_residual_connections and level > 0:

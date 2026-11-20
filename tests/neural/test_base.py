@@ -56,7 +56,7 @@ class TestStandardMLP:
         mlp = StandardMLP(layer_sizes=[4, 8, 1], rngs=rngs)
 
         x = jnp.ones((2, 4))  # Batch of 2, input dim 4
-        output = mlp(x, deterministic=True)
+        output = mlp(x)
 
         assert output.shape == (2, 1)
         assert jnp.isfinite(output).all()
@@ -69,9 +69,10 @@ class TestStandardMLP:
 
         x = jnp.ones((2, 4))
 
-        # Training mode (deterministic=False)
-        output1 = mlp(x, deterministic=False)
-        output2 = mlp(x, deterministic=False)
+        # Training mode, which nnx modules are built in
+        mlp.train()
+        output1 = mlp(x)
+        output2 = mlp(x)
 
         # Outputs should be different due to dropout randomness
         assert not jnp.allclose(output1, output2, atol=1e-5)
@@ -86,9 +87,10 @@ class TestStandardMLP:
 
         x = jnp.ones((2, 4))
 
-        # Inference mode (deterministic=True)
-        output1 = mlp(x, deterministic=True)
-        output2 = mlp(x, deterministic=True)
+        # Inference mode: eval() turns the dropout off
+        mlp.eval()
+        output1 = mlp(x)
+        output2 = mlp(x)
 
         # Outputs should be identical in inference mode
         assert jnp.allclose(output1, output2)
@@ -105,15 +107,17 @@ class TestStandardMLP:
         x = jnp.ones((2, 4))
 
         # Training mode should apply dropout to final layer
-        output1 = mlp(x, deterministic=False)
-        output2 = mlp(x, deterministic=False)
+        mlp.train()
+        output1 = mlp(x)
+        output2 = mlp(x)
 
         # Should be different due to final dropout
         assert not jnp.allclose(output1, output2, atol=1e-5)
 
         # Inference mode should be deterministic
-        output_inf1 = mlp(x, deterministic=True)
-        output_inf2 = mlp(x, deterministic=True)
+        mlp.eval()
+        output_inf1 = mlp(x)
+        output_inf2 = mlp(x)
         assert jnp.allclose(output_inf1, output_inf2)
 
     def test_different_activations(self):
@@ -126,7 +130,7 @@ class TestStandardMLP:
         for activation in activations:
             mlp = StandardMLP(layer_sizes=[4, 8, 1], activation=activation, rngs=rngs)
 
-            output = mlp(x, deterministic=True)
+            output = mlp(x)
             assert output.shape == (1, 1)
             assert jnp.isfinite(output).all()
 
@@ -149,5 +153,5 @@ class TestStandardMLP:
         x = jnp.ones((2, 4))
 
         # This should work fine
-        output = mlp(x, deterministic=False)
+        output = mlp(x)
         assert output.shape == (2, 1)

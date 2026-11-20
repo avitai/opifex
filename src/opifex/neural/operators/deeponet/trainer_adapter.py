@@ -37,8 +37,6 @@ class DeepONetTrainerAdapter(nnx.Module):
     def __call__(
         self,
         x: dict[str, jax.Array],
-        *,
-        deterministic: bool = True,
         **kwargs: Any,
     ) -> jax.Array:
         """Forward pass with dict input.
@@ -46,7 +44,6 @@ class DeepONetTrainerAdapter(nnx.Module):
         Args:
             x: Dict with 'branch' and 'trunk' keys containing the
                respective input arrays.
-            deterministic: Whether to use deterministic mode.
             **kwargs: Additional keyword arguments forwarded to the model.
 
         Returns:
@@ -64,5 +61,5 @@ class DeepONetTrainerAdapter(nnx.Module):
         if missing:
             raise TypeError(f"DeepONetTrainerAdapter input dict missing keys: {missing}")
         return self.model(  # pyright: ignore[reportCallIssue]
-            x["branch"], x["trunk"], deterministic=deterministic, **kwargs
+            x["branch"], x["trunk"], **kwargs
         )

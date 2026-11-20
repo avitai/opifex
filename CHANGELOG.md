@@ -108,6 +108,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `FourierContinuationExtender`, `FourierBoundaryHandler`, `SystemIdentifier` and
   `SystemDynamicsModel` take no `deterministic` argument. Each ignored it or passed it to
   layers that ignore it (`mode-flag-default`).
+- **Breaking:** `StandardMLP` takes no `deterministic` argument: its dropout follows the
+  module's mode, so `.eval()` turns it off and `.train()` on. Before, the flag defaulted to
+  `False`, so dropout stayed on after `.eval()`. The DeepONets (`DeepONet`,
+  `MultiFidelityDeepONet`, `AdaptiveDeepONet`, `FourierEnhancedDeepONet`,
+  `PODDeepONet`, `DeepONetTrainerAdapter`), `PhysicsInformedOperator`,
+  `LaplaceNeuralOperator` and Transolver's `PhysicsAttention`, `TransolverBlock` and
+  `Transolver` drop the flag they forwarded to it. Transolver defaulted it to `True`, so
+  with `dropout_rate > 0` its dropout now runs in training mode; call `.eval()` for
+  inference.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

@@ -326,14 +326,11 @@ class LaplaceNeuralOperator(nnx.Module):
     def __call__(
         self,
         x: jax.Array,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Forward pass.
 
         Args:
             x: Input ``(B, C_in, N)`` in channels-first format.
-            deterministic: If True, disable dropout (API consistency).
 
         Returns:
             Output ``(B, C_out, N)``.
@@ -341,14 +338,14 @@ class LaplaceNeuralOperator(nnx.Module):
         x = as_compute_array(x, self.compute_dtype)
 
         # Lift: (B, C_in, N) → (B, N, C_in) → MLP → (B, N, hidden) → (B, H, N)
-        h = self.lift(x.transpose(0, 2, 1), deterministic=deterministic).transpose(0, 2, 1)
+        h = self.lift(x.transpose(0, 2, 1)).transpose(0, 2, 1)
 
         # Laplace layers: each applies the pole-residue layer + skip + activation
         for layer in self.laplace_layers:
             h = self.activation_fn(layer(h))
 
         # Project: (B, H, N) -> (B, N, H) -> MLP -> (B, N, C_out) -> (B, C_out, N)
-        out = self.project(h.transpose(0, 2, 1), deterministic=deterministic).transpose(0, 2, 1)
+        out = self.project(h.transpose(0, 2, 1)).transpose(0, 2, 1)
         return out.astype(self.compute_dtype)
 
 

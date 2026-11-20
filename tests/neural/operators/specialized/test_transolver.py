@@ -86,7 +86,7 @@ class TestPhysicsAttention:
             rngs=rngs,
         )
         x = jax.random.normal(jax.random.PRNGKey(0), (2, 100, dim))
-        out = attn(x, deterministic=True)
+        out = attn(x)
         assert out.shape == (2, 100, dim)
 
     def test_output_dtype(self, rngs):
@@ -101,7 +101,7 @@ class TestPhysicsAttention:
             rngs=rngs,
         )
         x = jax.random.normal(jax.random.PRNGKey(0), (1, 50, dim))
-        out = attn(x, deterministic=True)
+        out = attn(x)
         assert out.dtype == jnp.float32
 
     def test_float64_input_uses_default_compute_dtype(self, rngs):
@@ -117,7 +117,7 @@ class TestPhysicsAttention:
         )
         with jax.enable_x64(True):
             x = jax.random.normal(jax.random.PRNGKey(0), (1, 50, dim), dtype=jnp.float64)
-            out = attn(x, deterministic=True)
+            out = attn(x)
 
         assert x.dtype == jnp.float64
         assert out.dtype == jnp.float32
@@ -135,7 +135,7 @@ class TestPhysicsAttention:
         )
         for n in [10, 50, 200]:
             x = jax.random.normal(jax.random.PRNGKey(0), (1, n, dim))
-            out = attn(x, deterministic=True)
+            out = attn(x)
             assert out.shape == (1, n, dim)
 
     def test_dropout_stochastic(self, rngs):
@@ -150,10 +150,12 @@ class TestPhysicsAttention:
             rngs=rngs,
         )
         x = jax.random.normal(jax.random.PRNGKey(0), (2, 20, dim))
-        # Deterministic should be reproducible
-        out1 = attn(x, deterministic=True)
-        out2 = attn(x, deterministic=True)
-        assert jnp.allclose(out1, out2, atol=1e-6)
+        # Evaluation mode turns the dropout off, so two calls agree
+        attn.eval()
+        assert jnp.array_equal(attn(x), attn(x))
+        # Training mode drops attention weights, so two calls differ
+        attn.train()
+        assert not jnp.array_equal(attn(x), attn(x))
 
     def test_temperature_is_learnable(self, rngs):
         """Test that temperature parameter is trainable."""
@@ -190,7 +192,7 @@ class TestTransolverBlock:
             rngs=rngs,
         )
         x = jax.random.normal(jax.random.PRNGKey(0), (2, 50, hidden_dim))
-        out = block(x, deterministic=True)
+        out = block(x)
         assert out.shape == (2, 50, hidden_dim)
 
     def test_block_residual_connection(self, rngs):
@@ -205,7 +207,7 @@ class TestTransolverBlock:
             rngs=rngs,
         )
         x = jax.random.normal(jax.random.PRNGKey(0), (1, 10, hidden_dim))
-        out = block(x, deterministic=True)
+        out = block(x)
         # Output should not be identical to input (attention modifies it)
         assert not jnp.allclose(out, x)
 
@@ -224,7 +226,7 @@ class TestTransolverBlock:
             rngs=rngs,
         )
         x = jax.random.normal(jax.random.PRNGKey(0), (2, 50, hidden_dim))
-        out = block(x, deterministic=True)
+        out = block(x)
         assert out.shape == (2, 50, out_dim)
 
 
@@ -268,7 +270,7 @@ class TestTransolver:
             jax.random.PRNGKey(1),
             (batch_size, num_points, config.fun_dim),
         )
-        out = model(x, fx, deterministic=True)
+        out = model(x, fx)
         assert out.shape == (batch_size, num_points, config.out_dim)
 
     def test_forward_no_fx(self, rngs):
@@ -284,7 +286,7 @@ class TestTransolver:
         )
         model = Transolver(config, rngs=rngs)
         x = jax.random.normal(jax.random.PRNGKey(0), (2, 50, 2))
-        out = model(x, deterministic=True)
+        out = model(x)
         assert out.shape == (2, 50, 1)
 
     def test_jit_compatible(self, config, rngs):
@@ -295,7 +297,7 @@ class TestTransolver:
 
         @nnx.jit
         def forward(m, x, fx):
-            return m(x, fx, deterministic=True)
+            return m(x, fx)
 
         out = forward(model, x, fx)
         assert out.shape == (2, 50, 1)
@@ -308,7 +310,7 @@ class TestTransolver:
 
         @nnx.value_and_grad
         def loss_fn(m):
-            out = m(x, fx, deterministic=True)
+            out = m(x, fx)
             return jnp.mean(out**2)
 
         loss, grads = loss_fn(model)
@@ -324,7 +326,7 @@ class TestTransolver:
         for batch in [1, 4, 8]:
             x = jax.random.normal(jax.random.PRNGKey(0), (batch, 30, 2))
             fx = jax.random.normal(jax.random.PRNGKey(1), (batch, 30, 1))
-            out = model(x, fx, deterministic=True)
+            out = model(x, fx)
             assert out.shape == (batch, 30, 1)
 
     def test_1d_space(self, rngs):
@@ -341,7 +343,7 @@ class TestTransolver:
         model = Transolver(config, rngs=rngs)
         x = jax.random.normal(jax.random.PRNGKey(0), (2, 100, 1))
         fx = jax.random.normal(jax.random.PRNGKey(1), (2, 100, 1))
-        out = model(x, fx, deterministic=True)
+        out = model(x, fx)
         assert out.shape == (2, 100, 1)
 
     def test_3d_space(self, rngs):
@@ -358,7 +360,7 @@ class TestTransolver:
         model = Transolver(config, rngs=rngs)
         x = jax.random.normal(jax.random.PRNGKey(0), (2, 50, 3))
         fx = jax.random.normal(jax.random.PRNGKey(1), (2, 50, 5))
-        out = model(x, fx, deterministic=True)
+        out = model(x, fx)
         assert out.shape == (2, 50, 3)
 
     def test_multi_output_channels(self, rngs):
@@ -375,7 +377,7 @@ class TestTransolver:
         model = Transolver(config, rngs=rngs)
         x = jax.random.normal(jax.random.PRNGKey(0), (2, 40, 2))
         fx = jax.random.normal(jax.random.PRNGKey(1), (2, 40, 3))
-        out = model(x, fx, deterministic=True)
+        out = model(x, fx)
         assert out.shape == (2, 40, 5)
 
 
@@ -408,5 +410,5 @@ class TestCreateTransolver:
         )
         x = jax.random.normal(jax.random.PRNGKey(0), (1, 20, 2))
         fx = jax.random.normal(jax.random.PRNGKey(1), (1, 20, 1))
-        out = model(x, fx, deterministic=True)
+        out = model(x, fx)
         assert out.shape == (1, 20, 1)

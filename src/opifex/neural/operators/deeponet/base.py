@@ -106,8 +106,6 @@ class DeepONet(nnx.Module):
         self,
         branch_input: jax.Array,
         trunk_input: jax.Array,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Apply DeepONet to compute operator output.
 
@@ -120,8 +118,6 @@ class DeepONet(nnx.Module):
             trunk_input: Evaluation locations
                 Shape: (batch_size, n_locations, location_dim) or
                        (n_locations, location_dim) for single batch
-            deterministic: Whether to use deterministic mode (unused here but
-                          kept for API consistency)
 
         Returns:
             Operator output at evaluation locations
@@ -147,7 +143,7 @@ class DeepONet(nnx.Module):
 
         # Process branch input (function values at sensors)
         # Shape: (batch_size, output_dim)
-        branch_output = self.branch_net(branch_input, deterministic=deterministic)
+        branch_output = self.branch_net(branch_input)
 
         # Process trunk input (evaluation locations)
         # Reshape to (batch_size * n_locations, location_dim) for batch processing
@@ -155,7 +151,7 @@ class DeepONet(nnx.Module):
 
         # Apply trunk network
         # Shape: (batch_size * n_locations, output_dim)
-        trunk_output_flat = self.trunk_net(trunk_flat, deterministic=deterministic)
+        trunk_output_flat = self.trunk_net(trunk_flat)
 
         # Reshape back to (batch_size, n_locations, output_dim)
         trunk_output = trunk_output_flat.reshape(batch_size, n_locations, self.output_dim)
@@ -178,31 +174,25 @@ class DeepONet(nnx.Module):
     def get_branch_output(
         self,
         branch_input: jax.Array,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Get branch network output for analysis purposes.
 
         Args:
             branch_input: Function values at sensor locations
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Branch network output
         """
-        return self.branch_net(branch_input, deterministic=deterministic)
+        return self.branch_net(branch_input)
 
     def get_trunk_output(
         self,
         trunk_input: jax.Array,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Get trunk network output for analysis purposes.
 
         Args:
             trunk_input: Evaluation locations
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Trunk network output
@@ -216,7 +206,7 @@ class DeepONet(nnx.Module):
             # Multiple batches
             trunk_flat = trunk_input.reshape(-1, trunk_input.shape[-1])
 
-        output_flat = self.trunk_net(trunk_flat, deterministic=deterministic)
+        output_flat = self.trunk_net(trunk_flat)
 
         # Reshape back to match input structure
         if trunk_input.ndim == 2:
@@ -300,8 +290,6 @@ class MultiFidelityDeepONet(nnx.Module):
         self,
         branch_inputs: list[jax.Array],
         trunk_input: jax.Array,
-        *,
-        deterministic: bool = True,
     ) -> jax.Array:
         """Apply Multi-fidelity DeepONet.
 
@@ -309,7 +297,6 @@ class MultiFidelityDeepONet(nnx.Module):
             branch_inputs: List of function values for each fidelity level
                 Each element has shape (batch_size, n_sensors_i)
             trunk_input: Evaluation locations
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Fused operator output at evaluation locations
@@ -327,7 +314,6 @@ class MultiFidelityDeepONet(nnx.Module):
             output = net(
                 branch_input=branch_input,
                 trunk_input=trunk_input,
-                deterministic=deterministic,
             )
             fidelity_outputs.append(output)
 
@@ -347,7 +333,7 @@ class MultiFidelityDeepONet(nnx.Module):
             flat_outputs = stacked_outputs.reshape(-1, self.n_fidelities)
 
             # Apply fusion network
-            fusion_result = self.fusion_net(flat_outputs, deterministic=deterministic)
+            fusion_result = self.fusion_net(flat_outputs)
             fused_output = fusion_result.reshape(original_shape)
         else:  # pragma: no cover - fusion_strategy validated in __init__
             raise AssertionError(f"unreachable: fusion_strategy={self.fusion_strategy!r}")

@@ -376,8 +376,8 @@ class TestLaplaceNeuralOperatorAdvanced:
             rngs=rngs,
         )
         x = jax.random.normal(rngs.params(), (2, 1, 64))
-        out1 = model(x, deterministic=True)
-        out2 = model(x, deterministic=True)
+        out1 = model(x)
+        out2 = model(x)
         assert jnp.allclose(out1, out2)
 
     def test_output_dtype(self, rngs):
@@ -548,11 +548,11 @@ class TestLaplaceNeuralOperatorAdvanced:
         )
         x = jax.random.normal(rngs.params(), (2, 1, 64))
 
-        eager_out = model(x, deterministic=True)
+        eager_out = model(x)
 
         @nnx.jit
         def jitted_forward(m, x):
-            return m(x, deterministic=True)
+            return m(x)
 
         jit_out = jitted_forward(model, x)
         assert jnp.allclose(eager_out, jit_out, atol=1e-5)
