@@ -184,7 +184,8 @@ class LearnToOptimize(nnx.Module):
             # Create temporary meta-network with correct architecture
             output_size = initial_params.size
             layers = [*self.meta_network_layers, output_size]
-            temp_meta_network = StandardMLP(layers, rngs=nnx.Rngs(42))
+            overwritten = nnx.Rngs(42)  # substrax-allow: seed-literal: nnx.update overwrites it
+            temp_meta_network = StandardMLP(layers, rngs=overwritten)
             nnx.update(temp_meta_network, meta_params)
 
             # Simulate optimization trajectory using current meta-network

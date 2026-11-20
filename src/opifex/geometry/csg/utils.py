@@ -74,7 +74,7 @@ def validate_implementation() -> None:
             raise ValueError("Distance test failed")
 
     # Test boundary sampling
-    key = jax.random.PRNGKey(42)
+    key = jax.random.PRNGKey(42)  # substrax-allow: seed-literal: self-test checks only shape
     boundary_points = rect.sample_boundary(50, key)
     if boundary_points.shape != (50, 2):
         raise ValueError("Boundary sampling test failed")

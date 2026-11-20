@@ -87,7 +87,7 @@ def _symmetric_to_l2_basis() -> np.ndarray:
     Returns:
         Real array ``W`` of shape ``(5, 9)``.
     """
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(0)  # substrax-allow: seed-literal: exact fit, draw-independent
     directions = rng.standard_normal((400, 3))
     symmetric_rows: list[np.ndarray] = []
     harmonic_rows: list[np.ndarray] = []

@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fit_collocation_surrogate` takes no `rngs`, which it never read. The ADVI, Pathfinder
   and SVGD backends take their keys through `substrax.rng.key_from` instead of probing the
   `nnx.Rngs` (`rngs-probe`).
+- `benchmark_with_prefetching` draws no random operands: the two it drew were overwritten
+  from the pool buffers and never read, and its prefetch payload, whose values nothing reads,
+  is zeros.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

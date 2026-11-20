@@ -380,7 +380,8 @@ class ModelRegistry:
         # accept an ``rngs`` keyword for parameter initialization (supplied here
         # only to build the abstract structure — no weights are materialized).
         def _build_abstract() -> nnx.Module:
-            return model_class(rngs=nnx.Rngs(0), **init_kwargs)  # type: ignore[call-arg]
+            shape_only = nnx.Rngs(0)  # substrax-allow: seed-literal: eval_shape draws no weights
+            return model_class(rngs=shape_only, **init_kwargs)  # type: ignore[call-arg]
 
         abstract_model = nnx.eval_shape(_build_abstract)
         graphdef, abstract_state = nnx.split(abstract_model)
