@@ -18,7 +18,7 @@ from substrax.testing.nnx_rules import findings
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _LIBRARY = ("src/opifex",)
-_RULES = ("noop-super-init", "trainable-metadata", "salted-hash")
+_RULES = ("noop-super-init", "trainable-metadata", "salted-hash", "rngs-fallback")
 
 
 def test_library_code_has_no_unexempted_site() -> None:

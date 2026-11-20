@@ -62,9 +62,8 @@ class LoRALinear(nnx.Module):
             ``B`` rows). Must be a positive integer.
         alpha: LoRA scaling numerator; the correction is scaled by
             ``alpha / rank``.
-        rngs: Random number generators seeding the random-small ``A`` init.
-            Defaults to a fixed seed (the init is tiny, so the seed is
-            inconsequential at the start of training).
+        rngs: Random number generators seeding the random-small ``A`` init, from the
+            ``params`` stream.
 
     Raises:
         ValueError: If ``rank`` is not a positive integer.
@@ -76,7 +75,7 @@ class LoRALinear(nnx.Module):
         *,
         rank: int = _DEFAULT_RANK,
         alpha: float = _DEFAULT_ALPHA,
-        rngs: nnx.Rngs | None = None,
+        rngs: nnx.Rngs,
     ) -> None:
         """Store the base layer and create the zero-``B`` / small-``A`` factors."""
         if rank <= 0:
@@ -89,7 +88,6 @@ class LoRALinear(nnx.Module):
         self.rank = rank
         self.scaling = float(alpha) / float(rank)
 
-        rngs = rngs if rngs is not None else nnx.Rngs(0)
         a_init = _LORA_A_INIT_STD * jax.random.normal(
             rngs.params(), (in_features, rank), dtype=base.kernel.value.dtype
         )
@@ -120,7 +118,7 @@ def apply_lora(
     *,
     rank: int = _DEFAULT_RANK,
     alpha: float = _DEFAULT_ALPHA,
-    rngs: nnx.Rngs | None = None,
+    rngs: nnx.Rngs,
 ) -> LoRALinear:
     """Wrap an ``nnx.Linear`` in a :class:`LoRALinear` adapter.
 
