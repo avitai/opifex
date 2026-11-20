@@ -19,7 +19,6 @@ Key Features:
 from collections.abc import Sequence
 from typing import Any
 
-import flax.errors
 import jax
 import jax.numpy as jnp
 from flax import nnx
@@ -49,72 +48,89 @@ def _matrix_shape(weight_shape: tuple[int, ...]) -> tuple[int, int]:
     return height, width
 
 
-def _layer_weight_shape(layer: Any) -> tuple[int, ...] | None:
-    """Return the shape of a layer's kernel/weight, or None when it exposes neither.
+def _layer_weight_shape(layer: Any) -> tuple[int, ...]:
+    """Return the shape of a layer's kernel/weight.
 
     Args:
         layer: The layer that will be spectrally normalized.
 
     Returns:
-        The weight shape, or None when the layer has no usable kernel or weight.
+        The weight shape.
+
+    Raises:
+        ValueError: If the layer has no ``kernel`` or ``weight`` of at least two dimensions.
     """
     weight = getattr(layer, "kernel", getattr(layer, "weight", None))
-    value = getattr(weight, "value", None)
-    shape = getattr(value, "shape", None)
-    return tuple(shape) if shape is not None and len(shape) >= 2 else None
+    shape = weight[...].shape if isinstance(weight, nnx.Variable) else None
+    if shape is None or len(shape) < 2:
+        raise ValueError(
+            f"{type(layer).__name__} has no 'kernel' or 'weight' of at least two dimensions "
+            "to normalize."
+        )
+    return tuple(shape)
+
+
+def _normalize(vector: jax.Array, eps: float) -> jax.Array:
+    """Scale ``vector`` to unit norm, as ``torch.nn.functional.normalize`` does.
+
+    Args:
+        vector: The vector to normalize.
+        eps: Lower bound on the norm divided by.
+
+    Returns:
+        ``vector / max(||vector||, eps)``.
+    """
+    return vector / jnp.maximum(jnp.linalg.norm(vector), eps)
 
 
 class PowerIteration(nnx.Module):
-    """Power iteration algorithm for estimating the spectral norm.
+    """Power iteration estimating a weight's largest singular value, as PyTorch's spectral norm.
 
-    Estimates the largest singular value efficiently using power iteration.
-    This is the core algorithm used by spectral normalization to efficiently
-    estimate the largest singular value of weight matrices without computing the
-    full SVD.
+    Follows ``torch.nn.utils.parametrizations._SpectralNorm``: the singular-vector estimates
+    ``u`` and ``v`` are state outside the gradient (PyTorch's buffers under ``no_grad``; here
+    ``nnx.BatchStat`` under ``lax.stop_gradient``, the types flax's ``nnx.SpectralNorm``
+    uses), updated by the power method only in training mode, and the weight is divided by
+    ``sigma = u . (W v)`` on use; the parameter itself stays ``W``. The mode follows
+    ``.train()``/``.eval()`` and ``nnx.view(..., use_running_average=...)``.
+
+    PyTorch also runs 15 power iterations at construction from the weight's value; this
+    module is built from the weight's shape, so its estimate sharpens over training calls.
     """
 
     def __init__(
         self,
         num_iterations: int = 1,
         eps: float = 1e-12,
-        use_running_average: bool = False,
         *,
-        weight_shape: tuple[int, ...] | None = None,
+        update_stats: bool = True,
+        weight_shape: tuple[int, ...],
         rngs: nnx.Rngs,
     ) -> None:
         """Initialize power iteration algorithm.
 
         Args:
-            num_iterations: Number of power iteration steps
-            eps: Small epsilon for numerical stability
-            use_running_average: When True, reuse the stored vectors instead of
-                writing the re-estimated ones back. ``nnx.Module.train()`` and
-                ``nnx.Module.eval()`` set this recursively, as they do for
-                ``nnx.BatchNorm``; the default matches nnx, which constructs
-                modules in training mode.
-            weight_shape: Shape of the weight this will normalize. Given it, the
-                vectors start at the size they will be used at, so they persist
-                across calls and the estimate sharpens. Omit it only when the
-                weight cannot be known at construction, such as a wrapper around
-                a layer that exposes no kernel.
-            rngs: Random number generators for initialization
+            num_iterations: Power-method steps per training call; at least one, as in PyTorch.
+            eps: Lower bound on the norms divided by when normalizing the vectors.
+            update_stats: Whether training calls update the stored vectors, as in flax's
+                ``nnx.SpectralNorm``; ``.train()`` and ``.eval()`` set the resulting mode.
+            weight_shape: Shape of the weight this will normalize. The vectors start
+                at the size they are used at, so they persist across calls and the
+                estimate sharpens; a weight of another shape is refused.
+            rngs: The vectors' initial draws come from ``rngs.params()``.
+
+        Raises:
+            ValueError: If ``num_iterations`` is below one.
         """
+        if num_iterations < 1:
+            raise ValueError(f"num_iterations must be at least 1, got {num_iterations}")
         self.num_iterations = num_iterations
         self.eps = eps
-        self.use_running_average = use_running_average
+        self.use_running_average = not update_stats
 
-        # Size the vectors for the weight they will iterate on. Left as scalar
-        # placeholders they never match, so __call__ re-draws them on every pass and
-        # each estimate starts from a fresh random vector instead of the previous one.
-        # Power iteration only sharpens by carrying its vectors forward, which is what
-        # flax.nnx.SpectralNorm means by updating u "over time".
-        if weight_shape is not None:
-            height, width = _matrix_shape(weight_shape)
-            self.u = nnx.Param(jax.random.normal(rngs.default(), (height,)) / jnp.sqrt(height))
-            self.v = nnx.Param(jax.random.normal(rngs.default(), (width,)) / jnp.sqrt(width))
-        else:
-            self.u = nnx.Param(jnp.array([1.0]))
-            self.v = nnx.Param(jnp.array([1.0]))
+        self.weight_shape = tuple(weight_shape)
+        height, width = _matrix_shape(weight_shape)
+        self.u = nnx.BatchStat(_normalize(jax.random.normal(rngs.params(), (height,)), eps))
+        self.v = nnx.BatchStat(_normalize(jax.random.normal(rngs.params(), (width,)), eps))
 
     def set_view(self, use_running_average: bool | None = None) -> None:
         """Class method used by ``nnx.view``.
@@ -127,71 +143,45 @@ class PowerIteration(nnx.Module):
             self.use_running_average = use_running_average
 
     def __call__(self, weight: jax.Array) -> tuple[jax.Array, jax.Array]:
-        """Estimate spectral norm using power iteration.
+        """Estimate the spectral norm and divide the weight by it.
 
-        Whether the re-estimated vectors are written back is decided by
-        ``use_running_average``, which ``train()`` and ``eval()`` set.
+        In training mode (``use_running_average`` False) the power method updates the stored
+        vectors first; in eval mode the stored vectors are used as they are.
 
         Args:
-            weight: Weight matrix of shape (..., out_features, in_features)
+            weight: Weight of shape (..., out_features); it is flattened to a matrix over its
+                last axis.
 
         Returns:
             Tuple of (spectral_norm, normalized_weight)
+
+        Raises:
+            ValueError: If ``weight`` does not flatten to the matrix ``weight_shape`` flattens to.
         """
-        # Reshape weight to 2D matrix for SVD computation
+        if _matrix_shape(weight.shape) != _matrix_shape(self.weight_shape):
+            raise ValueError(
+                f"PowerIteration was built for weight_shape {self.weight_shape}; got a weight "
+                f"of shape {tuple(weight.shape)}."
+            )
         original_shape = weight.shape
-        weight_2d = weight.reshape(-1, original_shape[-1]) if len(original_shape) > 2 else weight
-
-        height, width = weight_2d.shape
-
-        # Initialize u and v vectors if needed (JIT-compatible)
-        # Instead of checking _initialized, we'll reinitialize if dimensions don't match
-        # This avoids boolean conversion errors during JIT compilation
-
+        weight_2d = weight.reshape(-1, original_shape[-1])
+        # The vectors carry no gradient, as PyTorch's power method runs under no_grad.
+        frozen = jax.lax.stop_gradient(weight_2d)
         u, v = self.u[...], self.v[...]
 
-        # Ensure u and v have correct dimensions
-        if u.shape[0] != height:
-            u = jax.random.normal(nnx.Rngs(0).default(), (height,)) / jnp.sqrt(height)
-        if v.shape[0] != width:
-            v = jax.random.normal(nnx.Rngs(1).default(), (width,)) / jnp.sqrt(width)
-
-        # Power iteration
-        for _ in range(self.num_iterations):
-            # v = W^T u / ||W^T u||
-            v = weight_2d.T @ u
-            v = v / (jnp.linalg.norm(v) + self.eps)
-
-            # u = W v / ||W v||
-            u = weight_2d @ v
-            u = u / (jnp.linalg.norm(u) + self.eps)
-
-        # Write the re-estimated vectors back unless the stored ones are in use.
         if not self.use_running_average:
-            try:
-                # Assign through .value, not u[...]: the vectors start as shape-(1,)
-                # placeholders and are re-drawn above to (height,) / (width,), so the write
-                # has to REPLACE the value. Variable.__setitem__ routes through
-                # `.at[index].set()`, an in-place scatter that keeps the existing shape and
-                # rejects the new one with ValueError.
-                self.u.value = u
-                self.v.value = v
-            except (
-                TypeError,
-                jax.errors.TracerArrayConversionError,
-                flax.errors.TraceContextError,
-            ):
-                # State mutation is invalid inside jit/grad traces; callers update outside
-                # the transform when this is hit. flax raises TraceContextError for a write
-                # to a Variable owned by an outer trace.
-                pass
+            for _ in range(self.num_iterations):
+                u = _normalize(frozen @ v, self.eps)
+                v = _normalize(frozen.T @ u, self.eps)
+            self.u[...] = u
+            self.v[...] = v
 
-        # Compute spectral norm: sigma = u^T W v
+        u = jax.lax.stop_gradient(u)
+        v = jax.lax.stop_gradient(v)
         spectral_norm = jnp.dot(u, weight_2d @ v)
-
-        # Normalize weight by spectral norm
-        normalized_weight = weight / (spectral_norm + self.eps)
-        normalized_weight = normalized_weight.reshape(original_shape)
+        # flax's nnx.SpectralNorm guard: a zero weight is returned as it is, not divided by 0.
+        safe_norm = jnp.where(spectral_norm != 0, spectral_norm, 1.0)
+        normalized_weight = (weight_2d / safe_norm).reshape(original_shape)
 
         return spectral_norm, normalized_weight
 

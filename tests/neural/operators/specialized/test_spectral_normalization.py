@@ -30,25 +30,76 @@ class TestPowerIteration:
         return nnx.Rngs(0)
 
     @pytest.fixture
-    def power_iter(self, rngs):
-        """Create a basic PowerIteration instance."""
-        return PowerIteration(num_iterations=2, rngs=rngs)
+    def power_iter_for(self, rngs):
+        """Build a two-step PowerIteration for a weight of the given shape."""
+        return lambda weight_shape: PowerIteration(
+            num_iterations=2, weight_shape=weight_shape, rngs=rngs
+        )
 
     def test_initialization(self, rngs):
-        """Test basic initialization of PowerIteration."""
-        power_iter = PowerIteration(num_iterations=3, eps=1e-8, rngs=rngs)
+        """The vectors start at the size of the weight they will iterate on."""
+        power_iter = PowerIteration(num_iterations=3, eps=1e-8, weight_shape=(8, 4), rngs=rngs)
 
         assert power_iter.num_iterations == 3
         assert power_iter.eps == 1e-8
-        assert hasattr(power_iter, "u")
-        assert hasattr(power_iter, "v")
-        # _initialized attribute was removed for JIT compatibility
+        assert power_iter.u[...].shape == (8,)
+        assert power_iter.v[...].shape == (4,)
 
-    def test_spectral_norm_computation_2d(self, power_iter):
+    def test_the_vectors_are_state_not_parameters(self, power_iter_for):
+        """``u`` and ``v`` are non-trainable state, as PyTorch keeps them as buffers.
+
+        ``nnx.Optimizer(wrt=nnx.Param)`` must not update them; NNX's type for such state
+        is ``nnx.BatchStat`` (flax's own ``nnx.SpectralNorm`` stores ``u`` as one).
+        """
+        power_iter = power_iter_for((8, 4))
+        assert jax.tree.leaves(nnx.state(power_iter, nnx.Param)) == []
+        stats = nnx.state(power_iter, nnx.BatchStat)
+        assert {path[-1] for path, _ in nnx.to_flat_state(stats)} == {"u", "v"}
+
+    def test_the_gradient_does_not_flow_through_the_vectors(self, power_iter_for):
+        """With ``u`` and ``v`` held constant, d(sigma)/dW is ``outer(u, v)`` (no_grad in PyTorch)."""
+        weight = jax.random.normal(jax.random.key(3), (6, 5))
+        power_iter = power_iter_for(weight.shape)
+
+        def sigma_of(module: PowerIteration, w: jax.Array) -> jax.Array:
+            return module(w)[0]
+
+        # A training call: the power method updates u and v, then sigma = u . (W v).
+        gradient = nnx.grad(sigma_of, argnums=1)(power_iter, weight)
+        expected = jnp.outer(power_iter.u[...], power_iter.v[...])
+        # Each element on both sides is the single product u_i * v_j, so they agree exactly.
+        assert jnp.array_equal(gradient, expected)
+
+    def test_eval_mode_uses_the_stored_vectors_without_iterating(self, power_iter_for):
+        """In eval mode PyTorch does no power iteration: sigma is u . (W v) for the stored u, v."""
+        weight = jax.random.normal(jax.random.key(4), (7, 3))
+        power_iter = power_iter_for(weight.shape)
+        power_iter.eval()
+        sigma, normalized = power_iter(weight)
+        stored = jnp.dot(power_iter.u[...], weight @ power_iter.v[...])
+        assert sigma == stored
+        assert jnp.array_equal(normalized, weight / stored)
+
+    def test_a_non_positive_iteration_count_is_refused(self, rngs):
+        with pytest.raises(ValueError, match="num_iterations"):
+            PowerIteration(num_iterations=0, weight_shape=(4, 3), rngs=rngs)
+
+    def test_it_builds_from_a_parameter_stream_alone(self):
+        """The vectors are drawn from ``rngs.params()``, so no ``default`` stream is needed."""
+        power_iter = PowerIteration(weight_shape=(4, 3), rngs=nnx.Rngs(params=0))
+        assert power_iter.u[...].shape == (4,)
+
+    def test_a_weight_of_another_shape_is_refused(self, power_iter_for):
+        """A weight that does not match ``weight_shape`` names both shapes."""
+        power_iter = power_iter_for((8, 4))
+        with pytest.raises(ValueError, match=r"\(8, 4\).*\(6, 4\)"):
+            power_iter(jnp.ones((6, 4)))
+
+    def test_spectral_norm_computation_2d(self, power_iter_for):
         """Test spectral norm computation for 2D matrices."""
         weight = jax.random.normal(jax.random.PRNGKey(42), (64, 32))
 
-        spectral_norm, normalized_weight = power_iter(weight)
+        spectral_norm, normalized_weight = power_iter_for(weight.shape)(weight)
 
         assert spectral_norm.shape == ()  # Scalar
         assert normalized_weight.shape == weight.shape
@@ -56,18 +107,18 @@ class TestPowerIteration:
         assert not jnp.isnan(spectral_norm)
         assert not jnp.any(jnp.isnan(normalized_weight))
 
-    def test_spectral_norm_computation_3d(self, power_iter):
+    def test_spectral_norm_computation_3d(self, power_iter_for):
         """Test spectral norm computation for higher-dimensional tensors."""
         weight = jax.random.normal(jax.random.PRNGKey(42), (3, 3, 32, 64))
 
-        spectral_norm, normalized_weight = power_iter(weight)
+        spectral_norm, normalized_weight = power_iter_for(weight.shape)(weight)
 
         assert spectral_norm.shape == ()  # Scalar
         assert normalized_weight.shape == weight.shape
         assert spectral_norm > 0
         assert not jnp.isnan(spectral_norm)
 
-    def test_eval_mode_leaves_the_stored_vectors_untouched(self, power_iter):
+    def test_eval_mode_leaves_the_stored_vectors_untouched(self, power_iter_for):
         """``eval()`` must freeze the power-iteration state.
 
         The previous test only checked that both modes returned a positive,
@@ -75,6 +126,7 @@ class TestPowerIteration:
         nothing detected inference silently mutating them.
         """
         weight = jax.random.normal(jax.random.PRNGKey(42), (32, 16))
+        power_iter = power_iter_for(weight.shape)
         power_iter.eval()
 
         before_u, before_v = power_iter.u[...], power_iter.v[...]
@@ -85,9 +137,10 @@ class TestPowerIteration:
         assert spectral_norm > 0
         assert not jnp.isnan(spectral_norm)
 
-    def test_train_mode_updates_the_stored_vectors(self, power_iter):
+    def test_train_mode_updates_the_stored_vectors(self, power_iter_for):
         """``train()`` must write the re-estimated vectors back."""
         weight = jax.random.normal(jax.random.PRNGKey(42), (32, 16))
+        power_iter = power_iter_for(weight.shape)
         power_iter.train()
 
         before_u = power_iter.u[...]
@@ -113,8 +166,8 @@ class TestPowerIteration:
         weight = jax.random.normal(jax.random.PRNGKey(42), (32, 32))
 
         # Test with different numbers of iterations
-        power_iter_1 = PowerIteration(num_iterations=1, rngs=rngs)
-        power_iter_5 = PowerIteration(num_iterations=5, rngs=rngs)
+        power_iter_1 = PowerIteration(num_iterations=1, weight_shape=weight.shape, rngs=rngs)
+        power_iter_5 = PowerIteration(num_iterations=5, weight_shape=weight.shape, rngs=rngs)
 
         spectral_norm_1, _ = power_iter_1(weight)
         spectral_norm_5, _ = power_iter_5(weight)
@@ -124,7 +177,7 @@ class TestPowerIteration:
         assert spectral_norm_5 > 0
         # More iterations often lead to more accurate estimates
 
-    def test_normalization_property(self, power_iter):
+    def test_normalization_property(self, power_iter_for):
         """Test that normalization reduces spectral norm."""
         weight = jax.random.normal(jax.random.PRNGKey(42), (32, 32))
 
@@ -133,7 +186,7 @@ class TestPowerIteration:
         original_spectral_norm = s[0]
 
         # Apply power iteration normalization
-        estimated_spectral_norm, normalized_weight = power_iter(weight)
+        estimated_spectral_norm, normalized_weight = power_iter_for(weight.shape)(weight)
 
         # Check that normalization reduces spectral norm
         _, s_normalized, _ = jnp.linalg.svd(normalized_weight, full_matrices=False)
@@ -152,7 +205,7 @@ class TestPowerIteration:
 
     def test_numerical_stability(self, rngs):
         """Test numerical stability with edge cases."""
-        power_iter = PowerIteration(num_iterations=2, eps=1e-12, rngs=rngs)
+        power_iter = PowerIteration(num_iterations=2, eps=1e-12, weight_shape=(16, 16), rngs=rngs)
 
         # Test with zero matrix
         zero_weight = jnp.zeros((16, 16))
@@ -258,9 +311,9 @@ class TestSpectralNorm:
 
         invalid_layer = InvalidLayer()
 
-        # Creating spectral norm with invalid layer should work but may fail at runtime
-        spectral_norm = SpectralNorm(invalid_layer, rngs=rngs)
-        assert spectral_norm.layer == invalid_layer
+        # A layer with no weight can never be normalized, so it is refused at construction.
+        with pytest.raises(ValueError, match="InvalidLayer has no 'kernel' or 'weight'"):
+            SpectralNorm(invalid_layer, rngs=rngs)
 
 
 class TestSpectralLinear:
@@ -705,7 +758,7 @@ class TestSpectralNormalizationEdgeCases:
 
     def test_very_small_matrices(self, rngs):
         """Test power iteration with very small matrices."""
-        power_iter = PowerIteration(num_iterations=1, rngs=rngs)
+        power_iter = PowerIteration(num_iterations=1, weight_shape=(1, 1), rngs=rngs)
 
         # 1x1 matrix
         weight_1x1 = jnp.array([[2.0]])

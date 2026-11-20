@@ -80,15 +80,15 @@ RESULTS
 Model                          final MSE       max MSE   Lipschitz bound
 ------------------------------------------------------------------------
 plain nnx.Linear                     nan           nan               nan
-SpectralLinear                2.9396e-02    1.5593e-01          1.00e+00
+SpectralLinear                2.9674e-02    1.6013e-01          1.00e+00
 ------------------------------------------------------------------------
-Plain network destabilised: True; spectral final MSE 2.94e-02 (Lipschitz bound stays ~1 per layer).
+Plain network destabilised: True; spectral final MSE 2.97e-02 (Lipschitz bound stays ~1 per layer).
 ```
 
 | Model | Final MSE | Lipschitz bound | Outcome |
 |-------|-----------|-----------------|---------|
 | plain `nnx.Linear` | NaN | unbounded (≈10³ at init) | **diverges** |
-| **`SpectralLinear`** | **0.029** | **1.0 per layer** | **stable** |
+| **`SpectralLinear`** | **0.030** | **1.0 per layer** | **stable** |
 
 The plain deep network has a Lipschitz bound over 1000 at initialisation; at `lr=0.3` it blows up
 to NaN within the first few steps. Spectral normalization caps every layer at spectral norm 1, so
