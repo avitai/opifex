@@ -75,6 +75,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `FunctionEmbedding` requires `rngs` (its projection was initialised from
   `nnx.Rngs(0)`), and `benchmark_tensorly_integration` requires a keyword-only `key` for
   its test tensor (it was key 42).
+- **Breaking:** `PowerIteration` requires `weight_shape`: its vectors are created at their
+  real size, and a weight that flattens to another matrix is refused with `ValueError`.
+  Without it the vectors were shape-`(1,)` placeholders that every call replaced with draws
+  from `nnx.Rngs(0)` and `nnx.Rngs(1)`, so the estimate never carried forward. `SpectralNorm`
+  refuses a layer with no `kernel` or `weight` at construction instead of at its first call.
+  The power iteration follows PyTorch's spectral norm: `u` and `v` are `nnx.BatchStat`
+  state, outside the gradient, drawn from `rngs.params()`. They were `nnx.Param`, so an
+  optimizer over parameters trained them, and the gradient flowed through them. Training
+  calls run the power method and keep the vectors. Eval calls use the stored vectors as
+  they are, where before they re-estimated the vectors and discarded the result. The weight
+  is divided by `sigma = u . (W v)`, which stays the parameter. `update_stats=False` replaces
+  `use_running_average=True` in the constructor, `num_iterations` below one is refused, and a
+  write of the vectors that fails is no longer silently skipped. Checkpoints that hold `u`
+  and `v` as parameters do not restore.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.
