@@ -1,50 +1,30 @@
 r"""Per-family in-process registries for atomistic models, backbones and heads.
 
-Mirrors ``src/opifex/uncertainty/registry.py`` (which wraps
-``calibrax.core.registry.SingletonRegistry``): each family has its own singleton
-registry keyed by name, with two Opifex policies layered on top --
-duplicate-registration rejection and an actionable :meth:`require` error listing
-the available names. ``register_*`` class-decorators self-register at import time
-so simply importing a model/backbone/head module makes it discoverable.
+Each family has its own singleton registry keyed by name, a
+``calibrax.core.registry.SingletonRegistry``. That registry refuses a name it already
+holds with ``DuplicateRegistrationError``, so registrations are canonical; Opifex adds
+an actionable :meth:`require` error listing the available names. ``register_*``
+class-decorators self-register at import time so simply importing a
+model/backbone/head module makes it discoverable.
 
 This is **in-process** lookup only (swap a backbone/head by name). Persisted or
 versioned model *artifacts* belong to ``opifex.platform.registry`` instead.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 from calibrax.core.registry import SingletonRegistry
-
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 _C = TypeVar("_C", bound=type)
 
 
 class _AtomisticRegistry(SingletonRegistry[type]):
-    """Base class adding duplicate-rejection and an actionable ``require``.
+    """Base class adding an actionable ``require``.
 
     Subclassed once per family so each family is an independent singleton.
     """
-
-    def register(self, name: str, item: type) -> None:
-        """Register ``item`` under ``name``, rejecting duplicate names.
-
-        Raises:
-            ValueError: If ``name`` is already registered (registrations are
-                canonical; ``calibrax`` would silently overwrite).
-        """
-        if name in self:
-            raise ValueError(
-                f"{name!r} is already registered in {type(self).__name__}. "
-                "Registrations are canonical -- use require()/get() to read, or "
-                "choose a new name."
-            )
-        super().register(name, item)
 
     def require(self, name: str) -> type:
         """Return the class registered under ``name``.
