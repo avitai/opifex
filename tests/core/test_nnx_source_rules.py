@@ -24,6 +24,7 @@ _RULES = (
     "salted-hash",
     "rngs-fallback",
     "rngs-probe",
+    "seed-literal",
 )
 
 
