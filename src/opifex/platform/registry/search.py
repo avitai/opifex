@@ -10,9 +10,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import jax.numpy as jnp
+from sklearn.feature_extraction import FeatureHasher
 
 from opifex.platform.registry.core import RegistryService
 from opifex.platform.search_types import SearchType
+
+
+_EMBEDDING_DIM = 256
+"""Length of the keyword embedding: the number of feature-hashing buckets."""
 
 
 @dataclass(slots=True, kw_only=True)
@@ -116,6 +121,12 @@ class SearchEngine:
             "their",
             "if",
         }
+
+        # Feature hashing of the extracted keywords (Weinberger et al. 2009), as scikit-learn
+        # implements it: signed MurmurHash3 buckets (alternate_sign).
+        self._hasher = FeatureHasher(
+            n_features=_EMBEDDING_DIM, input_type="string", alternate_sign=True
+        )
 
     async def search(self, query: SearchQuery) -> list[SearchResult]:
         """Execute search query for neural functionals.
@@ -468,30 +479,25 @@ class SearchEngine:
         return filtered
 
     def _generate_embedding(self, text: str) -> jnp.ndarray:
-        """Generate a bag-of-words embedding for text.
+        """Generate a bag-of-words embedding for text by feature hashing its keywords.
 
-        Each extracted keyword is hashed into a fixed-size vector so that two
-        phrases sharing the same keyword set yield identical embeddings, giving
-        semantic search meaningful word-overlap similarity. A production system
-        would replace this with a neural model such as BERT/SciBERT.
+        scikit-learn's ``FeatureHasher`` hashes each extracted keyword into one of
+        ``_EMBEDDING_DIM`` buckets with a signed MurmurHash3, the same in every interpreter, and
+        the row is L2-normalised, as ``HashingVectorizer(norm="l2")`` does, so
+        two phrases sharing the same keyword set yield identical embeddings, giving semantic
+        search word-overlap similarity. A production system would replace this with a neural
+        model such as BERT/SciBERT.
 
         Args:
             text: Input text
 
         Returns:
-            Unit-normalised embedding vector
+            Unit-normalised embedding vector; the zero vector for text with no keyword.
         """
-        embedding_dim = 256
-        embedding = jnp.zeros(embedding_dim)
-
-        # Accumulate a hashed one-hot per keyword (order-independent).
-        for keyword in self._extract_keywords(text):
-            hash_index = hash(keyword) % embedding_dim
-            embedding = embedding.at[hash_index].add(1.0)
-
-        # Normalize to unit vector (empty text stays the zero vector).
-        norm = jnp.linalg.norm(embedding)
-        return embedding / norm if norm > 0 else embedding
+        hashed = self._hasher.transform([self._extract_keywords(text)]).toarray()[0]
+        row = jnp.asarray(hashed, dtype=jnp.float32)
+        norm = jnp.linalg.norm(row)
+        return row / norm if norm > 0 else row
 
     async def _get_functional_embedding(self, functional: dict[str, Any]) -> jnp.ndarray:
         """Get or generate embedding for a functional.

@@ -297,7 +297,7 @@ class AdaptiveJAXOptimizer(nnx.Module):
         """
 
         # Check cache first
-        cache_key = f"{id(model)}_{hash(str(workload))}"
+        cache_key = f"{id(model)}_{workload}"
         if cache_key in self.optimization_cache:
             return self.optimization_cache[cache_key]
 

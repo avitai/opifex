@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   calls in direct `nnx.Module` subclasses are removed; `nnx.Module` defines no `__init__`, so
   each reached `object.__init__`. `trainable-metadata`: `SystemDynamicsModel`'s linear `A`
   and `B` matrices no longer pass `trainable=True` to `nnx.Param`, metadata flax never reads.
+- `SearchEngine`'s keyword embedding is scikit-learn's feature hashing
+  (`FeatureHasher`: signed MurmurHash3 buckets), L2-normalised, of the extracted
+  keywords, in place of the builtin `hash`, whose value for a `str` changes with
+  `PYTHONHASHSEED`, so the same text embeds, and ranks, the same in every interpreter
+  (`salted-hash`). Colliding keywords take opposite signs half the time, so cosine scores
+  can be negative. Requires `scikit-learn>=1.9.1`, now a declared dependency.
+  `AdaptiveJAXOptimizer`'s cache key holds the workload's text instead of its hash.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.
