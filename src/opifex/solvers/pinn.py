@@ -151,7 +151,7 @@ class PINNConfig:
         num_iterations: Number of training iterations
         learning_rate: Learning rate for optimizer
         print_every: Print loss every N iterations (0 to disable)
-        seed: Random seed for reproducibility
+        seed: Seed the collocation points are sampled from
         loss_config: PhysicsLossConfig for loss weights (composition, not duplication)
     """
 
@@ -160,7 +160,7 @@ class PINNConfig:
     num_iterations: int = 2000
     learning_rate: float = 1e-3
     print_every: int = 500
-    seed: int = 42
+    seed: int
     loss_config: PhysicsLossConfig = field(
         default_factory=lambda: PhysicsLossConfig(
             data_loss_weight=0.0,
@@ -223,7 +223,7 @@ class PINNSolver:
         >>>
         >>> # Solve
         >>> solver = PINNSolver(pinn)
-        >>> result = solver.solve(geometry, residual_fn, bc_fn, PINNConfig())
+        >>> result = solver.solve(geometry, residual_fn, bc_fn, PINNConfig(seed=0))
     """
 
     def __init__(self, model: nnx.Module) -> None:
@@ -239,7 +239,7 @@ class PINNSolver:
         geometry: Geometry,
         residual_fn: Callable[[nnx.Module, Float[Array, "... d"]], Float[Array, ...]],
         bc_fn: Callable[[Float[Array, "... d"]], Float[Array, ...]],
-        config: PINNConfig | None = None,
+        config: PINNConfig,
     ) -> PINNResult:
         """Solve a PDE using physics-informed neural network.
 
@@ -249,7 +249,7 @@ class PINNSolver:
                 Use factory functions like poisson_residual() or define your own.
             bc_fn: Boundary condition function returning target values at
                 boundary points.
-            config: Solver configuration. Uses defaults if None.
+            config: Solver configuration, including the seed the collocation points come from.
 
         Returns:
             PINNResult containing trained model and metrics
@@ -266,7 +266,6 @@ class PINNSolver:
             ...     return laplacian - u  # Example: ∇²u = u
             >>> result = solver.solve(geometry, custom_residual, bc_fn, config)
         """
-        config = config or PINNConfig()
 
         # Create boundary loss function
         def bc_loss_fn(model: nnx.Module, x_bc: Float[Array, "... d"]) -> Float[Array, ""]:

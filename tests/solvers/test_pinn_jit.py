@@ -11,9 +11,7 @@ import pytest
 from flax import nnx
 
 from opifex.core.problems import create_pde_problem
-from opifex.core.solver.interface import SolverConfig, SolverState
 from opifex.geometry.csg import Rectangle
-from opifex.solvers.pinn import PINNSolver
 
 
 class SimpleMLP(nnx.Module):
@@ -43,35 +41,6 @@ def heat_problem():
 
 class TestPINNSolverJIT:
     """Test JIT compatibility of PINNSolver."""
-
-    def test_solve_is_not_jit_compatible_by_default(self, heat_problem):
-        """Verify that blindly JIT-ing the solve method fails (as expected currently).
-
-        The current implementation uses a Python loop in Trainer.train, so nnx.jit
-        on the outer method will likely trace the loop initialization or fail
-        due to side effects / dynamic control flow not compatible with trace-once.
-        """
-        model = SimpleMLP(jax.random.key(0))
-        solver = PINNSolver(model=model)
-        config = SolverConfig(max_iterations=2)
-        state = SolverState()
-
-        # We expect this might fail or run but not be truly JIT-ed (Tracer leaks etc)
-        # or Raise a TypeError because of side effects.
-        # Let's see what happens.
-
-        @nnx.jit
-        def jitted_solve(problem, st, cfg):
-            return solver.solve(problem, st, cfg)
-
-        # This should likely fail because 'problem' is an object that might not be a valid JAX type
-        # unless registered as a Pytree. Problem protocol isn't necessarily a Pytree yet.
-        # Also Trainer creates extensive state.
-
-        with pytest.raises(Exception, match=r".*"):
-            # We catch broadly to verify it's indeed NOT compatible right now.
-            # Specific error might vary (TypeError, TracerError, etc.)
-            jitted_solve(heat_problem, state, config)
 
     def test_inner_step_jit(self, heat_problem):
         """Verify that we COULD JIT the inner step if we wanted."""

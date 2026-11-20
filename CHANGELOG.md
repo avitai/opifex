@@ -89,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `use_running_average=True` in the constructor, `num_iterations` below one is refused, and a
   write of the vectors that fails is no longer silently skipped. Checkpoints that hold `u`
   and `v` as parameters do not restore.
+- **Breaking:** `PINNConfig` requires `seed`, and `PINNSolver.solve` requires its `config`;
+  a call without one sampled its collocation points from seed 42.
 - `AtomisticModelRegistry`, `BackboneRegistry`, `PropertyHeadRegistry` and
   `ServableModelRegistry` leave the refusal of a taken name to calibrax: registering under
   a taken name raises `DuplicateRegistrationError` and keeps the class registered first.

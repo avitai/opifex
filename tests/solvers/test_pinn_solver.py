@@ -29,13 +29,13 @@ class TestPINNConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        config = PINNConfig()
+        config = PINNConfig(seed=0)
         assert config.n_interior == 100
         assert config.n_boundary == 50
         assert config.num_iterations == 2000
         assert config.learning_rate == 1e-3
         assert config.print_every == 500
-        assert config.seed == 42
+        assert config.seed == 0
         # Check composed PhysicsLossConfig defaults
         assert config.loss_config.physics_loss_weight == 1.0
         assert config.loss_config.boundary_loss_weight == 100.0
@@ -241,6 +241,7 @@ class TestPINNSolver:
             n_boundary=10,
             num_iterations=5,
             print_every=0,
+            seed=0,
         )
         result = solver.solve(geometry, residual_fn, bc_fn, config)
 

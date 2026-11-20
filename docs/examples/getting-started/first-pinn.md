@@ -48,9 +48,9 @@ If you're familiar with DeepXDE, here's how Opifex compares:
 |------------------------------------------|----------------------------------------------------------|
 | `dde.geometry.Interval(-1, 1)`           | `Interval(-1.0, 1.0)`                                    |
 | `dde.nn.FNN([1, 50, 50, 50, 1], "tanh")` | `create_poisson_pinn(spatial_dim=1, hidden_dims=[50,50,50])` |
-| Manual loss weight tuning                | `PINNConfig(loss_config=PhysicsLossConfig(...))`         |
-| `model.train(iterations=2000)`           | `PINNSolver(pinn).solve(geometry, residual_fn, bc_fn)`   |
-| `model.compile("adam", lr=1e-3)`         | `PINNConfig(learning_rate=1e-3)`                         |
+| Manual loss weight tuning                | `PINNConfig(loss_config=PhysicsLossConfig(...), seed=0)` |
+| `model.train(iterations=2000)`           | `PINNSolver(pinn).solve(geometry, residual_fn, bc_fn, config)` |
+| `model.compile("adam", lr=1e-3)`         | `PINNConfig(learning_rate=1e-3, seed=0)`                 |
 | String-based PDE selection               | `poisson_residual(source_fn)`, an explicit factory         |
 
 **Key differences:**
@@ -396,6 +396,7 @@ The plot shows:
 config = PINNConfig(
     learning_rate=1e-2,  # Higher learning rate
     num_iterations=2000,
+    seed=0,
 )
 
 # Or use larger network
@@ -422,6 +423,7 @@ config = PINNConfig(
         physics_loss_weight=1.0,
         boundary_loss_weight=1000.0,  # Was 100.0
     ),
+    seed=0,
 )
 ```
 
@@ -436,5 +438,6 @@ config = PINNConfig(
 ```python
 config = PINNConfig(
     learning_rate=1e-4,  # Reduced from 1e-3
+    seed=0,
 )
 ```
