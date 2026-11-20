@@ -13,7 +13,15 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float  # noqa: TC002
 
-from opifex.geometry.csg.types import _EnhancedShapeBase, Point2D, Points2D, Shape2D
+from opifex.geometry.csg.types import (
+    _EnhancedShapeBase,
+    BoundingBox,
+    Membership,
+    Point2D,
+    PointBatch2D,
+    Points2D,
+    Shape2D,
+)
 
 
 class _SDFOperations:
@@ -60,13 +68,15 @@ class CSGUnion(_EnhancedShapeBase):
         self.shape_a = shape_a
         self.shape_b = shape_b
 
-    def contains(self, point: Point2D) -> bool:
-        """Point is in union if it's in either shape."""
-        # SDF-based robust evaluation (every shape exposes ``distance``).
-        dist_a = self.shape_a.distance(point)
-        dist_b = self.shape_b.distance(point)
-        union_dist = _SDFOperations.union_sdf(dist_a, dist_b)
-        return bool(union_dist <= 0)
+    def contains(self, points: PointBatch2D) -> Membership:
+        """Return whether each point lies in A or in B (DeepXDE ``CSGUnion.inside``)."""
+        return self.shape_a.contains(points) | self.shape_b.contains(points)
+
+    @property
+    def bbox(self) -> BoundingBox:
+        """Return the box holding both operands' boxes."""
+        a, b = self.shape_a.bbox, self.shape_b.bbox
+        return jnp.stack([jnp.minimum(a[0], b[0]), jnp.maximum(a[1], b[1])])
 
     def distance(self, point: Point2D) -> Float[jax.Array, ""]:
         """Compute signed distance to union boundary."""
@@ -142,12 +152,15 @@ class CSGIntersection(_EnhancedShapeBase):
         self.shape_a = shape_a
         self.shape_b = shape_b
 
-    def contains(self, point: Point2D) -> bool:
-        """Point is in intersection if it's in both shapes."""
-        dist_a = self.shape_a.distance(point)
-        dist_b = self.shape_b.distance(point)
-        intersection_dist = _SDFOperations.intersection_sdf(dist_a, dist_b)
-        return bool(intersection_dist <= 0)
+    def contains(self, points: PointBatch2D) -> Membership:
+        """Return whether each point lies in A and in B (DeepXDE ``CSGIntersection.inside``)."""
+        return self.shape_a.contains(points) & self.shape_b.contains(points)
+
+    @property
+    def bbox(self) -> BoundingBox:
+        """Return the overlap of the operands' boxes."""
+        a, b = self.shape_a.bbox, self.shape_b.bbox
+        return jnp.stack([jnp.maximum(a[0], b[0]), jnp.minimum(a[1], b[1])])
 
     def distance(self, point: Point2D) -> Float[jax.Array, ""]:
         """Compute signed distance to intersection boundary."""
@@ -190,8 +203,7 @@ class CSGIntersection(_EnhancedShapeBase):
         # Rejection sampling from Shape A
         # Since intersection is subset of A, this is efficient if overlap is high
         candidates = self.shape_a.sample_interior(n * 2, key)
-        mask = jax.vmap(self.shape_b.contains)(candidates)
-        valid = candidates[mask]
+        valid = candidates[self.shape_b.contains(candidates)]
 
         if valid.shape[0] >= n:
             return valid[:n]
@@ -225,12 +237,17 @@ class CSGDifference(_EnhancedShapeBase):
         self.shape_a = shape_a
         self.shape_b = shape_b
 
-    def contains(self, point: Point2D) -> bool:
-        """Point is in difference if it's in A but not in B."""
-        dist_a = self.shape_a.distance(point)
-        dist_b = self.shape_b.distance(point)
-        difference_dist = _SDFOperations.difference_sdf(dist_a, dist_b)
-        return bool(difference_dist <= 0)
+    def contains(self, points: PointBatch2D) -> Membership:
+        """Return whether each point lies in A and not in B (DeepXDE ``CSGDifference.inside``).
+
+        B's boundary belongs to B, so it is not in the difference.
+        """
+        return self.shape_a.contains(points) & ~self.shape_b.contains(points)
+
+    @property
+    def bbox(self) -> BoundingBox:
+        """Return A's box, which holds the difference."""
+        return self.shape_a.bbox
 
     def distance(self, point: Point2D) -> Float[jax.Array, ""]:
         """Compute signed distance to difference boundary."""
@@ -267,8 +284,7 @@ class CSGDifference(_EnhancedShapeBase):
         """Sample points from difference interior (A - B)."""
         # Rejection sampling from Shape A: accept if NOT in B
         candidates = self.shape_a.sample_interior(n * 2, key)
-        mask = jax.vmap(lambda p: not self.shape_b.contains(p))(candidates)
-        valid = candidates[mask]
+        valid = candidates[~self.shape_b.contains(candidates)]
 
         if valid.shape[0] >= n:
             return valid[:n]
@@ -315,10 +331,8 @@ def compute_boundary_normals(shape: Shape2D, point: Point2D) -> Point2D:
     return shape.compute_normal(point)
 
 
-def sample_boundary_points(shape: Shape2D, n_points: int, key: jax.Array | None = None) -> Points2D:
-    """Sample points on shape boundary."""
-    if key is None:
-        key = jax.random.PRNGKey(42)
+def sample_boundary_points(shape: Shape2D, n_points: int, *, key: jax.Array) -> Points2D:
+    """Sample ``n_points`` points on ``shape``'s boundary, drawn from ``key``."""
     return shape.sample_boundary(n=n_points, key=key)
 
 
@@ -334,9 +348,25 @@ def smooth_union(shape_a: Shape2D, shape_b: Shape2D, smoothness: float = 0.1):
             self.shape_b = shape_b
             self.smoothness = smoothness
 
-        def contains(self, point: Point2D) -> bool:
-            """Return whether ``point`` lies inside the smooth union."""
-            return bool(self.distance(point) <= 0)
+        def contains(self, points: PointBatch2D) -> Membership:
+            """Return whether each point lies where the smooth-minimum distance is <= 0.
+
+            The blend defines this shape, so its membership is its signed distance's sign.
+            """
+            points = jnp.asarray(points)
+            flat = points.reshape(-1, 2)
+            return (jax.vmap(self.distance)(flat) <= 0).reshape(points.shape[:-1])
+
+        @property
+        def bbox(self) -> BoundingBox:
+            """Return the operands' joint box, widened by the blend's reach.
+
+            The smooth minimum lowers the distance by at most ``smoothness / 4``, so the shape
+            reaches at most that far beyond the plain union.
+            """
+            a, b = self.shape_a.bbox, self.shape_b.bbox
+            reach = self.smoothness / 4
+            return jnp.stack([jnp.minimum(a[0], b[0]) - reach, jnp.maximum(a[1], b[1]) + reach])
 
         def distance(self, point: Point2D) -> Float[jax.Array, ""]:
             """Return the smooth-minimum signed distance to the union at ``point``."""

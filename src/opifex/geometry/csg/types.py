@@ -17,7 +17,7 @@ from typing import Protocol, runtime_checkable
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Float
+from jaxtyping import Bool, Float
 
 from opifex.geometry.base import Geometry
 
@@ -29,6 +29,9 @@ Point3D = Float[jax.Array, "3"]  # 3D point
 Points1D = Float[jax.Array, "n 1"]  # N x 1 array of 1D points
 Points2D = Float[jax.Array, "n 2"]  # N x 2 array of 2D points
 Points3D = Float[jax.Array, "n 3"]  # N x 3 array of 3D points
+PointBatch2D = Float[jax.Array, "... 2"]  # 2D points with any leading dimensions
+Membership = Bool[jax.Array, "..."]  # one membership per point
+BoundingBox = Float[jax.Array, "2 d"]  # [[mins], [maxs]]
 
 
 @runtime_checkable
@@ -36,8 +39,17 @@ class Shape2D(Geometry, Protocol):
     """Protocol for 2D geometric shapes."""
 
     @abstractmethod
-    def contains(self, point: Point2D) -> bool:
-        """Check if a point is contained within the shape."""
+    def contains(self, points: PointBatch2D) -> Membership:
+        """Return whether each point lies in the shape, as DeepXDE's ``Geometry.inside``.
+
+        Takes points of shape ``(..., 2)`` and returns booleans of shape ``(...)``.
+        """
+        ...
+
+    @property
+    @abstractmethod
+    def bbox(self) -> BoundingBox:
+        """Return the axis-aligned bounding box ``[[x_min, y_min], [x_max, y_max]]``."""
         ...
 
     @abstractmethod

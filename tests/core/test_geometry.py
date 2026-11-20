@@ -17,6 +17,7 @@ import pytest
 from opifex.geometry.csg import (
     Circle,
     compute_boundary_normals,
+    compute_shape_area,
     difference,
     intersection,
     MolecularGeometry,
@@ -174,13 +175,28 @@ class TestBoundaryDetection:
         circle = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
 
         # Sample boundary points
-        boundary_points = sample_boundary_points(circle, n_points=100)
+        boundary_points = sample_boundary_points(circle, n_points=100, key=jax.random.key(0))
 
         assert boundary_points.shape == (100, 2)
 
         # All points should be approximately on the boundary
         distances = jnp.linalg.norm(boundary_points, axis=1)
         assert jnp.allclose(distances, 1.0, atol=1e-6)
+
+    def test_shape_area_is_a_monte_carlo_estimate_from_the_given_key(self):
+        """The unit circle's estimate lies within five binomial standard errors of pi.
+
+        The fraction of ``n`` uniform points inside the circle has standard error
+        ``sqrt(p (1 - p) / n)`` with ``p = pi / A_box``; scaled by the box area ``A_box``
+        that is ``sqrt(pi (A_box - pi) / n)``, and the circle's box is ``[-1, 1]^2``.
+        """
+        circle = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
+        n = 4_000
+        area = compute_shape_area(circle, key=jax.random.key(0), resolution=n)
+        standard_error = float(jnp.sqrt(jnp.pi * (4.0 - jnp.pi) / n))
+        assert abs(area - float(jnp.pi)) < 5 * standard_error
+        assert area == compute_shape_area(circle, key=jax.random.key(0), resolution=n)
+        assert area != compute_shape_area(circle, key=jax.random.key(1), resolution=n)
 
 
 class TestMolecularGeometry:

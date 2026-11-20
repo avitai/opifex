@@ -651,9 +651,7 @@ class AdaptiveDomain:
 
     def create_initial_mesh(self):
         """Create initial uniform mesh."""
-        bounds = self.base_geometry.bounding_box()
-        x_min, x_max = bounds[0]
-        y_min, y_max = bounds[1]
+        (x_min, y_min), (x_max, y_max) = self.base_geometry.bbox
 
         x = jnp.linspace(x_min, x_max, self.resolution)
         y = jnp.linspace(y_min, y_max, self.resolution)
