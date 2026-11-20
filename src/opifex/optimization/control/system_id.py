@@ -87,15 +87,12 @@ class SystemIdentifier(nnx.Module):
         self,
         state: jax.Array,
         input_val: jax.Array,
-        *,
-        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jax.Array:
         """Predict next state given current state and input.
 
         Args:
             state: Current state vector
             input_val: Input/control vector
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Predicted next state
@@ -645,15 +642,12 @@ class SystemDynamicsModel(nnx.Module):
         self,
         state: jax.Array,
         input_val: jax.Array,
-        *,
-        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jax.Array:
         """Compute next state given current state and input.
 
         Args:
             state: Current state
             input_val: Input vector
-            deterministic: Whether to use deterministic computation
 
         Returns:
             Next state prediction

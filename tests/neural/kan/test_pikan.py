@@ -94,13 +94,6 @@ class TestPIKAN:
         y = default_pikan(x)
         assert jnp.all(jnp.isfinite(y))
 
-    def test_deterministic_flag(self, default_pikan):
-        """deterministic kwarg accepted without error."""
-        x = jax.random.normal(jax.random.PRNGKey(0), (4, 2))
-        y1 = default_pikan(x, deterministic=True)
-        y2 = default_pikan(x, deterministic=False)
-        assert y1.shape == y2.shape
-
     def test_different_kan_types(self):
         """PIKAN should accept multiple Artifex KAN variants."""
         for kan_type in ("dense", "efficient", "chebyshev"):

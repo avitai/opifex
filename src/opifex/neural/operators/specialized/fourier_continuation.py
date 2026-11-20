@@ -272,14 +272,12 @@ class FourierContinuationExtender(nnx.Module):
         self,
         x: jnp.ndarray,
         axes: int | tuple[int, ...] | None = None,
-        deterministic: bool = True,  # noqa: ARG002 - nnx forward interface carries a deterministic flag
     ) -> jnp.ndarray:
         """Apply Fourier continuation to input.
 
         Args:
             x: Input tensor to extend
             axes: Axes along which to extend (default: last axis for 1D, last 2 for 2D+)
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Extended tensor
@@ -438,14 +436,12 @@ class FourierBoundaryHandler(nnx.Module):
         self,
         x: jnp.ndarray,
         axes: int | tuple[int, ...] | None = None,
-        deterministic: bool = True,
     ) -> jnp.ndarray:
         """Apply intelligent boundary handling to input.
 
         Args:
             x: Input tensor to extend
             axes: Axes along which to extend
-            deterministic: Whether to use deterministic mode
 
         Returns:
             Extended tensor with optimal boundary conditions
@@ -459,7 +455,7 @@ class FourierBoundaryHandler(nnx.Module):
         # Apply each continuation method
         extended_results = []
         for method in self.continuation_methods:
-            extended = self.extenders[method](x, axes, deterministic)
+            extended = self.extenders[method](x, axes)
             extended_results.append(extended)
 
         # Ensure all results have the same shape before stacking

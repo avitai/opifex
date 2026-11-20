@@ -165,19 +165,18 @@ class UNOWithGrid(nnx.Module):
             rngs=rngs,
         )
 
-    def __call__(self, x: jax.Array, *, deterministic: bool = True) -> jax.Array:
+    def __call__(self, x: jax.Array) -> jax.Array:
         """Append grid coordinates, then apply the U-NO.
 
         Args:
             x: Input of shape (batch, height, width, input_channels).
-            deterministic: Whether to run the U-NO in deterministic mode.
 
         Returns:
             Output of shape (batch, height, width, output_channels).
         """
         x_embedded = self.grid_embedding(x)
         x_cf = jnp.transpose(x_embedded, (0, 3, 1, 2))
-        y_cf = self.uno(x_cf, deterministic=deterministic)
+        y_cf = self.uno(x_cf)
         return jnp.transpose(y_cf, (0, 2, 3, 1))
 
 
@@ -333,10 +332,7 @@ def main() -> dict[str, float | int]:
     x_test_jnp = jnp.array(x_test_n)
     y_test_jnp = jnp.array(y_test)
 
-    predictions = (
-        predict_in_batches(lambda b: trained_model(b, deterministic=True), x_test_jnp) * y_std
-        + y_mean
-    )
+    predictions = predict_in_batches(trained_model, x_test_jnp) * y_std + y_mean
 
     test_mse = float(jnp.mean((predictions - y_test_jnp) ** 2))
 
@@ -362,10 +358,7 @@ def main() -> dict[str, float | int]:
     x_high_n = jnp.array((x_high - x_mean) / x_std)
     y_high_jnp = jnp.array(y_high)
 
-    pred_high = (
-        predict_in_batches(lambda b: trained_model(b, deterministic=True), x_high_n) * y_std
-        + y_mean
-    )
+    pred_high = predict_in_batches(trained_model, x_high_n) * y_std + y_mean
     sr_per_sample = per_sample_relative_l2(pred_high, y_high_jnp)
     sr_error = float(jnp.mean(sr_per_sample))
     print(

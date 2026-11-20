@@ -432,8 +432,8 @@ class TestSystemDynamicsModel:
         input_val = jnp.array([0.1])
 
         # Multiple predictions should be identical (deterministic)
-        pred1 = model(state, input_val, deterministic=True)
-        pred2 = model(state, input_val, deterministic=True)
+        pred1 = model(state, input_val)
+        pred2 = model(state, input_val)
 
         assert jnp.allclose(pred1, pred2)
 

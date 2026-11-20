@@ -307,14 +307,12 @@ class UNeuralOperator(nnx.Module):
         inv_perm = [0, spatial + 1, *range(1, spatial + 1)]
         return jnp.transpose(layer(jnp.transpose(x, perm)), inv_perm)
 
-    def __call__(self, x: jax.Array, *, deterministic: bool = True) -> jax.Array:  # noqa: ARG002 - nnx forward interface carries a deterministic flag
+    def __call__(self, x: jax.Array) -> jax.Array:
         """Apply the U-NO.
 
         Args:
             x: Input of shape ``(batch, in_channels, height, width)``
                 (channels-first).
-            deterministic: Present for interface compatibility; U-NO has no
-                stochastic layers.
 
         Returns:
             Output of shape ``(batch, out_channels, *output_size)`` where the

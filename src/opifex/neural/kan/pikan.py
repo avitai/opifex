@@ -151,20 +151,17 @@ class PIKAN(nnx.Module):
     def __call__(
         self,
         x: jax.Array,
-        *,
-        deterministic: bool = False,
     ) -> jax.Array:
         """Forward pass through KAN stack.
 
         Args:
             x: Input coordinates, shape (batch, in_dim).
-            deterministic: Passed to each KAN layer.
 
         Returns:
             Output fields, shape (batch, out_dim).
         """
         for layer in self.layers:
-            x = layer(x, deterministic=deterministic)  # type: ignore[reportCallIssue]
+            x = layer(x)
         return x
 
     def update_grids(
@@ -231,20 +228,17 @@ class SincKAN(nnx.Module):
     def __call__(
         self,
         x: jax.Array,
-        *,
-        deterministic: bool = False,
     ) -> jax.Array:
         """Forward pass through sinc KAN stack.
 
         Args:
             x: Input, shape (batch, in_dim).
-            deterministic: Passed to each layer.
 
         Returns:
             Output, shape (batch, out_dim).
         """
         for layer in self.layers:
-            x = layer(x, deterministic=deterministic)  # type: ignore[reportCallIssue]
+            x = layer(x)
         return x
 
 
