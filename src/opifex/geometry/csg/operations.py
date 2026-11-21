@@ -13,6 +13,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float  # noqa: TC002
 
+from opifex.geometry.csg._sampling import draw_until
 from opifex.geometry.csg.types import (
     _EnhancedShapeBase,
     BoundingBox,
@@ -87,46 +88,23 @@ class CSGUnion(_EnhancedShapeBase):
         return jnp.array(result)
 
     def sample_boundary(self, n: int, key: jax.Array) -> Points2D:
-        """Sample boundary points using enhanced filtering."""
-        # Enhanced sampling using distance-based filtering
-        key1, key2, key3 = jax.random.split(key, 3)
-
-        # Oversample from both shapes
-        oversample_factor = 2
-        points_a = self.shape_a.sample_boundary(n * oversample_factor, key1)
-        points_b = self.shape_b.sample_boundary(n * oversample_factor, key2)
-
-        # Filter points near the true boundary
-        def is_boundary_point(point):
-            """Return whether a sampled point lies on the union boundary."""
-            dist_a = self.shape_a.distance(point)
-            dist_b = self.shape_b.distance(point)
-            union_dist = _SDFOperations.union_sdf(dist_a, dist_b)
-            return jnp.abs(union_dist) < 1e-3
-
-        all_points = jnp.concatenate([points_a, points_b], axis=0)
-        boundary_mask = jax.vmap(is_boundary_point)(all_points)
-        boundary_points = all_points[boundary_mask]
-
-        # Sample n if we have more than needed
-        if len(boundary_points) >= n:
-            indices = jax.random.choice(key3, len(boundary_points), (n,), replace=False)
-            return boundary_points[indices]
-        # If not enough boundary points, fill with regular sampling
-        remaining = n - len(boundary_points)
-        if remaining > 0:
-            extra_a = self.shape_a.sample_boundary(remaining // 2, key1)
-            extra_b = self.shape_b.sample_boundary(remaining - remaining // 2, key2)
-            return jnp.concatenate([boundary_points, extra_a, extra_b], axis=0)
-        return boundary_points
+        """Sample the union's boundary: A's boundary outside B and B's outside A (DeepXDE)."""
+        return draw_until(
+            n,
+            key,
+            lambda k: _boundary_round(
+                k,
+                n,
+                self.shape_a,
+                self.shape_b,
+                keep_a_inside_b=False,
+                keep_b_inside_a=False,
+            ),
+        )
 
     def sample_interior(self, n: int, key: jax.Array) -> Points2D:
-        """Sample points from union interior."""
-        # Simple approach: sample from A and B proportionally
-        key1, key2 = jax.random.split(key)
-        points_a = self.shape_a.sample_interior(n // 2, key1)
-        points_b = self.shape_b.sample_interior(n - n // 2, key2)
-        return jnp.concatenate([points_a, points_b], axis=0)
+        """Sample the union uniformly: uniform points of its bounding box that it contains."""
+        return draw_until(n, key, lambda k: _box_round(k, n, self))
 
     def compute_normal(self, point: Point2D) -> Point2D:
         """Compute normal (enhanced approach)."""
@@ -171,47 +149,28 @@ class CSGIntersection(_EnhancedShapeBase):
         return jnp.array(result)
 
     def sample_boundary(self, n: int, key: jax.Array) -> Points2D:
-        """Sample boundary points (enhanced approach)."""
-        # Enhanced sampling using distance-based filtering (as in union).
-        key1, key2, key3 = jax.random.split(key, 3)
-
-        oversample_factor = 3
-        points_a = self.shape_a.sample_boundary(n * oversample_factor, key1)
-        points_b = self.shape_b.sample_boundary(n * oversample_factor, key2)
-
-        def is_intersection_boundary(point):
-            """Return whether a sampled point lies on the intersection boundary."""
-            dist_a = self.shape_a.distance(point)
-            dist_b = self.shape_b.distance(point)
-            intersection_dist = _SDFOperations.intersection_sdf(dist_a, dist_b)
-            return jnp.abs(intersection_dist) < 1e-3
-
-        all_points = jnp.concatenate([points_a, points_b], axis=0)
-        boundary_mask = jax.vmap(is_intersection_boundary)(all_points)
-        boundary_points = all_points[boundary_mask]
-
-        if len(boundary_points) >= n:
-            indices = jax.random.choice(key3, len(boundary_points), (n,), replace=False)
-            return boundary_points[indices]
-        if len(boundary_points) > 0:
-            return boundary_points
-        # Fallback if no intersection boundary found
-        return jnp.zeros((1, 2))
+        """Sample the intersection's boundary: A's boundary in B and B's in A (DeepXDE)."""
+        return draw_until(
+            n,
+            key,
+            lambda k: _boundary_round(
+                k,
+                n,
+                self.shape_a,
+                self.shape_b,
+                keep_a_inside_b=True,
+                keep_b_inside_a=True,
+            ),
+        )
 
     def sample_interior(self, n: int, key: jax.Array) -> Points2D:
-        """Sample points from intersection interior."""
-        # Rejection sampling from Shape A
-        # Since intersection is subset of A, this is efficient if overlap is high
-        candidates = self.shape_a.sample_interior(n * 2, key)
-        valid = candidates[self.shape_b.contains(candidates)]
+        """Sample the intersection: A's interior points that B contains (DeepXDE)."""
 
-        if valid.shape[0] >= n:
-            return valid[:n]
-        # Pad with last valid or zeros
-        if valid.shape[0] > 0:
-            padding = jnp.repeat(valid[-1:], n - valid.shape[0], axis=0)
-            return jnp.concatenate([valid, padding], axis=0)
-        return jnp.zeros((n, 2))
+        def round_(round_key: jax.Array) -> Points2D:
+            candidates = self.shape_a.sample_interior(n, round_key)
+            return candidates[self.shape_b.contains(candidates)]
+
+        return draw_until(n, key, round_)
 
     def compute_normal(self, point: Point2D) -> Point2D:
         """Compute normal (enhanced approach)."""
@@ -258,40 +217,28 @@ class CSGDifference(_EnhancedShapeBase):
         return jnp.array(result)
 
     def sample_boundary(self, n: int, key: jax.Array) -> Points2D:
-        """Sample points on difference boundary."""
-        # Sample candidates from shape_a boundary and filter
-        candidates = self.shape_a.sample_boundary(n * 2, key)
-
-        def is_difference_boundary(point):
-            """Check if point is on difference boundary."""
-            # Point is on boundary if it's on shape_a and outside shape_b
-            on_a = jnp.isclose(self.shape_a.distance(point), 0.0, atol=1e-6)
-            outside_b = self.shape_b.distance(point) > 1e-6
-            return on_a & outside_b
-
-        boundary_mask = jax.vmap(is_difference_boundary)(candidates)
-        boundary_points = candidates[boundary_mask]
-
-        if len(boundary_points) >= n:
-            indices = jax.random.choice(key, len(boundary_points), (n,), replace=False)
-            return boundary_points[indices]
-        if len(boundary_points) > 0:
-            return boundary_points
-        # Fallback
-        return self.shape_a.sample_boundary(n, key)
+        """Sample the difference's boundary: A's outside B and B's inside A, the hole (DeepXDE)."""
+        return draw_until(
+            n,
+            key,
+            lambda k: _boundary_round(
+                k,
+                n,
+                self.shape_a,
+                self.shape_b,
+                keep_a_inside_b=False,
+                keep_b_inside_a=True,
+            ),
+        )
 
     def sample_interior(self, n: int, key: jax.Array) -> Points2D:
-        """Sample points from difference interior (A - B)."""
-        # Rejection sampling from Shape A: accept if NOT in B
-        candidates = self.shape_a.sample_interior(n * 2, key)
-        valid = candidates[~self.shape_b.contains(candidates)]
+        """Sample the difference: A's interior points that B does not contain (DeepXDE)."""
 
-        if valid.shape[0] >= n:
-            return valid[:n]
-        if valid.shape[0] > 0:
-            padding = jnp.repeat(valid[-1:], n - valid.shape[0], axis=0)
-            return jnp.concatenate([valid, padding], axis=0)
-        return jnp.zeros((n, 2))
+        def round_(round_key: jax.Array) -> Points2D:
+            candidates = self.shape_a.sample_interior(n, round_key)
+            return candidates[~self.shape_b.contains(candidates)]
+
+        return draw_until(n, key, round_)
 
     def compute_normal(self, point: Point2D) -> Point2D:
         """Compute normal from shape A."""
@@ -307,6 +254,43 @@ class CSGDifference(_EnhancedShapeBase):
         norm = jnp.linalg.norm(normal)
         result = jnp.where(norm > 1e-10, normal / norm, jnp.array([1.0, 0.0]))
         return jnp.asarray(result).reshape(2)
+
+
+def _box_round(key: jax.Array, n: int, shape: Shape2D) -> Points2D:
+    """Draw ``n`` uniform points of ``shape.bbox`` and keep those ``shape`` contains."""
+    bbox = shape.bbox
+    candidates = jax.random.uniform(key, (n, 2)) * (bbox[1] - bbox[0]) + bbox[0]
+    return candidates[shape.contains(candidates)]
+
+
+def _boundary_round(
+    key: jax.Array,
+    n: int,
+    shape_a: Shape2D,
+    shape_b: Shape2D,
+    *,
+    keep_a_inside_b: bool,
+    keep_b_inside_a: bool,
+) -> Points2D:
+    """Draw ``n`` boundary points of each operand, keep those on the result, and shuffle them.
+
+    Args:
+        key: Key the two boundary draws and the shuffle come from.
+        n: Number of boundary points drawn from each operand.
+        shape_a: First operand.
+        shape_b: Second operand.
+        keep_a_inside_b: Keep A's points that B contains (else those it does not).
+        keep_b_inside_a: Keep B's points that A contains (else those it does not).
+
+    Returns:
+        The kept points in random order.
+    """
+    key_a, key_b, key_order = jax.random.split(key, 3)
+    points_a = shape_a.sample_boundary(n, key_a)
+    points_b = shape_b.sample_boundary(n, key_b)
+    kept_a = points_a[shape_b.contains(points_a) == keep_a_inside_b]
+    kept_b = points_b[shape_a.contains(points_b) == keep_b_inside_a]
+    return jax.random.permutation(key_order, jnp.concatenate([kept_a, kept_b]))
 
 
 # CSG operation functions (preserving exact API)

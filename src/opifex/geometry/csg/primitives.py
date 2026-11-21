@@ -7,6 +7,7 @@ import jax.numpy as jnp
 from jaxtyping import Float  # noqa: TC002
 
 from opifex.geometry.base import Geometry
+from opifex.geometry.csg._sampling import draw_until
 from opifex.geometry.csg.types import (
     _EnhancedShapeBase,
     BoundingBox,
@@ -464,42 +465,14 @@ class Polygon(_EnhancedShapeBase):
         return jnp.asarray(result)
 
     def sample_interior(self, n: int, key: jax.Array) -> Points2D:
-        """Sample points from polygon interior using rejection sampling."""
-        # Find bounding box
-        min_vals = jnp.min(self.vertices, axis=0)
-        max_vals = jnp.max(self.vertices, axis=0)
+        """Sample the polygon uniformly: uniform points of its bounding box that it contains."""
+        bbox = self.bbox
 
-        # Simple rejection sampling
-        # Note: For complex polygons, ear clipping triangulation is better
-        # but more complex
-        def rejection_sample(current_key, num_needed):
-            """Draw interior samples by rejection sampling within the bounding box."""
-            # Generate proposals
-            key1, key2 = jax.random.split(current_key)
-            proposals_x = jax.random.uniform(
-                key1, (num_needed * 2,), minval=min_vals[0], maxval=max_vals[0]
-            )
-            proposals_y = jax.random.uniform(
-                key2, (num_needed * 2,), minval=min_vals[1], maxval=max_vals[1]
-            )
-            proposals = jnp.stack([proposals_x, proposals_y], axis=1)
+        def round_(round_key: jax.Array) -> Points2D:
+            candidates = jax.random.uniform(round_key, (n, 2)) * (bbox[1] - bbox[0]) + bbox[0]
+            return candidates[self.contains(candidates)]
 
-            # Check containment
-            return proposals[self.contains(proposals)]
-
-        # Initial batch
-        valid_points = rejection_sample(key, n)
-
-        # Pad or slice to get exactly n
-        # This is a naive implementation; production code might iterate or use dynamic
-        # shapes if allowed. For fixed shape JAX, we typically oversample and then
-        # mask/pad.
-        if valid_points.shape[0] >= n:
-            return valid_points[:n]
-
-        # If not enough, pad with last point (not ideal but safe for array shapes)
-        padding = jnp.repeat(valid_points[-1:], n - valid_points.shape[0], axis=0)
-        return jnp.concatenate([valid_points, padding], axis=0)
+        return draw_until(n, key, round_)
 
     def compute_normal(self, point: Point2D) -> Point2D:
         """Compute outward normal at boundary point."""

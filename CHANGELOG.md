@@ -66,6 +66,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its points from it and takes no `bbox` argument (it raised `TracerBoolConversionError`
   before, because it vmapped `contains`). `validate_implementation`, which failed on a
   correct implementation and was tested by nothing, is removed.
+- CSG sampling follows DeepXDE's samplers. `CSGUnion.sample_interior` keeps uniform points of
+  its bounding box that the union contains, so it samples the union uniformly; it drew half
+  its points from each operand, which put twice the density in the overlap.
+  `CSGIntersection`, `CSGDifference` and `Polygon` draw rounds until they hold `n` points
+  instead of repeating their last point to fill `n`. Each CSG node's `sample_boundary` keeps
+  each operand's boundary points that lie on the result's boundary, so a difference's
+  boundary includes its hole, which it never sampled, and an intersection whose boundary
+  filter found nothing no longer returns a single point at the origin.
 - **Breaking:** `optimistix_minimise`, `WarmStartingStrategy.get_warm_start_params` and
   `MetaOptimizer.get_warm_start_params` require a keyword-only `key`. They fell back to
   keys 0 and 42, so every warm start drew the same perturbation or initialisation.
