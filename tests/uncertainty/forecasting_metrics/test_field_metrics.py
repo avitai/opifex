@@ -3,8 +3,7 @@
 Tests pin:
 
 * :class:`opifex.uncertainty.scientific.fields.FieldMetadata` is the
-  canonical Pattern-A frozen dataclass (migrated from the Phase 4
-  temporary ``_FieldConformalMetadata``).
+  canonical Pattern-A frozen dataclass.
 * Spatially aggregated calibration error reports per-spatial-axis
   miscalibration.
 * Function-space L2 coverage measures the fraction of test samples whose
@@ -188,50 +187,6 @@ def test_residual_uncertainty_alignment_is_high_when_uncertainty_tracks_residual
     )
     assert score_aligned > 0.99
     assert score_aligned > score_misaligned
-
-
-# ---------------------------------------------------------------------------
-# Phase 4 → Phase 5 migration (no remaining TODOs)
-# ---------------------------------------------------------------------------
-
-
-def test_phase4_field_module_no_longer_carries_phase5_todo() -> None:
-    """After this task migrates the metadata dataclass, no
-    ``TODO(phase5-task-5.2)`` tag may remain in the codebase."""
-    import subprocess
-
-    result = subprocess.run(
-        [
-            "rg",
-            "-n",
-            r"TODO\(phase5-task-5\.2\)",
-            "src/opifex/uncertainty",
-        ],
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-    matches = result.stdout.strip()
-    assert matches == "", f"Lingering TODO(phase5-task-5.2) markers: {matches!r}"
-
-
-def test_phase4_temporary_field_conformal_metadata_is_deleted() -> None:
-    """The Phase-4 temporary ``_FieldConformalMetadata`` symbol must be gone."""
-    import subprocess
-
-    result = subprocess.run(
-        [
-            "rg",
-            "-n",
-            r"_FieldConformalMetadata\b",
-            "src/opifex/uncertainty",
-        ],
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-    matches = result.stdout.strip()
-    assert matches == "", f"Lingering _FieldConformalMetadata references: {matches!r}"
 
 
 # ---------------------------------------------------------------------------
