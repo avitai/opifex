@@ -102,6 +102,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ScientificComputingIntegrator.comprehensive_scientific_validation` stamps its result
   with `time.time()`; its `timestamp` was a uniform draw from key 0 times 1000, the same
   value on every call.
+- **Breaking:** `PDEBenchConfig`, `PDEBenchSource` and `create_pdebench_loader` live in
+  `opifex.data.sources.pdebench`, which imports `h5py` at its top, instead of
+  `opifex.data.sources.scientific`, which imported it inside `PDEBenchSource.__init__`.
+  `opifex.data.sources` still exports them and loads the module on their first use
+  (`lazy_loader.attach_stub` over `__init__.pyi`, as `datarax.sources` loads its optional
+  integrations), so `import opifex.data.sources` does not import `h5py`. Requires
+  `lazy-loader>=0.6`, now a declared dependency.
 - `PDEBenchLoader.load_dataset` refuses with `NotImplementedError` when a real PDEBench HDF5
   file is present. Reading one is not implemented, and it returned synthetic data in its
   place, without the opt-in or the warning the synthetic path requires.

@@ -49,7 +49,7 @@ import jax.numpy as jnp
 import numpy as np
 from flax import nnx
 
-from opifex.data.sources.scientific import (
+from opifex.data.sources.pdebench import (
     create_pdebench_loader,
     PDEBenchConfig,
     PDEBenchSource,

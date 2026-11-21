@@ -18,7 +18,7 @@ import pytest
 from datarax.pipeline import Pipeline
 from flax import nnx
 
-from opifex.data.sources.scientific import create_pdebench_loader
+from opifex.data.sources.pdebench import create_pdebench_loader
 
 
 # Lazy-import guards for optional deps
@@ -169,21 +169,21 @@ class TestPDEBenchConfigValidation:
 
     def test_config_requires_file_path(self) -> None:
         """PDEBenchConfig with no file_path should raise ValueError."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         with pytest.raises(ValueError, match="file_path is required"):
             PDEBenchConfig(dataset_name="1D_Burgers")
 
     def test_config_requires_dataset_name(self) -> None:
         """PDEBenchConfig with no dataset_name should raise ValueError."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         with pytest.raises(ValueError, match="dataset_name is required"):
             PDEBenchConfig(file_path=Path("nonexistent.hdf5"))
 
     def test_config_invalid_split(self) -> None:
         """Split must be 'train' or 'test'."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         with pytest.raises(ValueError, match="split must be"):
             PDEBenchConfig(
@@ -194,7 +194,7 @@ class TestPDEBenchConfigValidation:
 
     def test_config_invalid_train_split_ratio(self) -> None:
         """train_split must be in (0, 1)."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         with pytest.raises(ValueError, match="train_split must be in"):
             PDEBenchConfig(
@@ -205,7 +205,7 @@ class TestPDEBenchConfigValidation:
 
     def test_config_invalid_input_steps(self) -> None:
         """input_steps must be >= 1."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         with pytest.raises(ValueError, match="input_steps must be"):
             PDEBenchConfig(
@@ -216,7 +216,7 @@ class TestPDEBenchConfigValidation:
 
     def test_config_invalid_output_steps(self) -> None:
         """output_steps must be >= 1."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         with pytest.raises(ValueError, match="output_steps must be"):
             PDEBenchConfig(
@@ -227,7 +227,7 @@ class TestPDEBenchConfigValidation:
 
     def test_config_valid_defaults(self) -> None:
         """Valid config with defaults should not raise."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         config = PDEBenchConfig(
             file_path=Path("nonexistent.hdf5"),
@@ -241,7 +241,7 @@ class TestPDEBenchConfigValidation:
 
     def test_config_is_frozen(self) -> None:
         """StructuralConfig should be frozen after init."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         config = PDEBenchConfig(
             file_path=Path("nonexistent.hdf5"),
@@ -263,7 +263,7 @@ class TestPDEBenchSourceInit:
 
     def test_loads_hdf5_at_init(self, pdebench_hdf5_file: Path) -> None:
         """Data should be loaded to JAX arrays at initialization."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -281,7 +281,7 @@ class TestPDEBenchSourceInit:
 
     def test_nonexistent_file_raises(self, tmp_path: Path) -> None:
         """Loading a nonexistent HDF5 file should raise FileNotFoundError."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=tmp_path / "nonexistent.hdf5",
@@ -294,7 +294,7 @@ class TestPDEBenchSourceInit:
         """PDEBenchSource should be a DataSourceModule subclass."""
         from datarax.core.data_source import DataSourceModule
 
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -305,7 +305,7 @@ class TestPDEBenchSourceInit:
 
     def test_is_nnx_module(self, pdebench_hdf5_file: Path) -> None:
         """PDEBenchSource should be an nnx.Module."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -325,7 +325,7 @@ class TestPDEBenchSplit:
 
     def test_train_split_size(self, pdebench_hdf5_file: Path) -> None:
         """Train split should contain ~90% of sliding window samples."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -342,7 +342,7 @@ class TestPDEBenchSplit:
 
     def test_test_split_size(self, pdebench_hdf5_file: Path) -> None:
         """Test split should contain ~10% of sliding window samples."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -357,7 +357,7 @@ class TestPDEBenchSplit:
 
     def test_train_test_no_overlap(self, pdebench_hdf5_file: Path) -> None:
         """Train and test splits should not overlap in sample indices."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         kwargs = {
             "file_path": pdebench_hdf5_file,
@@ -380,7 +380,7 @@ class TestPDEBenchSplit:
 
     def test_split_is_deterministic(self, pdebench_hdf5_file: Path) -> None:
         """Same config should produce same data."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -404,7 +404,7 @@ class TestPDEBenchSlidingWindow:
 
     def test_input_shape(self, pdebench_hdf5_file: Path) -> None:
         """Input should have (input_steps, *spatial, channels) shape."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -419,7 +419,7 @@ class TestPDEBenchSlidingWindow:
 
     def test_target_shape(self, pdebench_hdf5_file: Path) -> None:
         """Target should have (output_steps, *spatial, channels) shape."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -433,7 +433,7 @@ class TestPDEBenchSlidingWindow:
 
     def test_many_steps_reduces_samples(self, pdebench_hdf5_file: Path) -> None:
         """More input+output steps = fewer valid sliding windows."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config_small = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -453,7 +453,7 @@ class TestPDEBenchSlidingWindow:
 
     def test_darcy_no_time_dimension(self, pdebench_darcy_hdf5_file: Path) -> None:
         """Darcy Flow (no time dimension) should work with input_steps=1, output_steps=1."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_darcy_hdf5_file,
@@ -480,7 +480,7 @@ class TestPDEBenchNormalization:
         """normalize=True yields a datarax MapOperator; normalize=False yields None."""
         from datarax.operators.map_operator import MapOperator
 
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         on = PDEBenchSource(
             PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True),
@@ -497,7 +497,7 @@ class TestPDEBenchNormalization:
 
     def test_loader_normalizes_to_unit_range(self, pdebench_hdf5_file: Path) -> None:
         """A normalize=True loader rescales input/target into [0, 1] (per-channel min-max)."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True
@@ -512,7 +512,7 @@ class TestPDEBenchNormalization:
 
     def test_raw_source_arrays_are_unnormalized(self, pdebench_hdf5_file: Path) -> None:
         """The source itself holds raw data — normalization happens in the pipeline stage."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True
@@ -532,7 +532,7 @@ class TestPDEBenchRandomAccess:
 
     def test_getitem_returns_dict(self, pdebench_hdf5_file: Path) -> None:
         """__getitem__ should return a dict with 'input' and 'target'."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -546,7 +546,7 @@ class TestPDEBenchRandomAccess:
 
     def test_getitem_out_of_bounds(self, pdebench_hdf5_file: Path) -> None:
         """Out-of-bounds index should raise IndexError."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -558,7 +558,7 @@ class TestPDEBenchRandomAccess:
 
     def test_getitem_negative_index(self, pdebench_hdf5_file: Path) -> None:
         """Negative index should work (Python convention)."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -573,7 +573,7 @@ class TestPDEBenchRandomAccess:
         pdebench_hdf5_file: Path,
     ) -> None:
         """Every index from 0..len-1 should be accessible."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -589,7 +589,7 @@ class TestPDEBenchRandomAccess:
         pdebench_hdf5_file: Path,
     ) -> None:
         """Return values should be JAX arrays on default device."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -611,7 +611,7 @@ class TestPDEBenchBatch:
 
     def test_get_records_returns_the_records_at_the_indices(self, pdebench_hdf5_file: Path) -> None:
         """get_records gathers exactly the records named, in the order named."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
         source = PDEBenchSource(config, rngs=nnx.Rngs(0))
@@ -624,7 +624,7 @@ class TestPDEBenchBatch:
 
     def test_get_records_traceable_under_jit(self, pdebench_hdf5_file: Path) -> None:
         """get_records accepts traced indices (composes with nnx.scan / jit)."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
         source = PDEBenchSource(config, rngs=nnx.Rngs(0))
@@ -638,7 +638,7 @@ class TestPDEBenchBatch:
         assert out.shape[0] == 2
 
     def test_shuffle_is_a_keyed_bijection(self, pdebench_hdf5_file: Path) -> None:
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", shuffle=True
@@ -647,7 +647,7 @@ class TestPDEBenchBatch:
 
     def test_element_spec(self, pdebench_hdf5_file: Path) -> None:
         """element_spec describes one element's input/target shapes and dtypes."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -675,7 +675,7 @@ class TestPDEBenchIteration:
         pdebench_hdf5_file: Path,
     ) -> None:
         """Iterating should yield exactly len(source) elements."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -690,7 +690,7 @@ class TestPDEBenchIteration:
         pdebench_hdf5_file: Path,
     ) -> None:
         """Each iterated element should be a dict."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -708,7 +708,7 @@ class TestPDEBenchIteration:
         pdebench_hdf5_file: Path,
     ) -> None:
         """Iteration carries no internal counter — re-iterating yields the same elements."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -731,7 +731,7 @@ class TestPDEBenchCoordinates:
 
     def test_coordinates_loaded(self, pdebench_hdf5_file: Path) -> None:
         """When /x and /t exist in HDF5, they are accessible on source.coordinates."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file,
@@ -748,7 +748,7 @@ class TestPDEBenchLoader:
 
     def test_loader_returns_pipeline(self, pdebench_hdf5_file: Path) -> None:
         """The loader returns a datarax Pipeline whose step() yields batched dicts."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
         loader = create_pdebench_loader(config, batch_size=4, seed=0)
@@ -759,7 +759,7 @@ class TestPDEBenchLoader:
 
     def test_loader_iterates_full_dataset(self, pdebench_hdf5_file: Path) -> None:
         """Successive step() calls advance through the dataset (pipeline-driven position)."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         config = PDEBenchConfig(file_path=pdebench_hdf5_file, dataset_name="1D_Burgers")
         loader = create_pdebench_loader(config, batch_size=4, seed=0)
@@ -769,7 +769,7 @@ class TestPDEBenchLoader:
 
     def test_iterating_the_loader_matches_step(self, pdebench_hdf5_file: Path) -> None:
         """A normalizing loader iterates one epoch equal to successive step() calls."""
-        from opifex.data.sources.scientific import PDEBenchConfig
+        from opifex.data.sources.pdebench import PDEBenchConfig
 
         config = PDEBenchConfig(
             file_path=pdebench_hdf5_file, dataset_name="1D_Burgers", normalize=True
@@ -780,7 +780,7 @@ class TestPDEBenchLoader:
         self, pdebench_hdf5_file: Path
     ) -> None:
         """A shuffled epoch holds every record once, in an order other than the stored one."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         # Unnormalized, so the served rows are the stored records themselves.
         config = PDEBenchConfig(
@@ -811,7 +811,7 @@ class TestPDEBenchMultifield:
         pdebench_multifield_hdf5_file: Path,
     ) -> None:
         """Source should load and stack separate field datasets."""
-        from opifex.data.sources.scientific import PDEBenchConfig, PDEBenchSource
+        from opifex.data.sources.pdebench import PDEBenchConfig, PDEBenchSource
 
         config = PDEBenchConfig(
             file_path=pdebench_multifield_hdf5_file,
