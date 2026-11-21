@@ -156,6 +156,7 @@ class TrainArgs:
     out: Path
     val_every: int
     resume: bool
+    seed: int
 
 
 def _parse_args(argv: list[str] | None) -> TrainArgs:
@@ -200,6 +201,9 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
     parser.add_argument("--out", type=Path, default=_DEFAULT_OUT)
     parser.add_argument("--val-every", type=int, default=1, dest="val_every")
     parser.add_argument(
+        "--seed", type=int, default=0, help="Seed of the model's initialisation and the shuffle."
+    )
+    parser.add_argument(
         "--resume",
         action="store_true",
         help=(
@@ -228,6 +232,7 @@ def _parse_args(argv: list[str] | None) -> TrainArgs:
         out=namespace.out,
         val_every=namespace.val_every,
         resume=namespace.resume,
+        seed=namespace.seed,
     )
 
 
@@ -262,7 +267,7 @@ def _build_predictor(args: TrainArgs) -> BlockHamiltonianPredictor:
         start_refinement_layer=args.start_refinement_layer,
         bottleneck_multiplicity=args.bottleneck_multiplicity,
     )
-    return BlockHamiltonianPredictor(config=config, rngs=nnx.Rngs(0))
+    return BlockHamiltonianPredictor(config=config, rngs=nnx.Rngs(args.seed))
 
 
 def _train_config(args: TrainArgs, steps_per_epoch: int) -> BlockTrainConfig:
@@ -550,6 +555,7 @@ def _run(args: TrainArgs) -> dict[str, object]:
         max_atoms=args.max_atoms,
         max_edges=args.max_edges,
         shuffle=True,
+        shuffle_seed=args.seed,
     )
     db_path = _resolve_db_path(args)
     if args.dataset == "stable":
