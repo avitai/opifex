@@ -45,11 +45,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --extra dev --extra test
 
-      - name: Ensure ripgrep is available
-        # A few migration-guard tests shell out to `rg`; macOS images lack it.
-        run: command -v rg >/dev/null 2>&1 || brew install ripgrep
-
-
       - name: Run the unit suite
         env:
           JAX_PLATFORMS: cpu
@@ -93,15 +88,6 @@ jobs:
       - name: Install dependencies
         # Extras so integration suites exercise ase/pyscf instead of skipping.
         run: uv sync --locked --extra dev --extra test --extra neural-dft --extra quantum-chemistry
-
-      - name: Ensure ripgrep is available
-        # A few migration-guard tests shell out to `rg`; macOS images lack it.
-        run: |
-          command -v rg >/dev/null 2>&1 || {
-            if [ "$RUNNER_OS" = "macOS" ]; then brew install ripgrep; \
-            else sudo apt-get update && sudo apt-get install -y ripgrep; fi
-          }
-
 
       - name: Run extended suites
         env:
