@@ -566,18 +566,111 @@ class TestPDEBenchIntegration:
         with pytest.raises(FileNotFoundError, match="synthetic_key"):
             loader.load_dataset(dataset_name="advection", subset_size=4, resolution="low")
 
-    def test_pdebench_refuses_a_real_file_it_cannot_read(self, tmp_path) -> None:
-        """A real PDEBench file is refused, not replaced with synthetic data."""
+    def test_pdebench_reads_a_real_file_as_pdebenchs_first_training_step(self, tmp_path) -> None:
+        """A real file gives PDEBench's first autoregressive pair, channels first.
+
+        PDEBench's FNO training (``pdebench/models/fno/train.py``) stacks the ``initial_step``
+        input frames as channels and predicts frame ``initial_step``; the test split is the
+        first tenth of the samples.
+        """
+        import h5py
+        import numpy as np
+
+        from opifex.benchmarking.pdebench_integration import PDEBenchLoader
+
+        data_root = tmp_path / "pdebench"
+        data_root.mkdir()
+        tensor = np.arange(20 * 12 * 8, dtype=np.float32).reshape(20, 12, 8)  # (N, T, X)
+        with h5py.File(data_root / "1D_Advection_Sols_beta0.1.hdf5", "w") as f:
+            f["tensor"] = tensor
+            f["x-coordinate"] = np.linspace(0.0, 1.0, 8, dtype=np.float32)
+            f["t-coordinate"] = np.linspace(0.0, 1.0, 13, dtype=np.float32)
+        dataset = PDEBenchLoader(data_root=str(data_root)).load_dataset("advection", split="test")
+        assert dataset["metadata"]["is_synthetic"] is False
+        assert dataset["input_data"].shape == (2, 10, 8)
+        assert dataset["target_data"].shape == (2, 1, 8)
+        assert jnp.array_equal(dataset["input_data"][1], tensor[1, :10])
+        assert jnp.array_equal(dataset["target_data"][1, 0], tensor[1, 10])
+
+    def test_pdebench_darcy_flow_maps_the_coefficient_to_the_solution(self, tmp_path) -> None:
+        import h5py
+        import numpy as np
+
+        from opifex.benchmarking.pdebench_integration import PDEBenchLoader
+
+        data_root = tmp_path / "pdebench"
+        data_root.mkdir()
+        rng = np.random.default_rng(0)
+        nu = rng.random((10, 8, 8), dtype=np.float32)
+        solution = rng.random((10, 1, 8, 8), dtype=np.float32)
+        with h5py.File(data_root / "2D_DarcyFlow_beta1.0_Train.hdf5", "w") as f:
+            f["nu"], f["tensor"] = nu, solution
+            f["x-coordinate"] = np.linspace(0.0, 1.0, 8, dtype=np.float32)
+            f["y-coordinate"] = np.linspace(0.0, 1.0, 8, dtype=np.float32)
+        dataset = PDEBenchLoader(data_root=str(data_root)).load_dataset("darcy_flow", split="train")
+        assert jnp.array_equal(dataset["input_data"][:, 0], nu[1:])
+        assert jnp.array_equal(dataset["target_data"][:, 0], solution[1:, 0])
+
+    def test_pdebench_refuses_several_matching_files_unless_one_is_named(self, tmp_path) -> None:
         import pytest
 
         from opifex.benchmarking.pdebench_integration import PDEBenchLoader
 
         data_root = tmp_path / "pdebench"
         data_root.mkdir()
-        (data_root / "advection.h5").write_bytes(b"")
-        loader = PDEBenchLoader(data_root=str(data_root))
-        with pytest.raises(NotImplementedError, match=r"advection\.h5"):
-            loader.load_dataset(dataset_name="advection", subset_size=4, resolution="low")
+        for beta in ("0.1", "0.4"):
+            (data_root / f"1D_Advection_Sols_beta{beta}.hdf5").write_bytes(b"")
+        with pytest.raises(ValueError, match=r"beta0\.1.*beta0\.4"):
+            PDEBenchLoader(data_root=str(data_root)).load_dataset("advection")
+
+    def test_pdebench_refuses_incompressible_navier_stokes_files(self, tmp_path) -> None:
+        import pytest
+
+        from opifex.benchmarking.pdebench_integration import PDEBenchLoader
+
+        data_root = tmp_path / "pdebench"
+        data_root.mkdir()
+        (data_root / "ns_incom_inhom_2d_512-0.h5").write_bytes(b"")
+        with pytest.raises(ValueError, match="no reader"):
+            PDEBenchLoader(data_root=str(data_root)).load_dataset("navier_stokes")
+
+    def test_pdebench_loader_creates_no_directories(self, tmp_path, monkeypatch) -> None:
+        from opifex.benchmarking.pdebench_integration import PDEBenchLoader
+
+        monkeypatch.chdir(tmp_path)
+        PDEBenchLoader()
+        assert list(tmp_path.iterdir()) == []
+
+    def test_pdebench_synthetic_data_differs_per_dataset_for_one_key(self, tmp_path) -> None:
+        """One synthetic key is folded by the dataset's name, so two datasets share no draw.
+
+        Shallow water and incompressible Navier-Stokes have the same synthetic shape, so one
+        key used as it is would give both the same arrays.
+        """
+        import pytest
+
+        from opifex.benchmarking.pdebench_integration import PDEBenchLoader
+
+        loader = PDEBenchLoader(data_root=str(tmp_path / "empty"))
+        with pytest.warns(UserWarning, match="SYNTHETIC"):
+            water = loader.load_dataset(
+                "shallow_water", subset_size=3, synthetic_key=jax.random.key(0)
+            )
+        with pytest.warns(UserWarning, match="SYNTHETIC"):
+            flow = loader.load_dataset(
+                "navier_stokes", subset_size=3, synthetic_key=jax.random.key(0)
+            )
+        assert water["input_data"].shape == flow["input_data"].shape
+        assert not jnp.array_equal(water["input_data"], flow["input_data"])
+
+    @pytest.mark.parametrize("name", ["diffusion_reaction", "compressible_navier_stokes"])
+    def test_pdebench_every_supported_dataset_has_a_schema(self, tmp_path, name) -> None:
+        from opifex.benchmarking.pdebench_integration import PDEBenchLoader
+
+        loader = PDEBenchLoader(data_root=str(tmp_path / "empty"))
+        with pytest.warns(UserWarning, match="SYNTHETIC"):
+            dataset = loader.load_dataset(name, subset_size=2, synthetic_key=jax.random.key(0))
+        assert dataset["input_data"].shape[0] == 2
 
     def test_pdebench_synthetic_warns_and_flags(self, tmp_path) -> None:
         """Opt-in synthetic data must warn loudly and flag metadata."""
@@ -702,8 +795,9 @@ class TestPDEBenchIntegration:
 
         # Create a simple FNO model for testing
         rngs = nnx.Rngs(42)
+        # Advection's pair stacks its 10 input frames (PDEBench's initial_step) as channels.
         model = FourierNeuralOperator(
-            in_channels=1,
+            in_channels=10,
             out_channels=1,
             hidden_channels=16,
             modes=4,

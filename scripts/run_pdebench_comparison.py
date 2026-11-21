@@ -18,13 +18,13 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-import h5py
 import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
 from flax import nnx
 
+from opifex.data.sources import load_pdebench, PDEBenchConfig
 from opifex.neural.operators.fno.base import FourierNeuralOperator
 
 
@@ -207,18 +207,21 @@ def benchmark_darcy_pdebench(
 
     hdf5_path = _ensure_pdebench_data("2D_DarcyFlow_beta1.0_Train.hdf5")
 
-    with h5py.File(hdf5_path, "r") as f:
-        x_all = np.array(f["nu"][: n_train + n_test])  # (N, 128, 128)
-        y_all = np.array(f["tensor"][: n_train + n_test])  # (N, 1, 128, 128)
+    # PDEBench's split: the test split is the first n_test of the n_train + n_test samples.
+    def _split(split: str):
+        return load_pdebench(
+            PDEBenchConfig(
+                file_path=hdf5_path,
+                split=split,
+                initial_step=1,
+                num_samples_max=n_train + n_test,
+                test_ratio=n_test / (n_train + n_test),
+            )
+        )
 
-    H, W = x_all.shape[1], x_all.shape[2]
-
-    # Use PDEBench's grid coordinates from the HDF5 file (cell-centered)
-    with h5py.File(hdf5_path, "r") as f:
-        gx = np.array(f["x-coordinate"], dtype=np.float32)
-        gy = np.array(f["y-coordinate"], dtype=np.float32)
-    grid_x, grid_y = np.meshgrid(gx, gy, indexing="ij")
-    grid = np.stack([grid_x, grid_y], axis=0)  # (2, H, W)
+    train, test = _split("train"), _split("test")
+    H, W = train.grid.shape[:2]
+    grid = np.moveaxis(train.grid, -1, 0)  # (2, H, W), PDEBench's cell-centred coordinates
 
     def _add_grid(x_raw):
         """Concat permeability + grid coords: (N,128,128) -> (N,3,128,128)."""
@@ -227,10 +230,11 @@ def benchmark_darcy_pdebench(
         g = np.broadcast_to(grid[np.newaxis], (n, 2, H, W))
         return jnp.array(np.concatenate([x_ch, g], axis=1))
 
-    x_train = _add_grid(x_all[:n_train])
-    y_train = jnp.array(y_all[:n_train])
-    x_test = _add_grid(x_all[n_train:])
-    y_test = jnp.array(y_all[n_train:])
+    # Darcy flow's two steps are nu, then the solution: [N, H, W, 2, 1].
+    x_train = _add_grid(train.targets[..., 0, 0])
+    y_train = jnp.array(train.targets[..., 1, 0][:, np.newaxis])
+    x_test = _add_grid(test.targets[..., 0, 0])
+    y_test = jnp.array(test.targets[..., 1, 0][:, np.newaxis])
 
     return _train_and_evaluate(
         "2D_DarcyFlow",
@@ -278,31 +282,32 @@ def benchmark_burgers_pdebench(
 
     hdf5_path = _ensure_pdebench_data("1D_Burgers_Sols_Nu1.0.hdf5")
 
-    with h5py.File(hdf5_path, "r") as f:
-        # tensor shape: (N, T, X) — time-series data
-        data = np.array(f["tensor"][: n_train + n_test])
+    # PDEBench's split: the test split is the first n_test of the n_train + n_test samples.
+    def _split(split: str):
+        return load_pdebench(
+            PDEBenchConfig(
+                file_path=hdf5_path,
+                split=split,
+                initial_step=1,
+                num_samples_max=n_train + n_test,
+                test_ratio=n_test / (n_train + n_test),
+            )
+        )
 
-    # Input: initial condition (t=0), Target: final state (t=-1)
-    x_all = data[:, 0, :]  # (N, X)
-    y_all = data[:, -1, :]  # (N, X)
+    train, test = _split("train"), _split("test")
+    grid_x = train.grid[:, 0]
 
-    # Add grid coordinates as second channel (matching PDEBench FNO1d)
-    n_x = x_all.shape[1]
-    with h5py.File(hdf5_path, "r") as f:
-        if "x-coordinate" in f:
-            grid_x = np.array(f["x-coordinate"], dtype=np.float32)
-        else:
-            grid_x = np.linspace(0, 1, n_x, dtype=np.float32)
+    def _pair(data):
+        """Input u(x, t=0) with the x coordinate as a second channel; target u(x, t=-1)."""
+        initial = data.targets[:, :, 0, 0]  # [N, X, T, 1] -> (N, X)
+        final = data.targets[:, :, -1, 0]
+        n_total, n_x = initial.shape
+        grid_broadcast = np.broadcast_to(grid_x[np.newaxis, np.newaxis, :], (n_total, 1, n_x))
+        x_with_grid = np.concatenate([initial[:, np.newaxis, :], grid_broadcast], axis=1)
+        return jnp.array(x_with_grid), jnp.array(final[:, np.newaxis, :])
 
-    # Channel-first: (N, 2, X) = [u(x,t=0), x_coord]
-    n_total = x_all.shape[0]
-    grid_broadcast = np.broadcast_to(grid_x[np.newaxis, np.newaxis, :], (n_total, 1, n_x))
-    x_with_grid = np.concatenate([x_all[:, np.newaxis, :], grid_broadcast], axis=1)
-
-    x_train = jnp.array(x_with_grid[:n_train])  # (N, 2, X)
-    y_train = jnp.array(y_all[:n_train, np.newaxis, :])
-    x_test = jnp.array(x_with_grid[n_train:])
-    y_test = jnp.array(y_all[n_train:, np.newaxis, :])
+    x_train, y_train = _pair(train)
+    x_test, y_test = _pair(test)
 
     return _train_and_evaluate(
         "1D_Burgers",

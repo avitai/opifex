@@ -16,10 +16,6 @@ src/opifex/benchmarking/evaluation_engine.py
     DOC501: Method `BenchmarkEvaluator.evaluate_model` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `BenchmarkEvaluator.evaluate_model` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
 --------------------
-src/opifex/benchmarking/pdebench_integration.py
-    DOC501: Method `PDEBenchLoader.get_dataset_info` has raise statements, but the docstring does not have a "Raises" section
-    DOC503: Method `PDEBenchLoader.get_dataset_info` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
---------------------
 src/opifex/benchmarking/report_generator.py
     DOC501: Method `PDEBenchReportGenerator.save_report` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `PDEBenchReportGenerator.save_report` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].

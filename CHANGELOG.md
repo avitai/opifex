@@ -125,12 +125,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   split-local min-max normalisation are removed: they read a 1D file as steady (input equal to
   target), read no Darcy `nu`, found no coordinates and scaled each split by its own
   statistics. Normalise with a `GaussianNormalizer` fitted on the train split.
-- `PDEBenchLoader.load_dataset` refuses with `NotImplementedError` when a real PDEBench HDF5
-  file is present. Reading one is not implemented, and it returned synthetic data in its
-  place, without the opt-in or the warning the synthetic path requires.
+- **Breaking:** `PDEBenchLoader.load_dataset` reads a real PDEBench file under `data_root`
+  (matched by its published name; `file_name` chooses one when several match) through
+  `load_pdebench`, and returns PDEBench's first training pair: the `initial_step` input frames
+  stacked as channels, `(n, initial_step * V, x...)`, and the next frame, `(n, V, x...)`; a
+  DeepONet trunk takes the file's grid. It returned synthetic data in place of a real file,
+  without the opt-in or the warning the synthetic path requires. Incompressible Navier-Stokes
+  files are refused (PDEBench has no reader for them), and `split` is `"train"` or `"test"`.
 - **Breaking:** `PDEBenchLoader.load_dataset` and `PDEBenchEvaluationPipeline` take
-  `synthetic_key` in place of `allow_synthetic`: a key opts in to synthetic data and is the
-  key it is drawn from. The data was drawn from key 42.
+  `synthetic_key` in place of `allow_synthetic`: a key opts in to synthetic data, of the real
+  pair's shapes, drawn from the key folded by the dataset's name, so two datasets share no
+  draw. The data was drawn from key 42. `diffusion_reaction` and `compressible_navier_stokes`
+  have schemas (they raised `KeyError`). `normalize` is removed: it scaled each split by its
+  own statistics. `PDEBenchLoader` takes no `cache_dir` (unused) and creates no directories,
+  and `PDEBenchEvaluationPipeline.evaluate_model_on_datasets` lets a failing dataset's error
+  propagate instead of warning and skipping it.
 - `seed-literal` holds over `src/opifex`, so opifex's own fixed-key checks, which looked
   only for `jax.random.PRNGKey(...)` in four uncertainty modules
   (`tests/uncertainty/test_rng_safety.py` and a test in
