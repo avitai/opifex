@@ -198,6 +198,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every such operator, and registers none of them. It skipped those names before, so a
   second discovery, or a discovery after registering a built-in operator by hand, passed
   silently. `BenchmarkRunner` discovers only into an empty registry and is unaffected.
+- CI no longer installs ripgrep. The three tests that ran `rg` over `src/` only checked that
+  removed names (`BlackJAXIntegration`, `_FieldConformalMetadata` and a TODO tag) were
+  absent, and are removed. On the `ubuntu-26.04` runner image, `apt-get install ripgrep`
+  found no package, so the unit shard failed before its tests ran.
 
 ## [0.2.13] - 2026-11-19
 

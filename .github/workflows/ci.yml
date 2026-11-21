@@ -128,16 +128,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --extra dev --extra test
 
-      - name: Ensure ripgrep is available
-        # A few migration-guard tests shell out to `rg`; ubuntu images ship it,
-        # macOS images do not.
-        run: |
-          command -v rg >/dev/null 2>&1 || {
-            if [ "$RUNNER_OS" = "macOS" ]; then brew install ripgrep; \
-            else sudo apt-get update && sudo apt-get install -y ripgrep; fi
-          }
-
-
       - name: Run tests
         env:
           JAX_PLATFORMS: cpu

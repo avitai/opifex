@@ -1,25 +1,15 @@
-"""Pin migrated behavior: ``BlackJAXBackend`` replaces the deleted ``BlackJAXIntegration``.
+"""``BlackJAXBackend`` end to end on a non-trivial target log-density.
 
-Pre-migration, ``opifex.neural.bayesian.blackjax_integration:BlackJAXIntegration``
-exposed a high-level MCMC wrapper coupled to model + data + a fake
-perturbation-based log-likelihood. The migration deleted that class and
-introduced ``opifex.uncertainty.inference_backends.blackjax.BlackJAXBackend``
-— a thin adapter around Artifex's BlackJAX wrappers that accepts a
-log-density callable directly.
+``opifex.uncertainty.inference_backends.blackjax.BlackJAXBackend`` is a thin adapter
+around Artifex's BlackJAX wrappers that takes a log-density callable. These tests pin:
 
-These tests pin three properties of the migrated behavior:
-
-1. The legacy symbol is gone from every searched root.
-2. The new backend integrates with the Phase 1 contract (``BackendResult``,
-   ``BackendDiagnostics``, ``InferenceBackendSpec``) end-to-end on a
-   non-trivial target log-density.
-3. The migrated stack composes with Opifex's predictive-distribution
-   container via ``BlackJAXBackend.predict_distribution``.
+1. The backend meets the inference-backend contract (``BackendResult``,
+   ``BackendDiagnostics``, ``InferenceBackendSpec``) on a banana-shaped target.
+2. It composes with Opifex's predictive-distribution container via
+   ``BlackJAXBackend.predict_distribution``.
 """
 
 from __future__ import annotations
-
-import subprocess
 
 import jax
 import jax.numpy as jnp
@@ -40,24 +30,6 @@ def _banana_log_density(x: jax.Array) -> jax.Array:
     return -((a - x[0]) ** 2 + b * (x[1] - x[0] ** 2) ** 2)
 
 
-def test_legacy_blackjax_integration_symbol_no_longer_exists() -> None:
-    """Migration deleted the legacy class; zero remaining references in src/.
-
-    The search is restricted to ``src/`` because this very test file
-    necessarily mentions the legacy name in its own assertion / docstring.
-    """
-    result = subprocess.run(
-        ["rg", "-l", r"\bBlackJAXIntegration\b", "src/"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    matches = [line for line in result.stdout.splitlines() if line.strip()]
-    assert not matches, (
-        f"Legacy class name still referenced under src/ after migration. Offending files: {matches}"
-    )
-
-
 def test_blackjax_backend_runs_end_to_end_on_non_trivial_target() -> None:
     backend = BlackJAXBackend(
         target_log_prob=_banana_log_density,
@@ -75,7 +47,7 @@ def test_blackjax_backend_runs_end_to_end_on_non_trivial_target() -> None:
 
 
 def test_blackjax_backend_populates_post_hoc_ess_diagnostic() -> None:
-    """Post-migration diagnostics surface ESS even though Artifex drops BlackJAX's info dict."""
+    """The diagnostics surface ESS even though Artifex drops BlackJAX's info dict."""
     backend = BlackJAXBackend(
         target_log_prob=_banana_log_density,
         init_state=jnp.zeros(2),
