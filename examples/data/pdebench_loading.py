@@ -24,19 +24,18 @@ PDEBench is a full benchmark suite for scientific machine learning,
 providing HDF5-formatted simulation trajectories across 1D/2D/3D PDEs
 (Burgers, Navier-Stokes, Darcy Flow, etc.).
 
-Opifex's `PDEBenchSource` is a **datarax `DataSourceModule`**: it reads the HDF5 file at init,
-performs the PDE-specific input/target time-window pairing (the one step datarax has no operator
-for), and then exposes the standard datarax contract (`get_records` / `element_spec`) so it is
-driven by a datarax **`Pipeline`**. Normalisation is a datarax **`MapOperator`** stage, not baked
-into the arrays. `create_pdebench_loader` assembles the source + normalize stage into a Pipeline.
+Opifex reads a PDEBench file as PDEBench's own loader does (`FNODatasetSingle` in
+`pdebench/models/fno/utils.py`): every field becomes `[N, x..., t, V]`, the test split is the
+first `test_ratio` of the samples, and a record is the first `initial_step` steps of a trajectory
+(the input) with the whole trajectory (the target). `load_pdebench` returns one split's arrays;
+`create_pdebench_loader` serves them through a datarax `Pipeline`.
 
 ## Learning Goals
 
-1. **Create** a synthetic HDF5 file matching the PDEBench format
-2. **Build** a datarax `Pipeline` over the dataset with `create_pdebench_loader`
-3. **Batch** data for training via the pipeline's `.step()` (JAX-traceable)
-4. **Inspect** the source's element contract (`element_spec`, `get_records`) and coordinate grids
-5. **Normalize** with a composable `MapOperator` stage (train/test via the `split` config)
+1. **Create** a synthetic HDF5 file in PDEBench's 1D Burgers layout
+2. **Load** the train and test splits with `load_pdebench`
+3. **Batch** records through a datarax `Pipeline` with `create_pdebench_loader`
+4. **Normalize** with statistics fitted on the train split only
 """
 
 # %%
@@ -47,24 +46,21 @@ import h5py
 import jax
 import jax.numpy as jnp
 import numpy as np
-from flax import nnx
 
-from opifex.data.sources.pdebench import (
-    create_pdebench_loader,
-    PDEBenchConfig,
-    PDEBenchSource,
-)
+from opifex.core.normalization import GaussianNormalizer
+from opifex.data.sources.pdebench import create_pdebench_loader, load_pdebench, PDEBenchConfig
 
 
 # %% [markdown]
 """
 ## Step 1: Create a Synthetic PDEBench HDF5 File
 
-PDEBench datasets follow a specific HDF5 structure:
-- `/tensor`: shape `(N, T, X[, Y], C)` — simulation trajectories
-- `/x`, `/y`, `/t`: optional coordinate grids
+PDEBench's 1D Burgers files (for example `1D_Burgers_Sols_Nu1.0.hdf5`) hold:
+- `tensor`: shape `(N, T, X)`, one trajectory per sample
+- `x-coordinate`: shape `(X,)`
+- `t-coordinate`: shape `(T + 1,)`
 
-We create a small synthetic dataset for demonstration.
+We create a small synthetic dataset in that layout.
 """
 
 
@@ -74,87 +70,64 @@ def create_synthetic_pdebench_hdf5(
     n_samples: int = 20,
     n_timesteps: int = 20,
     n_spatial: int = 64,
-    n_channels: int = 1,
 ) -> None:
-    """Create a synthetic 1D Burgers-like HDF5 file.
+    """Create a synthetic file in PDEBench's 1D Burgers layout.
 
-    The data simulates a simple diffusing step function to
-    approximate the structure of real PDEBench Burgers data.
+    The data is a decaying superposition of sinusoids, which has the shape of real PDEBench
+    Burgers data, not its physics.
     """
     rng = np.random.default_rng(42)
 
-    # Generate smooth initial conditions and evolve them
     x = np.linspace(0, 2 * np.pi, n_spatial)
-    t = np.linspace(0, 1, n_timesteps)
-    data = np.zeros((n_samples, n_timesteps, n_spatial, n_channels))
-
+    t = np.linspace(0, 1, n_timesteps + 1)
+    data = np.zeros((n_samples, n_timesteps, n_spatial))
     for i in range(n_samples):
-        # Random superposition of sinusoids as initial condition
         u0 = rng.normal(0, 0.5) * np.sin(x) + rng.normal(0, 0.3) * np.sin(2 * x)
-        for j, tj in enumerate(t):
-            # Simple diffusion-like evolution
-            data[i, j, :, 0] = u0 * np.exp(-0.5 * tj)
+        for j, tj in enumerate(t[:-1]):
+            data[i, j] = u0 * np.exp(-0.5 * tj)
 
     with h5py.File(file_path, "w") as f:
         f.create_dataset("tensor", data=data.astype(np.float32))
-        f.create_dataset("x", data=x.astype(np.float32))
-        f.create_dataset("t", data=t.astype(np.float32))
+        f.create_dataset("x-coordinate", data=x.astype(np.float32))
+        f.create_dataset("t-coordinate", data=t.astype(np.float32))
 
     print(f"Created synthetic HDF5: {file_path}")
-    print(f"  tensor shape: {data.shape}")
-    print(f"  x shape:      {x.shape}")
-    print(f"  t shape:      {t.shape}")
+    print(f"  tensor shape:       {data.shape}")
+    print(f"  x-coordinate shape: {x.shape}")
+    print(f"  t-coordinate shape: {t.shape}")
 
 
 # %% [markdown]
 """
-## Step 2: The source — HDF5 read, split, window pairing, datarax contract
+## Step 2: Load the splits
 
-`PDEBenchSource` reads the file at `__init__`, splits train/test, and creates the input/target
-time-window pairs. It then satisfies the datarax `DataSourceModule` contract — `element_spec()`
-declares per-element shapes and `get_records(indices)` is a stateless, JAX-traceable
-fetch — so a `Pipeline` can drive it. Coordinate grids are domain metadata on `source.coordinates`.
-"""
-
-
-# %%
-def build_source(hdf5_path: Path) -> PDEBenchSource:
-    """Construct a train-split PDEBenchSource over the synthetic 1D Burgers file."""
-    config = PDEBenchConfig(
-        file_path=hdf5_path,
-        dataset_name="1D_Burgers",
-        train_split=0.8,
-        split="train",
-        input_steps=5,
-        output_steps=5,
-        normalize=True,
-    )
-    return PDEBenchSource(config, rngs=nnx.Rngs(0))
-
-
-# %% [markdown]
-"""
-## Step 3: Build a datarax Pipeline with `create_pdebench_loader`
-
-The loader assembles the source and (because `normalize=True`) a per-channel min-max
-`MapOperator` stage into a `Pipeline`. `pipeline.step()` fetches one batch through the source's
-`get_records` and runs the normalize stage — the whole call is JAX-traceable, so it composes with
-`pipeline.scan(...)` for a GPU-fused training epoch.
+`load_pdebench` reads one split: the test split is the first `int(N * test_ratio)` samples and
+the train split the rest. `inputs` are the first `initial_step` time steps of each `targets`
+trajectory, and `grid` holds the coordinates every sample shares.
 """
 
 # %% [markdown]
 """
-## Step 4: Train vs test splits
+## Step 3: Batch through a datarax Pipeline
 
-Two loaders differing only in the `split` config give normalized train/test pipelines.
+`create_pdebench_loader` serves a split's `{"input", "target"}` records through a `MemorySource`
+and a `Pipeline`; the train split is shuffled from the seed.
+"""
+
+# %% [markdown]
+"""
+## Step 4: Normalize with train statistics
+
+PDEBench applies no normalisation. Fit a `GaussianNormalizer` on the train split and reuse it
+for the test split, so both are scaled by the same, train-only statistics.
 """
 
 
 # %%
 def main() -> dict[str, float | int]:
-    """Build PDEBench train/test datarax pipelines and report the loaded contract + batch."""
+    """Load PDEBench train/test splits, batch them, and normalize with train statistics."""
     print("=" * 72)
-    print("Opifex Example: PDEBench loading on datarax (Source + MapOperator + Pipeline)")
+    print("Opifex Example: PDEBench loading")
     print("=" * 72)
     print(f"JAX backend: {jax.default_backend()}")
 
@@ -162,51 +135,33 @@ def main() -> dict[str, float | int]:
     hdf5_path = Path(tmp_dir) / "1D_Burgers_synth.hdf5"
     create_synthetic_pdebench_hdf5(hdf5_path, n_samples=20, n_timesteps=20)
 
-    # --- Source contract ---
-    source = build_source(hdf5_path)
-    spec = source.element_spec()
-    print(f"\nWindowed pairs: {len(source)}  (input_steps=5, output_steps=5)")
-    print(f"  element_spec input:  {spec['input'].shape}")
-    print(f"  element_spec target: {spec['target'].shape}")
-    print(f"  coordinates: {None if source.coordinates is None else list(source.coordinates)}")
+    train = load_pdebench(PDEBenchConfig(file_path=hdf5_path, split="train", initial_step=10))
+    test = load_pdebench(PDEBenchConfig(file_path=hdf5_path, split="test", initial_step=10))
+    print(f"\nTrain: inputs {train.inputs.shape}, targets {train.targets.shape}")
+    print(f"Test:  inputs {test.inputs.shape}, targets {test.targets.shape}")
+    print(f"Grid:  {train.grid.shape}")
 
-    # --- datarax Pipeline (train) ---
     batch_size = 4
-    train_config = PDEBenchConfig(
-        file_path=hdf5_path,
-        dataset_name="1D_Burgers",
-        train_split=0.8,
-        split="train",
-        input_steps=5,
-        output_steps=5,
-        normalize=True,
+    loader = create_pdebench_loader(
+        PDEBenchConfig(file_path=hdf5_path, split="train", initial_step=10),
+        batch_size=batch_size,
+        seed=0,
     )
-    test_config = PDEBenchConfig(
-        file_path=hdf5_path,
-        dataset_name="1D_Burgers",
-        train_split=0.8,
-        split="test",
-        input_steps=5,
-        output_steps=5,
-        normalize=True,
-    )
-    train_loader = create_pdebench_loader(train_config, batch_size=batch_size, seed=0)
-    test_loader = create_pdebench_loader(test_config, batch_size=batch_size, seed=0)
+    batch = next(iter(loader))
+    print(f"\nPipeline batch: input {batch['input'].shape}, target {batch['target'].shape}")
 
-    batch = train_loader.step()
-    input_min, input_max = float(jnp.min(batch["input"])), float(jnp.max(batch["input"]))
-    print(f"\nPipeline.step() batch: input {batch['input'].shape}, target {batch['target'].shape}")
-    print(f"  normalized input range: [{input_min:.4f}, {input_max:.4f}]  (MapOperator stage)")
-
-    print(f"\nTrain pairs: {len(train_loader.source)}   Test pairs: {len(test_loader.source)}")
+    normalizer = GaussianNormalizer.fit(jnp.asarray(train.targets))
+    test_targets = normalizer.normalize(jnp.asarray(test.targets))
+    test_mean, test_std = float(jnp.mean(test_targets)), float(jnp.std(test_targets))
+    print(f"Test targets with train statistics: mean {test_mean:.4f}, std {test_std:.4f}")
     print("=" * 72)
 
     summary = {
-        "train_pairs": len(train_loader.source),
-        "test_pairs": len(test_loader.source),
+        "train_samples": int(train.targets.shape[0]),
+        "test_samples": int(test.targets.shape[0]),
         "batch_size": batch_size,
-        "input_min": input_min,
-        "input_max": input_max,
+        "test_mean_with_train_statistics": test_mean,
+        "test_std_with_train_statistics": test_std,
     }
     for name, value in summary.items():
         print(f"{name}: {value}")
@@ -219,17 +174,15 @@ def main() -> dict[str, float | int]:
 
 | Aspect | How it is built |
 |--------|-----------------|
-| Source | `PDEBenchSource` (datarax `DataSourceModule`): HDF5 read + split + window pairing |
-| Contract | `element_spec()` + stateless, traceable `get_records(indices)` |
-| Normalization | datarax `MapOperator` stage (per-channel min-max), not baked into arrays |
-| Batching | datarax `Pipeline.step()` / `.scan()` |
-| Splits | Train/test via the `split` config |
+| Reading | `load_pdebench`: PDEBench's layouts, strides and split |
+| Records | `(target[..., :initial_step, :], target)`, grid shared |
+| Batching | datarax `MemorySource` + `Pipeline` (`create_pdebench_loader`) |
+| Normalization | `GaussianNormalizer` fitted on the train split |
 
 ## Next Steps
 
-- Use the loader with real PDEBench `.hdf5` files from
-  [PDEBench](https://github.com/pdebench/PDEBench)
-- Drive training with `pipeline.scan(step_fn, length=...)` for a GPU-fused epoch
+- Use the loader with real PDEBench files from [PDEBench](https://github.com/pdebench/PDEBench)
+  (Darcy flow takes `initial_step=1`)
 - See [Darcy Flow Analysis](darcy_flow_analysis.md) for a related example
 """
 

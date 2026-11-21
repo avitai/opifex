@@ -1,418 +1,278 @@
-"""PDEBench HDF5 data source for Opifex.
+"""PDEBench HDF5 data, read as PDEBench lays it out and splits it.
 
 An optional integration: it imports ``h5py``, which the ``scientific-data`` and ``pdebench``
 extras install, at the top, and ``opifex.data.sources`` loads this module only when one of its
 names is first used.
 
-Datarax pattern reference:
-    - Config: @dataclass inheriting StructuralConfig (frozen, validated)
-    - Module: class extending DataSourceModule → StructuralModule → nnx.Module
-    - Data: annotate JAX array storage with nnx.data(value)
-    - I/O: all file I/O at __init__, pure JAX after
+The rules follow PDEBench's own loader (``pdebench/models/fno/utils.py``, ``FNODatasetSingle``;
+that file is under a noncommercial licence, so its rules are restated here, not its code):
+
+- A file's layout decides how it is read. A single ``.hdf5`` file holds either ``tensor``,
+  ``(N, T, x...)`` for a scalar equation, with ``nu`` beside a ``(N, 1, x, y)`` ``tensor`` for
+  Darcy flow, or one dataset per field for compressible flow (``density``, ``pressure``,
+  ``Vx``[, ``Vy``, ``Vz``], in that channel order). A grouped ``.h5`` file holds one group per
+  sample (``"0000"``, ...), each with ``data`` of shape ``(T, x..., V)`` and ``grid/{x, y, t}``.
+- Every field is returned as ``[N, x..., t, V]``: space, then time, then channels. Darcy
+  flow's ``nu`` and solution are stacked along that time axis, so its ``initial_step`` is 1.
+- ``reduced_batch``, ``reduced_resolution_t`` and ``reduced_resolution`` stride the sample,
+  time and space axes (Darcy flow's two "time" steps are never strided). ``num_samples_max``
+  caps the strided samples; the test split is the first ``int(num_samples * test_ratio)`` of
+  them and the train split the rest.
+- A record is ``(target[..., :initial_step, :], target)``: the input steps and the whole
+  trajectory, with the grid shared by every record.
+
+Strides are applied through h5py's hyperslab selection, so only the requested rows and points
+are read, where PDEBench reads each file whole (the 1D Burgers file is 8.2 GB). PDEBench applies
+no normalisation; fit :class:`opifex.core.normalization.GaussianNormalizer` on the train split
+and reuse it for the test split.
 """
 
-import logging
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import h5py
-import jax
-import jax.numpy as jnp
 import numpy as np
-from datarax.core.config import MapOperatorConfig, StructuralConfig
-from datarax.core.data_source import DataSourceModule
-from datarax.operators.map_operator import MapOperator
 from datarax.pipeline import Pipeline
-from datarax.sources import resolve_wrapped_indices
-from flax import nnx
+from datarax.sources import MemorySource, MemorySourceConfig
+from substrax.rng import rngs_from_seed
 
 
-logger = logging.getLogger(__name__)
+_CFD_FIELDS: tuple[str, ...] = ("density", "pressure", "Vx", "Vy", "Vz")
+"""The compressible-flow fields in PDEBench's channel order; a d-dimensional file holds 2 + d."""
 
-# =============================================================================
-# Known PDEBench multi-field datasets (separate HDF5 keys per field)
-# =============================================================================
-
-_MULTIFIELD_DATASETS: dict[str, tuple[str, ...]] = {
-    "1D_CFD": ("Vx", "density", "pressure"),
-    "2D_CFD": ("Vx", "Vy", "density", "pressure"),
-    "3D_CFD": ("Vx", "Vy", "Vz", "density", "pressure"),
-}
+_COORDINATES: tuple[str, ...] = ("x-coordinate", "y-coordinate", "z-coordinate")
+_GROUP_AXES: tuple[str, ...] = ("x", "y", "z")
+_SPLITS: tuple[str, ...] = ("train", "test")
 
 
-# =============================================================================
-# PDEBench Configuration
-# =============================================================================
-
-
-@dataclass(frozen=True)
-class PDEBenchConfig(StructuralConfig):
-    """Configuration for PDEBench HDF5 data source.
-
-    PDEBench datasets are HDF5 files with structure:
-        /tensor: shape (N, T, X[, Y[, Z]], C) — simulation trajectories
-        /x, /y, /z: spatial coordinate grids (optional)
-        /t: time coordinates (optional)
+@dataclass(frozen=True, kw_only=True)
+class PDEBenchConfig:
+    """Which PDEBench file to read, at which resolution, and which split.
 
     Attributes:
-        file_path: Path to HDF5 file (use pathlib.Path, not str — SWE Rule 13)
-        dataset_name: Name of the PDE problem (e.g., "1D_Burgers", "2D_DarcyFlow")
-        train_split: Fraction of data for training (default: 0.9)
-        split: Which split to load ("train" or "test")
-        input_steps: Number of input time steps (default: 1)
-        output_steps: Number of output time steps to predict (default: 1)
-        normalize: Whether to attach a per-channel min-max normalisation operator
-            (a datarax ``MapOperator``) in :func:`create_pdebench_loader` (default: True)
-        shuffle: Whether ``record_indices_at`` shuffles by the supplied key (default: False)
-        dtype: JAX dtype for arrays (default: jnp.float32)
-        field_keys: Tuple of HDF5 dataset keys for multi-field datasets (optional).
-            If provided, these keys are stacked along the last axis.
-            If None, autodetermined from dataset_name or defaults to ("tensor",).
+        file_path: The ``.hdf5`` or ``.h5`` file, named as PDEBench publishes it.
+        split: ``"train"`` or ``"test"``.
+        initial_step: Time steps given as input (PDEBench's default is 10; Darcy flow needs 1).
+        test_ratio: Share of the samples in the test split (PDEBench's default, 0.1).
+        num_samples_max: Cap on the samples, after ``reduced_batch``; -1 keeps every sample.
+        reduced_batch: Stride over the samples.
+        reduced_resolution: Stride over each spatial axis.
+        reduced_resolution_t: Stride over the time axis.
     """
 
-    file_path: Path | None = None
-    dataset_name: str | None = None
-    train_split: float = 0.9
+    file_path: Path
     split: str = "train"
-    input_steps: int = 1
-    output_steps: int = 1
-    normalize: bool = True
-    shuffle: bool = False
-    dtype: Any = jnp.float32
-    field_keys: tuple[str, ...] | None = None
+    initial_step: int = 10
+    test_ratio: float = 0.1
+    num_samples_max: int = -1
+    reduced_batch: int = 1
+    reduced_resolution: int = 1
+    reduced_resolution_t: int = 1
 
     def __post_init__(self) -> None:
-        """Validate and freeze config (SWE Rule 6: fail-fast)."""
-        object.__setattr__(self, "stochastic", False)
-        super().__post_init__()
-        if self.file_path is None:
-            raise ValueError("file_path is required for PDEBenchConfig")
-        if self.dataset_name is None:
-            raise ValueError("dataset_name is required for PDEBenchConfig")
-        if self.split not in ("train", "test"):
-            raise ValueError(f"split must be 'train' or 'test', got '{self.split}'")
-        if not 0.0 < self.train_split < 1.0:
-            raise ValueError(f"train_split must be in (0, 1), got {self.train_split}")
-        if self.input_steps < 1:
-            raise ValueError(f"input_steps must be >= 1, got {self.input_steps}")
-        if self.output_steps < 1:
-            raise ValueError(f"output_steps must be >= 1, got {self.output_steps}")
-
-
-# =============================================================================
-# PDEBench Data Source
-# =============================================================================
-
-
-class PDEBenchSource(DataSourceModule):
-    """Eager-loading datarax source for PDEBench HDF5 datasets.
-
-    Reads the HDF5 file at ``__init__``, splits train/test, and performs the PDE-specific
-    input/target time-window pairing (the one piece datarax has no operator for). After that it is
-    a standard datarax :class:`~datarax.core.data_source.DataSourceModule`: it implements the
-    stateless :meth:`get_records` / :meth:`element_spec` contract so it can be driven by a datarax
-    :class:`~datarax.pipeline.Pipeline`. Each element is a dict with:
-        - "input": jax.Array of shape (input_steps, *spatial, channels)
-        - "target": jax.Array of shape (output_steps, *spatial, channels)
-
-    Coordinate grids (if present) are exposed via :attr:`coordinates`. Normalisation is *not* baked
-    into the stored arrays — it is a datarax :class:`~datarax.operators.map_operator.MapOperator`
-    obtained from :meth:`normalize_operator` and attached as a pipeline stage (see
-    :func:`create_pdebench_loader`), keeping the source pure data and transforms composable.
-
-    Example:
-        >>> config = PDEBenchConfig(
-        ...     file_path=Path("/data/pdebench/1D_Burgers.hdf5"),
-        ...     dataset_name="1D_Burgers",
-        ...     input_steps=10,
-        ...     output_steps=10,
-        ... )
-        >>> loader = create_pdebench_loader(config, batch_size=32)
-        >>> batch = loader.step()
-        >>> batch["input"].shape   # (32, 10, 1024, 1)
-    """
-
-    def __init__(
-        self,
-        config: PDEBenchConfig,
-        *,
-        rngs: nnx.Rngs | None = None,
-        name: str | None = None,
-    ) -> None:
-        """Load HDF5 data, split into train/test, create input/target pairs."""
-        super().__init__(config, rngs=rngs, name=name)
-
-        file_path = Path(config.file_path)  # type: ignore[arg-type]
-        if not file_path.exists():
-            raise FileNotFoundError(f"HDF5 file not found: {file_path}")
-
-        # Determine field keys
-        field_keys = config.field_keys
-        if field_keys is None:
-            dataset_name: str = config.dataset_name or ""
-            field_keys = _MULTIFIELD_DATASETS.get(
-                dataset_name,
-                ("tensor",),
-            )
-
-        # Read HDF5 file (all I/O at init)
-        with h5py.File(file_path, "r") as f:
-            raw_data = self._read_hdf5_data(f, field_keys)
-            coords = self._read_coordinates(f)
-
-        # Split into train/test along sample axis (axis=0)
-        n_samples = raw_data.shape[0]
-        split_idx = int(n_samples * config.train_split)
-
-        data = raw_data[:split_idx] if config.split == "train" else raw_data[split_idx:]
-
-        # Determine if dataset has time dimension
-        has_time = self._has_time_dimension(data, config.dataset_name)
-
-        # Create sliding window pairs or direct input/target
-        if has_time:
-            inputs, targets = self._create_sliding_windows(
-                data,
-                config.input_steps,
-                config.output_steps,
-            )
-        else:
-            # No time dimension (e.g. DarcyFlow): each sample is both input and target
-            inputs = data
-            targets = data
-
-        # Store raw arrays; normalisation is a composable MapOperator, not baked in here.
-        self.inputs = jnp.array(inputs, dtype=config.dtype)
-        self.targets = jnp.array(targets, dtype=config.dtype)
-        coord_dict = (
-            {k: jnp.array(v, dtype=config.dtype) for k, v in coords.items()} if coords else None
-        )
-        self.coordinates = nnx.data(coord_dict)
-        self._shuffle = config.shuffle
-
-        # Per-channel min-max statistics for the optional normalisation operator.
-        norm_min, norm_scale = self._compute_norm_stats(self.inputs, self.targets)
-        self._norm_min = nnx.data(norm_min)
-        self._norm_scale = nnx.data(norm_scale)
-
-        logger.info(
-            "Loaded %s: %d samples (%s split)",
-            config.dataset_name,
-            len(self),
-            config.split,
-        )
-
-    @staticmethod
-    def _read_hdf5_data(
-        f: Any,
-        field_keys: tuple[str, ...],
-    ) -> np.ndarray:
-        """Read and stack field data from HDF5 file."""
-        if len(field_keys) == 1 and field_keys[0] == "tensor":
-            # Standard single-tensor format
-            return np.array(f["tensor"])
-
-        # Multi-field: stack along last axis
-        arrays = []
-        for key in field_keys:
-            arr = np.array(f[key])
-            if arr.ndim < 3:
-                # Ensure at least (N, T, X) shape
-                arr = arr[..., np.newaxis]
-            arrays.append(arr)
-
-        return np.stack(arrays, axis=-1)
-
-    @staticmethod
-    def _read_coordinates(f: Any) -> dict[str, np.ndarray]:
-        """Read optional coordinate arrays (/x, /y, /z, /t)."""
-        coords: dict[str, np.ndarray] = {}
-        for key in ("x", "y", "z", "t"):
-            if key in f:
-                coords[key] = np.array(f[key])
-        return coords
-
-    @staticmethod
-    def _has_time_dimension(
-        data: np.ndarray,
-        dataset_name: str | None,
-    ) -> bool:
-        """Determine if dataset has a time dimension.
-
-        DarcyFlow and similar steady-state problems have shape (N, X, Y, C)
-        with no time axis. Time-varying problems have shape (N, T, X, ..., C).
-        """
-        if dataset_name and "Darcy" in dataset_name:
-            return False
-        # Heuristic: if ndim >= 4 and second dim > 1, likely has time
-        return data.ndim >= 4
-
-    @staticmethod
-    def _create_sliding_windows(
-        data: np.ndarray,
-        input_steps: int,
-        output_steps: int,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """Create sliding window input/target pairs over time axis.
-
-        Args:
-            data: shape (N, T, *spatial, C)
-            input_steps: number of input time steps
-            output_steps: number of output time steps
-
-        Returns:
-            inputs: shape (N_windows, input_steps, *spatial, C)
-            targets: shape (N_windows, output_steps, *spatial, C)
+        """Refuse a split, ratio, step or stride that selects no well-defined data.
 
         Raises:
-            ValueError: If ``input_steps + output_steps`` exceeds the time steps.
+            ValueError: If ``split`` is not ``"train"`` or ``"test"``, ``test_ratio`` is outside
+                ``[0, 1)``, ``initial_step`` or a stride is below one, or ``num_samples_max`` is
+                neither -1 nor positive.
         """
-        n_samples, time_steps = data.shape[0], data.shape[1]
-        window_size = input_steps + output_steps
-        n_windows_per_sample = max(0, time_steps - window_size + 1)
+        if self.split not in _SPLITS:
+            raise ValueError(f"split must be one of {_SPLITS}, got {self.split!r}")
+        if not 0.0 <= self.test_ratio < 1.0:
+            raise ValueError(f"test_ratio must lie in [0, 1), got {self.test_ratio}")
+        for name in ("initial_step", "reduced_batch", "reduced_resolution", "reduced_resolution_t"):
+            if getattr(self, name) < 1:
+                raise ValueError(f"{name} must be at least 1, got {getattr(self, name)}")
+        if self.num_samples_max == 0 or self.num_samples_max < -1:
+            raise ValueError(f"num_samples_max must be -1 or positive, got {self.num_samples_max}")
 
-        if n_windows_per_sample == 0:
-            raise ValueError(
-                f"input_steps ({input_steps}) + output_steps ({output_steps}) "
-                f"= {window_size} exceeds time steps ({time_steps})"
-            )
 
-        all_inputs = []
-        all_targets = []
+@dataclass(frozen=True, kw_only=True)
+class PDEBenchData:
+    """One split of a PDEBench file.
 
-        for sample_idx in range(n_samples):
-            for t_start in range(n_windows_per_sample):
-                inp = data[sample_idx, t_start : t_start + input_steps]
-                tgt = data[
-                    sample_idx,
-                    t_start + input_steps : t_start + input_steps + output_steps,
-                ]
-                all_inputs.append(inp)
-                all_targets.append(tgt)
+    Attributes:
+        inputs: ``(n, x..., initial_step, V)``, the first ``initial_step`` steps of each target.
+        targets: ``(n, x..., t, V)``, each sample's whole trajectory.
+        grid: ``(x..., d)``, the spatial coordinates shared by every sample.
+    """
 
-        return np.stack(all_inputs), np.stack(all_targets)
+    inputs: np.ndarray
+    targets: np.ndarray
+    grid: np.ndarray
 
-    @staticmethod
-    def _compute_norm_stats(
-        inputs: jax.Array,
-        targets: jax.Array,
-    ) -> tuple[jax.Array, jax.Array]:
-        """Per-channel min-max statistics ``(min, scale)`` over inputs and targets.
 
-        Returned arrays have shape ``(channels,)`` so they broadcast against both a single element
-        ``(steps, *spatial, C)`` and a batch ``(size, steps, *spatial, C)`` on the last axis.
-        ``scale`` is ``max - min`` with zeros replaced by one to avoid division by zero.
-        """
-        channels = inputs.shape[-1]
-        combined = jnp.concatenate(
-            [inputs.reshape(-1, channels), targets.reshape(-1, channels)], axis=0
+def _dataset(node: h5py.Group, name: str) -> h5py.Dataset:
+    """Return ``node[name]``, refusing an entry that is not a dataset."""
+    item = node[name]
+    if not isinstance(item, h5py.Dataset):
+        raise TypeError(f"{node.name}/{name} is a {type(item).__name__}, not a dataset")
+    return item
+
+
+def _group(node: h5py.Group, name: str) -> h5py.Group:
+    """Return ``node[name]``, refusing an entry that is not a group."""
+    item = node[name]
+    if not isinstance(item, h5py.Group):
+        raise TypeError(f"{node.name}/{name} is a {type(item).__name__}, not a group")
+    return item
+
+
+def _split_rows(n_rows: int, config: PDEBenchConfig) -> slice:
+    """Return the file rows a split reads: stride, then cap, then the first share is test."""
+    n_strided = len(range(0, n_rows, config.reduced_batch))
+    n_samples = n_strided if config.num_samples_max < 0 else min(config.num_samples_max, n_strided)
+    test_count = int(n_samples * config.test_ratio)
+    first, stop = (0, test_count) if config.split == "test" else (test_count, n_samples)
+    step = config.reduced_batch
+    return slice(first * step, stop * step, step)
+
+
+def _space(stride: int, spatial_ndim: int) -> tuple[slice, ...]:
+    """Return one strided slice per spatial axis."""
+    return (slice(None, None, stride),) * spatial_ndim
+
+
+def _coordinate_grid(node: h5py.Group, names: tuple[str, ...], stride: int) -> np.ndarray:
+    """Return the strided meshgrid of the named 1-D coordinate datasets, stacked last."""
+    axes = [np.asarray(_dataset(node, name)[::stride], dtype=np.float32) for name in names]
+    return np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1)
+
+
+def _read_tensor(
+    file: h5py.File, rows: slice, config: PDEBenchConfig
+) -> tuple[np.ndarray, np.ndarray]:
+    """Read a scalar equation's ``tensor``, or Darcy flow's ``nu`` and ``tensor``."""
+    tensor = _dataset(file, "tensor")
+    spatial_ndim = tensor.ndim - 2
+    space = _space(config.reduced_resolution, spatial_ndim)
+    if "nu" in file:
+        solution = np.moveaxis(np.asarray(tensor[(rows, slice(None), *space)]), 1, -1)
+        coefficient = np.asarray(_dataset(file, "nu")[(rows, *space)])[..., None]
+        field = np.concatenate([coefficient, solution], axis=-1)
+    else:
+        time = slice(None, None, config.reduced_resolution_t)
+        field = np.moveaxis(np.asarray(tensor[(rows, time, *space)]), 1, -1)
+    grid = _coordinate_grid(file, _COORDINATES[:spatial_ndim], config.reduced_resolution)
+    return field[..., None].astype(np.float32), grid
+
+
+def _read_fields(
+    file: h5py.File, rows: slice, config: PDEBenchConfig
+) -> tuple[np.ndarray, np.ndarray]:
+    """Read a compressible-flow file's per-field datasets as channels."""
+    spatial_ndim = _dataset(file, "density").ndim - 2
+    selection = (
+        rows,
+        slice(None, None, config.reduced_resolution_t),
+        *_space(config.reduced_resolution, spatial_ndim),
+    )
+    channels = [
+        np.moveaxis(np.asarray(_dataset(file, name)[selection]), 1, -1)
+        for name in _CFD_FIELDS[: 2 + spatial_ndim]
+    ]
+    grid = _coordinate_grid(file, _COORDINATES[:spatial_ndim], config.reduced_resolution)
+    return np.stack(channels, axis=-1).astype(np.float32), grid
+
+
+def _read_groups(
+    file: h5py.File, path: Path, config: PDEBenchConfig
+) -> tuple[np.ndarray, np.ndarray]:
+    """Read a grouped ``.h5`` file: one ``data`` of shape ``(T, x..., V)`` per sample group."""
+    keys = sorted(file.keys())
+    first = file[keys[0]] if keys else None
+    if not isinstance(first, h5py.Group) or "data" not in first:
+        raise ValueError(
+            f"{path.name}: a grouped .h5 file holds a 'data' dataset per sample group, and this "
+            f"one does not (first groups: {keys[:3]}). PDEBench's incompressible Navier-Stokes "
+            "files have another layout, which PDEBench's loaders do not read either."
         )
-        ch_min = combined.min(axis=0)
-        ch_scale = combined.max(axis=0) - ch_min
-        ch_scale = jnp.where(ch_scale == 0, 1.0, ch_scale)
-        return ch_min, ch_scale
+    spatial_ndim = _dataset(first, "data").ndim - 2
+    selection = (
+        slice(None, None, config.reduced_resolution_t),
+        *_space(config.reduced_resolution, spatial_ndim),
+        slice(None),
+    )
 
-    def normalize_operator(self, *, rngs: nnx.Rngs | None = None) -> MapOperator | None:
-        """Return the per-channel min-max normalisation as a datarax ``MapOperator``.
+    def sample(key: str) -> np.ndarray:
+        return np.moveaxis(np.asarray(_dataset(_group(file, key), "data")[selection]), 0, -2)
 
-        The operator rescales the ``"input"`` and ``"target"`` fields (leaving ``"coordinates"``
-        untouched) to ``[0, 1]`` using the statistics computed at load. Returns ``None`` when the
-        config has ``normalize=False`` so the loader attaches no normalisation stage.
-        """
-        if not self.config.normalize:  # type: ignore[attr-defined]
-            return None
-        ch_min, ch_scale = self._norm_min, self._norm_scale
-
-        def rescale(value: jax.Array, key: jax.Array) -> jax.Array:  # noqa: ARG001 - deterministic
-            return (value - ch_min) / ch_scale
-
-        return MapOperator(
-            MapOperatorConfig(subtree={"input": None, "target": None}),
-            fn=rescale,
-            rngs=rngs,
-        )
-
-    def __len__(self) -> int:
-        """Return the total number of windowed elements."""
-        return self.inputs.shape[0]
-
-    def element_spec(self) -> dict[str, jax.ShapeDtypeStruct]:
-        """Per-element ``{"input", "target"}`` shapes/dtypes (datarax contract)."""
-        return {
-            "input": jax.ShapeDtypeStruct(self.inputs.shape[1:], self.inputs.dtype),
-            "target": jax.ShapeDtypeStruct(self.targets.shape[1:], self.targets.dtype),
-        }
-
-    def record_indices_at(
-        self,
-        start: int | jax.Array,
-        size: int,
-        key: jax.Array | None = None,
-    ) -> jax.Array:
-        """The index of each record at positions ``start .. start + size`` (datarax contract).
-
-        In stored order, or with ``shuffle=True`` and a ``key`` the keyed bijection datarax
-        shuffles by: O(1) per record and no stored permutation, so a batch costs O(size).
-        """
-        return resolve_wrapped_indices(start, size, len(self), self._shuffle, key)
-
-    def get_records(self, indices: jax.Array) -> dict[str, jax.Array]:
-        """The ``{"input", "target"}`` records at ``indices`` (datarax contract).
-
-        Stateless and JAX-traceable, so ``Pipeline`` iterates it in a compiled session and
-        ``step()`` / ``scan`` drive it.
-        """
-        return {
-            "input": jnp.take(self.inputs, indices, axis=0),
-            "target": jnp.take(self.targets, indices, axis=0),
-        }
-
-    def __getitem__(self, index: int) -> dict[str, jax.Array]:  # type: ignore[override]
-        """Return the raw ``{"input", "target"}`` element at ``index`` (supports negatives)."""
-        n = len(self)
-        if index < 0:
-            index += n
-        if index < 0 or index >= n:
-            raise IndexError(f"Index {index} out of range [0, {n})")
-        return {"input": self.inputs[index], "target": self.targets[index]}
-
-    def __iter__(self) -> Iterator[dict[str, jax.Array]]:  # type: ignore[override]
-        """Iterate raw elements in order (debug/inspection; training uses the ``Pipeline``)."""
-        for i in range(len(self)):
-            yield self[i]
+    selected = keys[_split_rows(len(keys), config)]
+    field = (
+        np.stack([sample(key) for key in selected])
+        if selected
+        else np.zeros((0, *sample(keys[0]).shape), np.float32)
+    )
+    grid = _coordinate_grid(
+        _group(first, "grid"), _GROUP_AXES[:spatial_ndim], config.reduced_resolution
+    )
+    return field.astype(np.float32), grid
 
 
-def create_pdebench_loader(
-    config: PDEBenchConfig,
-    *,
-    batch_size: int,
-    seed: int,
-) -> Pipeline:
-    """Build a datarax ``Pipeline`` over a :class:`PDEBenchSource` (canonical loader pattern).
-
-    Mirrors the sibling loaders (``rmd17``/``qh9``): the source supplies the windowed
-    ``{"input", "target"}`` records via its ``get_records`` contract and the pipeline drives
-    batched iteration. When ``config.normalize`` is set, the per-channel min-max
-    :class:`~datarax.operators.map_operator.MapOperator` from
-    :meth:`PDEBenchSource.normalize_operator` is attached as the single transform stage.
+def load_pdebench(config: PDEBenchConfig) -> PDEBenchData:
+    """Read one split of a PDEBench file as PDEBench's loader lays it out.
 
     Args:
-        config: PDEBench source configuration.
-        batch_size: Records per batch.
-        seed: Seed for the source's shuffle stream and the pipeline rngs.
+        config: The file, split, resolution and input steps.
 
     Returns:
-        A configured datarax ``Pipeline``: iterate it (``for batch in loader``), or drive it
-        with ``.step()`` or ``.scan()``.
+        The split's inputs, targets and grid.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If the file has none of PDEBench's layouts, or ``initial_step`` leaves no
+            time step to predict.
     """
-    source = PDEBenchSource(config, rngs=nnx.Rngs(seed))
-    normalize_op = source.normalize_operator(rngs=nnx.Rngs(seed))
-    stages: list[nnx.Module] = [normalize_op] if normalize_op is not None else []
-    return Pipeline(
-        source=source,
-        stages=stages,
-        batch_size=batch_size,
-        rngs=nnx.Rngs(seed),
+    path = Path(config.file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"PDEBench file not found: {path}")
+    with h5py.File(path, "r") as file:
+        if path.suffix == ".h5":
+            field, grid = _read_groups(file, path, config)
+        elif "tensor" in file:
+            field, grid = _read_tensor(
+                file, _split_rows(_dataset(file, "tensor").shape[0], config), config
+            )
+        elif "density" in file:
+            field, grid = _read_fields(
+                file, _split_rows(_dataset(file, "density").shape[0], config), config
+            )
+        else:
+            raise ValueError(
+                f"{path.name}: no PDEBench layout found (keys: {sorted(file.keys())}); a "
+                "PDEBench .hdf5 file holds 'tensor' or the compressible-flow fields"
+            )
+    time_steps = field.shape[-2]
+    if config.initial_step >= time_steps:
+        # PDEBench slices the input steps without a check, so an initial_step of at least the
+        # time steps read makes the input the whole target: for Darcy flow (two steps, nu then
+        # the solution) any initial_step above 1 puts the solution in the input.
+        raise ValueError(
+            f"{path.name}: initial_step {config.initial_step} leaves no step to predict of the "
+            f"{time_steps} time steps read (Darcy flow holds 2: nu, then the solution)"
+        )
+    return PDEBenchData(inputs=field[..., : config.initial_step, :], targets=field, grid=grid)
+
+
+def create_pdebench_loader(config: PDEBenchConfig, *, batch_size: int, seed: int) -> Pipeline:
+    """Build a datarax ``Pipeline`` over one split of a PDEBench file.
+
+    The split's ``{"input", "target"}`` records are served by a ``MemorySource``, as opifex's
+    other loaders serve theirs; the train split is shuffled from the seed's ``shuffle`` stream.
+
+    Args:
+        config: The file, split, resolution and input steps.
+        batch_size: Records per batch.
+        seed: Seed of the shuffle stream and of the pipeline's streams.
+
+    Returns:
+        The pipeline; the grid every record shares is :func:`load_pdebench`'s.
+    """
+    data = load_pdebench(config)
+    source = MemorySource(
+        MemorySourceConfig(shuffle=config.split == "train"),
+        data={"input": data.inputs, "target": data.targets},
+        rngs=rngs_from_seed(seed, ("shuffle",)),
     )
+    return Pipeline(source=source, stages=[], batch_size=batch_size, rngs=rngs_from_seed(seed))
