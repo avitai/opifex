@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.14] - 2026-11-21
+
 ### Changed
 
 - Requires `calibrax[publication]>=0.1.21`, whose `Registry.register` refuses a name the
@@ -102,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ScientificComputingIntegrator.comprehensive_scientific_validation` stamps its result
   with `time.time()`; its `timestamp` was a uniform draw from key 0 times 1000, the same
   value on every call.
-- **Breaking:** `PDEBenchConfig`, `PDEBenchSource` and `create_pdebench_loader` live in
+- **Breaking:** `PDEBenchConfig` and `create_pdebench_loader` live in
   `opifex.data.sources.pdebench`, which imports `h5py` at its top, instead of
   `opifex.data.sources.scientific`, which imported it inside `PDEBenchSource.__init__`.
   `opifex.data.sources` still exports them and loads the module on their first use
@@ -118,7 +120,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and grouped `.h5` files, and refuses PDEBench's incompressible Navier-Stokes layout, which
   PDEBench's loaders do not read either. `PDEBenchConfig` takes PDEBench's `initial_step`,
   `test_ratio`, `num_samples_max` and `reduced_batch`/`reduced_resolution`/
-  `reduced_resolution_t`; the test split is the first `test_ratio` of the samples, as in
+  `reduced_resolution_t`, all keyword-only, with `file_path` required. It is a frozen
+  dataclass rather than a datarax `StructuralConfig`; its `shuffle` and `dtype` fields are
+  removed, since the loader shuffles the train split from its `seed` and every field is read
+  as `float32`. The test split is the first `test_ratio` of the samples, as in
   PDEBench, where the train split was taken first. Strides are read through h5py's hyperslab
   selection, so a file is no longer read whole. `PDEBenchSource`, the sliding windows
   (`input_steps`, `output_steps`), `train_split`, `dataset_name`, `field_keys` and the
