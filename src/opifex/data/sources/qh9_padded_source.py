@@ -129,22 +129,30 @@ class QH9PaddedConfig(StructuralConfig):
             be at least the largest molecule's atom count (QH9-Stable: 29).
         max_edges: Fixed per-molecule directed-edge count. Must be at least
             ``max_atoms * (max_atoms - 1)``.
-        seed: Seed reproducing the QH9-Stable reference random split (43) and the
-            per-epoch shuffle permutation.
+        split_seed: Seed of the QH9-Stable reference random split (43, QH9's own), which
+            fixes which molecules are train, validation and test.
         shuffle: Whether the source iterates molecules in shuffled (per-epoch
             permuted) order.
+        shuffle_seed: The caller's seed for the per-epoch shuffle permutation; required
+            when ``shuffle`` is true, since the training order is the caller's, not the
+            reference split's.
     """
 
     max_atoms: int = 32
     max_edges: int = 992
-    seed: int = 43  # substrax-allow: seed-literal: QH9-Stable reference split seed
+    split_seed: int = 43  # substrax-allow: seed-literal: QH9-Stable reference split seed
     shuffle: bool = False
+    shuffle_seed: int | None = None
 
     def __post_init__(self) -> None:
         """Validate the configuration, failing fast on bad values."""
         super().__post_init__()
         if self.max_atoms < 1:
             raise ValueError(f"max_atoms must be >= 1, got {self.max_atoms}.")
+        if self.shuffle and self.shuffle_seed is None:
+            raise ValueError(
+                "shuffle=True needs a shuffle_seed: the training order is the caller's."
+            )
         if self.max_edges < self.max_atoms * (self.max_atoms - 1):
             raise ValueError(
                 f"max_edges {self.max_edges} < max_atoms*(max_atoms-1) "
@@ -332,7 +340,7 @@ class QH9PaddedSource(DataSourceModule):
         split_ids: The molecule ids this source streams (cheap; ~1 MB for 130k).
         split_name: Optional split label (``"train"``/``"val"``/``"test"``).
         rngs: Optional NNX RNGs (unused; the per-epoch shuffle is seeded by
-            ``config.seed`` for reproducibility independent of NNX state).
+            ``config.shuffle_seed`` for reproducibility independent of NNX state).
         name: Optional module name.
     """
 
@@ -378,14 +386,15 @@ class QH9PaddedSource(DataSourceModule):
         """Return this epoch's id order: seeded permutation if shuffling, else ascending.
 
         The seed advances with the epoch so each pass differs while staying
-        reproducible from ``config.seed`` -- perfect per-epoch coverage (every
+        reproducible from ``config.shuffle_seed`` -- perfect per-epoch coverage (every
         molecule exactly once, no drops/dupes), strictly better than a fixed
         shuffle buffer.
         """
         ids = np.asarray(self.split_ids, dtype=np.int64)
-        if not self._is_random_order:
+        shuffle_seed = self.config.shuffle_seed
+        if not self._is_random_order or shuffle_seed is None:
             return ids
-        rng = np.random.default_rng(self.config.seed + int(self.epoch.value))
+        rng = np.random.default_rng(shuffle_seed + int(self.epoch.value))
         return ids[rng.permutation(int(self.length))]
 
     def _ids_for_positions(self, positions: NDArray[np.int64]) -> NDArray[np.int64]:
@@ -417,7 +426,7 @@ class QH9PaddedSource(DataSourceModule):
         concrete Python position: the reader runs on the host and cannot be traced,
         so the source does not implement datarax's traceable ``get_records``. The
         wrap-around (``% length``) fills the final partial batch; the per-epoch
-        shuffle is seeded by ``config.seed`` and advanced via :meth:`next_epoch`.
+        shuffle is seeded by ``config.shuffle_seed`` and advanced via :meth:`next_epoch`.
 
         Args:
             start: Starting logical position.
@@ -473,8 +482,9 @@ def _with_shuffle(config: QH9PaddedConfig, shuffle: bool) -> QH9PaddedConfig:
     return QH9PaddedConfig(
         max_atoms=config.max_atoms,
         max_edges=config.max_edges,
-        seed=config.seed,
+        split_seed=config.split_seed,
         shuffle=shuffle,
+        shuffle_seed=config.shuffle_seed,
     )
 
 
@@ -571,7 +581,7 @@ def create_qh9_padded_sources(
         config=config,
         db_path=resolved_path,
         keys=np.asarray(ids, dtype=np.int64),
-        split_indices=qh9_random_split(len(ids), seed=config.seed),
+        split_indices=qh9_random_split(len(ids), seed=config.split_seed),
         variant=QH9Variant.STABLE,
         dataset_name="QH9Stable",
         rngs=rngs,

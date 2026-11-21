@@ -84,9 +84,14 @@ def _config() -> QH9PaddedConfig:
     return QH9PaddedConfig(max_atoms=6, max_edges=6 * 5)
 
 
-def _source(db_path: Path, *, shuffle: bool = False) -> QH9PaddedSource:
+def _source(db_path: Path, *, shuffle: bool = False, shuffle_seed: int = 0) -> QH9PaddedSource:
     """Build a single-split source over every molecule in ``db_path`` (ascending id)."""
-    config = QH9PaddedConfig(max_atoms=6, max_edges=6 * 5, shuffle=shuffle)
+    config = QH9PaddedConfig(
+        max_atoms=6,
+        max_edges=6 * 5,
+        shuffle=shuffle,
+        shuffle_seed=shuffle_seed if shuffle else None,
+    )
     examples = read_qh9_sqlite(db_path)
     split_ids = tuple(int(ex.molecule_id) for ex in examples)
     return QH9PaddedSource(config, db_path=db_path, split_ids=split_ids)
@@ -202,7 +207,7 @@ def test_create_sources_splits(synthetic_qh9_db: Path) -> None:
     """The factory returns three sources whose lengths match the reference split."""
     splits = create_qh9_padded_sources(config=_config(), db_path=synthetic_qh9_db, rngs=nnx.Rngs(0))
     examples = read_qh9_sqlite(synthetic_qh9_db)
-    train_idx, val_idx, test_idx = qh9_random_split(len(examples), seed=_config().seed)
+    train_idx, val_idx, test_idx = qh9_random_split(len(examples), seed=_config().split_seed)
     assert len(splits.train) == len(train_idx)
     assert len(splits.val) == len(val_idx)
     assert len(splits.test) == len(test_idx)
@@ -211,12 +216,34 @@ def test_create_sources_splits(synthetic_qh9_db: Path) -> None:
 
 def test_the_shuffle_override_keeps_every_other_setting() -> None:
     """A split whose order differs from the config's gets a copy with only ``shuffle`` changed."""
-    config = QH9PaddedConfig(max_atoms=6, max_edges=30, seed=5, shuffle=True)
+    config = QH9PaddedConfig(max_atoms=6, max_edges=30, split_seed=7, shuffle=True, shuffle_seed=5)
 
     ordered = _with_shuffle(config, shuffle=False)
 
     assert ordered.shuffle is False
-    assert (ordered.max_atoms, ordered.max_edges, ordered.seed) == (6, 30, 5)
+    assert (ordered.max_atoms, ordered.max_edges, ordered.split_seed, ordered.shuffle_seed) == (
+        6,
+        30,
+        7,
+        5,
+    )
+
+
+def test_shuffling_needs_its_own_seed() -> None:
+    """The training order comes from the caller's integer seed, as the style guide asks of
+    shuffling; the split seed stays the QH9-Stable reference value, 43."""
+    with pytest.raises(ValueError, match="shuffle_seed"):
+        QH9PaddedConfig(shuffle=True)
+    assert QH9PaddedConfig().split_seed == 43
+
+
+def test_the_shuffle_order_follows_the_shuffle_seed(synthetic_qh9_db: Path) -> None:
+    n = len(_source(synthetic_qh9_db))
+    first = _fingerprints_per_epoch(_source(synthetic_qh9_db, shuffle=True, shuffle_seed=0), n)
+    again = _fingerprints_per_epoch(_source(synthetic_qh9_db, shuffle=True, shuffle_seed=0), n)
+    other = _fingerprints_per_epoch(_source(synthetic_qh9_db, shuffle=True, shuffle_seed=1), n)
+    assert first == again
+    assert first != other
 
 
 def test_oversized_molecule_fails_fast(tmp_path: Path) -> None:

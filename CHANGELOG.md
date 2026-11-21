@@ -144,6 +144,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only for `jax.random.PRNGKey(...)` in four uncertainty modules
   (`tests/uncertainty/test_rng_safety.py` and a test in
   `tests/uncertainty/layers/test_bayesian.py`), are removed.
+- **Breaking:** `QH9PaddedConfig` takes `split_seed` (43, QH9-Stable's reference split) and
+  `shuffle_seed`, which `shuffle=True` requires, in place of `seed`: one seed fixed both the
+  reference split and the training order, so the order was QH9's split seed rather than the
+  caller's. `scripts/train_qh9_blocks.py` takes `--seed` (default 0) for its model and its
+  shuffle.
 - **Breaking:** `CliffordFourierBlock`, `CliffordFNO`, `PIKAN`, `SincKAN`, `UNeuralOperator`,
   `FourierContinuationExtender`, `FourierBoundaryHandler`, `SystemIdentifier` and
   `SystemDynamicsModel` take no `deterministic` argument. Each ignored it or passed it to
