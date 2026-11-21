@@ -20,6 +20,7 @@ from flax import nnx
 # the absent-dependency fallbacks unify to bound names; ``_module_available`` gates use.
 benchmark_tensorly_integration: Any
 MemoryOptimalContractions: Any
+TensorLyCPInitializer: Any
 TensorLyEnhancedDecomposition: Any
 TensorLyTuckerInitializer: Any
 _tensorly_flag: bool
@@ -28,6 +29,7 @@ try:
         benchmark_tensorly_integration,
         MemoryOptimalContractions,
         TENSORLY_AVAILABLE,
+        TensorLyCPInitializer,
         TensorLyEnhancedDecomposition,
         TensorLyTuckerInitializer,
     )
@@ -37,6 +39,7 @@ try:
 except ImportError:
     benchmark_tensorly_integration = None
     MemoryOptimalContractions = None
+    TensorLyCPInitializer = None
     TensorLyEnhancedDecomposition = None
     TensorLyTuckerInitializer = None
     TENSORLY_AVAILABLE = False  # pyright: ignore[reportConstantRedefinition]
@@ -81,28 +84,17 @@ class TestTensorLyTuckerInitializer:
         test_tensor = jax.random.normal(jax.random.PRNGKey(42), tensor_shape)
         ranks = [4, 6, 8]
 
-        try:
-            core, factors = TensorLyTuckerInitializer.decompose_tensor(
-                test_tensor, ranks, max_iter=10, tolerance=1e-6
-            )
+        core, factors = TensorLyTuckerInitializer.decompose_tensor(
+            test_tensor, ranks, max_iter=10, tolerance=1e-6, key=jax.random.key(0)
+        )
 
-            # Check core shape
-            assert core.shape == tuple(ranks)
-
-            # Check factor shapes
-            assert len(factors) == len(tensor_shape)
-            for i, factor in enumerate(factors):
-                assert factor.shape == (tensor_shape[i], ranks[i])
-
-            # Check data types
-            assert isinstance(core, jax.Array)
-            for factor in factors:
-                assert isinstance(factor, jax.Array)
-
-        except Exception as e:
-            # TensorLy might have issues with JAX backend
-            # For now, we'll skip this test if TensorLy fails
-            pytest.skip(f"TensorLy decomposition failed: {e}")
+        assert core.shape == tuple(ranks)
+        assert len(factors) == len(tensor_shape)
+        for i, factor in enumerate(factors):
+            assert factor.shape == (tensor_shape[i], ranks[i])
+        assert isinstance(core, jax.Array)
+        for factor in factors:
+            assert isinstance(factor, jax.Array)
 
     def test_complex_tensor_decomposition(self):
         """Test decomposition of complex tensors."""
@@ -112,19 +104,13 @@ class TestTensorLyTuckerInitializer:
         complex_tensor = real_part + 1j * imag_part
         ranks = [3, 4, 5]
 
-        try:
-            core, factors = TensorLyTuckerInitializer.decompose_tensor(
-                complex_tensor, ranks, max_iter=5, tolerance=1e-5
-            )
+        core, factors = TensorLyTuckerInitializer.decompose_tensor(
+            complex_tensor, ranks, max_iter=5, tolerance=1e-5, key=jax.random.key(0)
+        )
 
-            # Check that results are complex
-            assert jnp.iscomplexobj(core)
-            for factor in factors:
-                assert jnp.iscomplexobj(factor)
-
-        except Exception as e:
-            # Skip this test if complex tensor decomposition fails
-            pytest.skip(f"Complex tensor decomposition failed: {e}")
+        assert jnp.iscomplexobj(core)
+        for factor in factors:
+            assert jnp.iscomplexobj(factor)
 
     def test_different_rank_specifications(self):
         """Test different ways of specifying ranks."""
@@ -139,19 +125,43 @@ class TestTensorLyTuckerInitializer:
         ]
 
         for ranks in rank_specs:
-            try:
-                core, factors = TensorLyTuckerInitializer.decompose_tensor(
-                    test_tensor, ranks, max_iter=5
-                )
+            core, factors = TensorLyTuckerInitializer.decompose_tensor(
+                test_tensor, ranks, max_iter=5, key=jax.random.key(0)
+            )
 
-                # Should produce valid decomposition
-                assert isinstance(core, jax.Array)
-                assert len(factors) == len(tensor_shape)
+            assert isinstance(core, jax.Array)
+            assert len(factors) == len(tensor_shape)
 
-            except Exception as e:
-                # Some rank specifications might not work
-                # Skip this test if the rank specification fails
-                pytest.skip(f"Rank specification failed: {e}")
+
+@pytest.mark.skipif(not _tensorly_available, reason="TensorLy not available")
+class TestDecompositionRandomness:
+    """TensorLy draws from ``random_state`` where its algorithm is random: Tucker's random
+    initialisation, and CP's SVD initialisation when the rank exceeds a mode's size
+    (``initialize_cp`` in ``tensorly/decomposition/_cp.py``). Those draws are the caller's."""
+
+    def test_cp_factors_beyond_a_modes_size_follow_the_key(self):
+        tensor = jax.random.normal(jax.random.key(0), (3, 4, 5))
+
+        def factors(seed):
+            _, cp_factors = TensorLyCPInitializer.decompose_tensor(
+                tensor, 6, max_iter=1, key=jax.random.key(seed)
+            )
+            return cp_factors[0]
+
+        assert jnp.array_equal(factors(1), factors(1))
+        assert not jnp.array_equal(factors(1), factors(2))
+
+    def test_a_random_tucker_initialisation_follows_the_key(self):
+        tensor = jax.random.normal(jax.random.key(0), (6, 7, 8))
+
+        def core(seed):
+            tucker_core, _ = TensorLyTuckerInitializer.decompose_tensor(
+                tensor, [2, 3, 4], use_svd=False, max_iter=1, key=jax.random.key(seed)
+            )
+            return tucker_core
+
+        assert jnp.array_equal(core(1), core(1))
+        assert not jnp.array_equal(core(1), core(2))
 
 
 @pytest.mark.skipif(not _tensorly_available, reason="TensorLy not available")
