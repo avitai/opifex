@@ -109,6 +109,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`lazy_loader.attach_stub` over `__init__.pyi`, as `datarax.sources` loads its optional
   integrations), so `import opifex.data.sources` does not import `h5py`. Requires
   `lazy-loader>=0.6`, now a declared dependency.
+- **Breaking:** PDEBench files are read as PDEBench's own loader reads them
+  (`FNODatasetSingle`): `load_pdebench(PDEBenchConfig(...))` returns a split's `inputs`
+  (the first `initial_step` steps), `targets` (whole trajectories) and shared `grid`, every
+  field laid out `[N, x..., t, V]`, and `create_pdebench_loader` serves them through a
+  datarax `MemorySource` and `Pipeline`. It reads scalar files (`tensor`), Darcy flow (`nu`,
+  then the solution, along time), compressible flow (`density`, `pressure`, `Vx`, `Vy`, `Vz`)
+  and grouped `.h5` files, and refuses PDEBench's incompressible Navier-Stokes layout, which
+  PDEBench's loaders do not read either. `PDEBenchConfig` takes PDEBench's `initial_step`,
+  `test_ratio`, `num_samples_max` and `reduced_batch`/`reduced_resolution`/
+  `reduced_resolution_t`; the test split is the first `test_ratio` of the samples, as in
+  PDEBench, where the train split was taken first. Strides are read through h5py's hyperslab
+  selection, so a file is no longer read whole. `PDEBenchSource`, the sliding windows
+  (`input_steps`, `output_steps`), `train_split`, `dataset_name`, `field_keys` and the
+  split-local min-max normalisation are removed: they read a 1D file as steady (input equal to
+  target), read no Darcy `nu`, found no coordinates and scaled each split by its own
+  statistics. Normalise with a `GaussianNormalizer` fitted on the train split.
 - `PDEBenchLoader.load_dataset` refuses with `NotImplementedError` when a real PDEBench HDF5
   file is present. Reading one is not implemented, and it returned synthetic data in its
   place, without the opt-in or the warning the synthetic path requires.

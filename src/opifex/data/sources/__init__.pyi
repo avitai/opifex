@@ -7,8 +7,9 @@ from .pde_generation import (
 )
 from .pdebench import (
     create_pdebench_loader as create_pdebench_loader,
+    load_pdebench as load_pdebench,
     PDEBenchConfig as PDEBenchConfig,
-    PDEBenchSource as PDEBenchSource,
+    PDEBenchData as PDEBenchData,
 )
 from .qh9_blocks import (
     cut_fock_to_blocks as cut_fock_to_blocks,
@@ -45,7 +46,7 @@ from .scientific import (
 
 __all__ = [
     "PDEBenchConfig",
-    "PDEBenchSource",
+    "PDEBenchData",
     "QH9Data",
     "QH9Example",
     "QH9PaddedConfig",
@@ -68,6 +69,7 @@ __all__ = [
     "generate_navier_stokes",
     "generate_shallow_water",
     "iterate_padded_batches",
+    "load_pdebench",
     "load_qh9_data",
     "matrix_transform_def2svp",
     "parse_rmd17_npz",
