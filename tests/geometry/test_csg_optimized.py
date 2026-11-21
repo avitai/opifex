@@ -248,6 +248,69 @@ class TestCSGMembership:
         assert inside.tolist() == [True, False]
 
 
+class TestCSGSampling:
+    """Sampling as DeepXDE's CSG nodes sample (``deepxde/geometry/csg.py``).
+
+    Interior: a union rejects uniform points of its bounding box; an intersection or a
+    difference keeps the first operand's interior points that the second does (or does not)
+    contain. Boundary: each operand's boundary points that lie on the result's boundary. Every
+    sampler draws until it has ``n`` points. Fractions are checked within five binomial
+    standard errors, ``sqrt(p (1 - p) / n)``.
+    """
+
+    def test_a_union_samples_its_interior_uniformly(self):
+        """Two unit-height strips overlapping on a third of the union: a third of the points."""
+        left = Rectangle(center=jnp.array([1.0, 0.5]), width=2.0, height=1.0)
+        right = Rectangle(center=jnp.array([2.0, 0.5]), width=2.0, height=1.0)
+        n = 4_000
+        points = CSGUnion(left, right).sample_interior(n, jax.random.key(0))
+        assert points.shape == (n, 2)
+        in_overlap = float(jnp.mean(left.contains(points) & right.contains(points)))
+        expected = 1.0 / 3.0
+        assert abs(in_overlap - expected) < 5 * (expected * (1 - expected) / n) ** 0.5
+
+    def test_a_difference_samples_the_boundary_of_its_hole(self):
+        """A 4x4 square minus the unit disc: half the boundary points lie on the hole.
+
+        DeepXDE draws ``n`` boundary points of each operand per round and keeps those on the
+        result's boundary: here every square point (outside the disc) and every disc point
+        (inside the square), so each operand supplies half, whatever its perimeter.
+        """
+        square = Rectangle(center=jnp.array([0.0, 0.0]), width=4.0, height=4.0)
+        hole = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
+        n = 4_000
+        points = CSGDifference(square, hole).sample_boundary(n, jax.random.key(1))
+        assert points.shape == (n, 2)
+        on_hole = float(jnp.mean(jnp.abs(jnp.linalg.norm(points, axis=-1) - 1.0) < 1e-5))
+        assert abs(on_hole - 0.5) < 5 * (0.25 / n) ** 0.5
+
+    @pytest.mark.parametrize("kind", ["intersection", "difference", "polygon"])
+    def test_a_rejection_sampler_draws_until_it_has_n_distinct_points(self, kind):
+        """A small acceptance rate needs several rounds; no point is repeated to fill ``n``."""
+        a = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
+        b = Circle(center=jnp.array([1.8, 0.0]), radius=1.0)
+        shape = {
+            "intersection": CSGIntersection(a, b),
+            "difference": CSGDifference(a, Circle(center=jnp.array([0.0, 0.0]), radius=0.95)),
+            "polygon": Polygon(vertices=jnp.array([[0.0, 0.0], [10.0, 10.0], [10.0, 9.0]])),
+        }[kind]
+        n = 500
+        points = shape.sample_interior(n, jax.random.key(2))
+        assert points.shape == (n, 2)
+        assert bool(jnp.all(shape.contains(points)))
+        assert jnp.unique(points, axis=0).shape[0] == n
+
+    def test_an_intersection_samples_its_boundary(self):
+        a = Circle(center=jnp.array([0.0, 0.0]), radius=1.0)
+        b = Circle(center=jnp.array([1.0, 0.0]), radius=1.0)
+        lens = CSGIntersection(a, b)
+        points = lens.sample_boundary(200, jax.random.key(3))
+        assert points.shape == (200, 2)
+        on_a = jnp.abs(jnp.linalg.norm(points - a.center, axis=-1) - 1.0) < 1e-5
+        on_b = jnp.abs(jnp.linalg.norm(points - b.center, axis=-1) - 1.0) < 1e-5
+        assert bool(jnp.all((on_a & b.contains(points)) | (on_b & a.contains(points))))
+
+
 class TestOptimizedPeriodicCell:
     """Test optimized periodic cell operations."""
 
