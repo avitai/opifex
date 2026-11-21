@@ -37,6 +37,8 @@ dependencies = [
   # numerical computing
   "scikit-learn>=1.9.1",
   # keyword feature hashing in the platform search engine (FeatureHasher)
+  "lazy-loader>=0.6",
+  # opifex.data.sources loads its optional PDEBench integration on first use (__init__.pyi)
   "tensorly>=0.9.0",
   # tensor decomposition for neural operators
   "matplotlib>=3.7.0",
@@ -255,7 +257,7 @@ test = [
   "opifex[platform]",
   # The shared example tests (substrax-notebooks test) run every example, and
   # examples/data/pdebench_loading.py imports h5py alongside
-  # opifex.data.sources.scientific. scientific-data is the extra backing that
+  # opifex.data.sources.pdebench. scientific-data is the extra backing that
   # module; pdebench also carries h5py but drags in torch.
   "opifex[scientific-data]",
   # tests/mlops exercises the MLflow backend against a local file store.

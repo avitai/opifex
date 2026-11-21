@@ -151,8 +151,6 @@ src/opifex/data/sources/rmd17_source.py
     DOC502: Function `create_rmd17_loader` has a "Raises" section in the docstring, but there are not "raise" statements in the body
 --------------------
 src/opifex/data/sources/scientific.py
-    DOC501: Method `PDEBenchSource._create_sliding_windows` has raise statements, but the docstring does not have a "Raises" section
-    DOC503: Method `PDEBenchSource._create_sliding_windows` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
     DOC101: Method `VTKMeshSource._cells_to_coo`: Docstring contains fewer arguments than in function signature.
     DOC103: Method `VTKMeshSource._cells_to_coo`: Docstring arguments are different from function arguments. (Or could be other formatting issues: https://jsh9.github.io/pydoclint/violation_codes.html#notes-on-doc103 ). Arguments in the function signature but not in the docstring: [cells: list[Any]].
 --------------------

@@ -78,7 +78,7 @@ graph LR
 ### Building the loader (source + normalize stage + Pipeline)
 
 ```python
-from opifex.data.sources.scientific import PDEBenchConfig, create_pdebench_loader
+from opifex.data.sources.pdebench import PDEBenchConfig, create_pdebench_loader
 
 config = PDEBenchConfig(
     file_path=Path("data/1D_Burgers.hdf5"),
