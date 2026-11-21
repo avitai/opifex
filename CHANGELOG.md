@@ -149,6 +149,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference split and the training order, so the order was QH9's split seed rather than the
   caller's. `scripts/train_qh9_blocks.py` takes `--seed` (default 0) for its model and its
   shuffle.
+- **Breaking:** `TensorLyTuckerInitializer.decompose_tensor` and
+  `TensorLyCPInitializer.decompose_tensor` take `key`, from which TensorLy's random draws come:
+  they were fixed at 42, which decided Tucker's random initialisation and the CP factor columns
+  beyond a mode's size. `TensorLyEnhancedDecomposition` draws it from its `rngs`, and
+  `MultiGridTuckerDecomposition` folds it from each band's key. The Tucker initializer's
+  tests fail instead of skipping on an error.
 - **Breaking:** `CliffordFourierBlock`, `CliffordFNO`, `PIKAN`, `SincKAN`, `UNeuralOperator`,
   `FourierContinuationExtender`, `FourierBoundaryHandler`, `SystemIdentifier` and
   `SystemDynamicsModel` take no `deterministic` argument. Each ignored it or passed it to

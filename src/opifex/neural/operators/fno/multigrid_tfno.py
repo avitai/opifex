@@ -22,6 +22,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax import nnx
+from substrax.rng import fold_in_name
 
 
 # Optional TensorLy integration for enhanced initialization
@@ -269,7 +270,11 @@ class MultiGridTuckerDecomposition(nnx.Module):
         try:
             # Use TensorLy's superior Tucker decomposition
             core, factors = TensorLyTuckerInitializer.decompose_tensor(
-                init_tensor, ranks, max_iter=25, tolerance=1e-10
+                init_tensor,
+                ranks,
+                max_iter=25,
+                tolerance=1e-10,
+                key=fold_in_name(key, "decomposition"),
             )
 
             return nnx.Dict(

@@ -25,6 +25,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax import nnx
+from substrax.rng import fold_in_name
 
 from opifex.neural.operators.fno._factorized import (
     contract_cp,
@@ -72,6 +73,16 @@ except ImportError:
 TENSORLY_AVAILABLE = _tensorly_available
 
 
+def _random_state(key: jax.Array) -> np.random.RandomState:
+    """Return TensorLy's ``random_state`` for a JAX key.
+
+    NumPy seeds a ``RandomState`` with the key's ``uint32`` words, so the draw is the caller's
+    and nothing is lost converting it (neither JAX, NumPy nor substrax ships a
+    key-to-``RandomState`` conversion).
+    """
+    return np.random.RandomState(np.asarray(jax.random.key_data(key)))
+
+
 def _ensure_tensorly_configured() -> None:
     """Select the JAX backend for TensorLy on first use (lazy, idempotent).
 
@@ -107,6 +118,8 @@ class TensorLyTuckerInitializer:
         use_svd: bool = True,
         tolerance: float = 1e-12,
         max_iter: int = 100,
+        *,
+        key: jax.Array,
     ) -> tuple[jax.Array, Sequence[jax.Array]]:
         """Decompose tensor using TensorLy's Tucker algorithm.
 
@@ -116,6 +129,7 @@ class TensorLyTuckerInitializer:
             use_svd: Whether to use SVD-based initialization
             tolerance: Convergence tolerance
             max_iter: Maximum iterations
+            key: Key of TensorLy's random draws (the random initialisation).
 
         Returns:
             Tuple of (core_tensor, factor_matrices)
@@ -151,7 +165,7 @@ class TensorLyTuckerInitializer:
                     init="svd" if use_svd else "random",
                     tol=tolerance,
                     n_iter_max=max_iter,
-                    random_state=42,  # Reproducible results
+                    random_state=_random_state(key),
                 )
             else:
                 _raise_tucker_unavailable()
@@ -214,8 +228,14 @@ class TensorLyCPInitializer:
         rank: int,
         max_iter: int = 100,
         tolerance: float = 1e-12,
+        *,
+        key: jax.Array,
     ) -> tuple[jax.Array, Sequence[jax.Array]]:
-        """Decompose tensor using TensorLy's CP/PARAFAC algorithm."""
+        """Decompose tensor using TensorLy's CP/PARAFAC algorithm.
+
+        ``key`` is the key of TensorLy's random draws: its SVD initialisation fills the factor
+        columns beyond a mode's size at random.
+        """
         if not TENSORLY_AVAILABLE:
             raise RuntimeError("TensorLy not available for advanced decomposition")
 
@@ -236,7 +256,7 @@ class TensorLyCPInitializer:
                     init="svd",
                     tol=tolerance,
                     n_iter_max=max_iter,
-                    random_state=42,
+                    random_state=_random_state(key),
                 )
             else:
                 _raise_parafac_unavailable()
@@ -456,7 +476,7 @@ class TensorLyEnhancedDecomposition(nnx.Module):
         if self.decomposition_type == "tucker":
             init_tensor = self._random_init_tensor(init_key, self.tensor_shape)
             core, factors = TensorLyTuckerInitializer.decompose_tensor(
-                init_tensor, self.rank, max_iter=max_iter, tolerance=tolerance
+                init_tensor, self.rank, max_iter=max_iter, tolerance=tolerance, key=rngs.params()
             )
             self.core = nnx.Param(core)
             self.factors = nnx.List([nnx.Param(factor) for factor in factors])
@@ -466,7 +486,7 @@ class TensorLyEnhancedDecomposition(nnx.Module):
             rank_value = int(self.rank) if isinstance(self.rank, float | int) else int(self.rank[0])
             self.rank = rank_value  # normalize so get_compression_ratio uses the int rank
             weights, factors = TensorLyCPInitializer.decompose_tensor(
-                init_tensor, rank_value, max_iter=max_iter, tolerance=tolerance
+                init_tensor, rank_value, max_iter=max_iter, tolerance=tolerance, key=rngs.params()
             )
             self.weights_real = nnx.Param(jnp.real(weights))
             self.weights_imag = nnx.Param(jnp.imag(weights))
@@ -678,11 +698,16 @@ def benchmark_tensorly_integration(
     # (guaranteed bound since ``num_trials >= 1``); remaining trials add timing samples.
     tucker_times = []
     start = time.monotonic()
-    core, factors = TensorLyTuckerInitializer.decompose_tensor(test_tensor, rank)
+    decomposition_key = fold_in_name(key, "decomposition")
+    core, factors = TensorLyTuckerInitializer.decompose_tensor(
+        test_tensor, rank, key=decomposition_key
+    )
     tucker_times.append(time.monotonic() - start)
     for _ in range(num_trials - 1):
         start = time.monotonic()
-        core, factors = TensorLyTuckerInitializer.decompose_tensor(test_tensor, rank)
+        core, factors = TensorLyTuckerInitializer.decompose_tensor(
+            test_tensor, rank, key=decomposition_key
+        )
         tucker_times.append(time.monotonic() - start)
 
     results["tucker_decomposition_time"] = {
