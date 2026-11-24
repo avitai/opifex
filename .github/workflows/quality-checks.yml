@@ -37,6 +37,10 @@ jobs:
 
   quality-checks:
     runs-on: ubuntu-latest
+    env:
+      # The tracked .python-version is every uv command's interpreter request, so the
+      # matrix version must reach them all; a venv made with another is replaced by uv sync.
+      UV_PYTHON: ${{ matrix.python-version }}
     needs: [already_tested]
     if: needs.already_tested.outputs.skip != 'true'
     strategy:

@@ -14,6 +14,10 @@ jobs:
   macos-unit-tests:
     name: Unit Tests (macos-15, Python ${{ matrix.python-version }}, shard ${{ matrix.group }}/6)
     runs-on: macos-15
+    env:
+      # The tracked .python-version is every uv command's interpreter request, so the
+      # matrix version must reach them all; a venv made with another is replaced by uv sync.
+      UV_PYTHON: ${{ matrix.python-version }}
     # Observed shards run ~65-105 min on macOS-14; 180 min clears the heaviest
     # with margin while bounding hangs.
     timeout-minutes: 180
@@ -63,6 +67,10 @@ jobs:
   extended-tests:
     name: Extended Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    env:
+      # The tracked .python-version is every uv command's interpreter request, so the
+      # matrix version must reach them all; a venv made with another is replaced by uv sync.
+      UV_PYTHON: ${{ matrix.python-version }}
     timeout-minutes: 300
     strategy:
       matrix:

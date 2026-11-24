@@ -15,6 +15,10 @@ jobs:
   build:
     name: Build (${{ matrix.os }}, Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    env:
+      # The tracked .python-version is every uv command's interpreter request, so the
+      # matrix version must reach them all; a venv made with another is replaced by uv sync.
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       matrix:
         # The macOS runners queue for hours and run the same steps; they run on
