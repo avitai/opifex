@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `.python-version` pins 3.12, the oldest Python the package supports, so `./setup.sh` and
+  any uv command without `--python` build on it rather than on the newest interpreter
+  installed (a free-threaded 3.14 on one development machine).
+  Every CI job with a Python matrix sets `UV_PYTHON` to its matrix version, which the pin
+  would otherwise override for its uv commands.
+
 ## [0.2.14] - 2026-11-21
 
 ### Changed
