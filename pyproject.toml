@@ -813,7 +813,7 @@ unfixable = []
   "C901", # Test bodies may exercise many branches/parametrisations inline
   "ARG001", # Mock callbacks / parametrize ids / JAX-callback fakes keep interface params
   "ARG002", # Stub method overrides keep the interface signature they replace
-  "ARG005", # Test lambdas keep interface params (e.g. nnx callbacks, diffrax rhs)
+  "ARG005", # Test lambdas keep interface params (e.g. nnx callbacks, ODE rhs)
   "PLR0913" # Test factories/builders configure fixtures with many explicit kwargs
 ]
 "tests/conftest.py" = [
@@ -914,7 +914,6 @@ max-complexity = 10 # Rule 2 (SRP): functions above this must be decomposed
 "src/opifex/physics/solvers/diffusion_advection.py" = ["ANN001", "ANN202"]
 "src/opifex/physics/solvers/shallow_water.py" = ["ANN001", "ANN202"]
 "src/opifex/platform/registry/core.py" = ["ANN202"]
-"src/opifex/solvers/ude.py" = ["ANN001"]
 "src/opifex/typing.py" = ["ANN001", "ANN202"]
 "src/opifex/uncertainty/active/rembo.py" = ["D417"]
 "src/opifex/uncertainty/inference_backends/_pathfinder_algorithm.py" = ["ANN202"]

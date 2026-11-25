@@ -27,6 +27,13 @@ from opifex.solvers.stiff_ode import (
     Ros34PW2,
     solve_stiff_ode,
 )
+from opifex.solvers.ude import (
+    create_ude,
+    NeuralODE,
+    tsit5_solve,
+    UDEConfig,
+    UDESolver,
+)
 
 
 __all__ = [
@@ -35,6 +42,7 @@ __all__ = [
     "InitialValueProblem",
     "Kvaerno3",
     "LevenbergMarquardt",
+    "NeuralODE",
     "NeuralOperatorSolver",
     "NonlinearLeastSquaresProblem",
     "PINNConfig",
@@ -42,10 +50,14 @@ __all__ = [
     "PINNSolver",
     "Rodas4",
     "Ros34PW2",
+    "UDEConfig",
+    "UDESolver",
     "additive_hybrid",
+    "create_ude",
     "heat_residual",
     "helmholtz_residual",
     "levenberg_marquardt",
     "poisson_residual",
     "solve_stiff_ode",
+    "tsit5_solve",
 ]

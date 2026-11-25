@@ -281,9 +281,6 @@
     "src/opifex/platform/registry/core.py": {
       "ANN202": 1
     },
-    "src/opifex/solvers/ude.py": {
-      "ANN001": 4
-    },
     "src/opifex/typing.py": {
       "ANN001": 1,
       "ANN202": 1

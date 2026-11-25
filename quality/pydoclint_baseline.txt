@@ -615,10 +615,6 @@ src/opifex/platform/registry/version.py
     DOC501: Method `VersionManager.create_branch` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `VersionManager.create_branch` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
 --------------------
-src/opifex/solvers/ude.py
-    DOC107: Method `NeuralODE.vector_field`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
-    DOC107: Method `UDESolver.vector_field`: The option `--arg-type-hints-in-signature` is `True` but not all args in the signature have type hints
---------------------
 src/opifex/training/uncertainty_trainers.py
     DOC501: Method `ActiveUncertaintyLearner.acquire_samples` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Method `ActiveUncertaintyLearner.acquire_samples` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
