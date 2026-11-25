@@ -17,8 +17,8 @@ _LINALG_CAPABILITY = UQCapability(
         "Matrix-free linalg primitives — Krylov decompositions, "
         "stochastic trace / diagonal estimators (Hutchinson, Hutch++, "
         "XTrace, XNysTrace), low-rank approximations, randomized SVD, "
-        "matrix-function evaluation, log-determinant integrands, "
-        "differentiable LSMR. Pure JAX kernels citing Krämer et al. "
+        "matrix-function evaluation, and log-determinant integrands. "
+        "Pure JAX kernels citing Krämer et al. "
         "(arXiv:2405.17277), Meyer et al. (arXiv:2010.09649) and "
         "Epperly, Tropp & Webber (arXiv:2301.07825)."
     ),

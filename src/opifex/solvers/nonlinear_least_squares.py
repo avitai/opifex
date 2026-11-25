@@ -66,10 +66,10 @@ import optax
 from flax import struct
 from jax.flatten_util import ravel_pytree
 
+from opifex.core.solver.lsmr import lsmr
 from opifex.core.solver.problem import Method, Problem, solve
 from opifex.core.solver.solution import Solution
 from opifex.core.solver.status import Status
-from opifex.uncertainty.linalg.lstsq import lsmr
 
 
 LinearSolverKind = Literal["qr", "cholesky", "lsmr"]

@@ -21,7 +21,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from opifex.uncertainty.linalg import lsmr
+from opifex.core.solver import lsmr
 
 
 def test_lsmr_solves_overdetermined_least_squares() -> None:

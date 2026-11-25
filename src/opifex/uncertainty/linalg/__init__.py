@@ -2,7 +2,7 @@
 
 JAX-native implementations of Krylov decompositions, stochastic
 trace and diagonal estimators, low-rank approximations, randomized SVD,
-matrix functions, log-determinant integrands, differentiable least-squares,
+matrix functions, log-determinant integrands,
 and higher-moment trace UQ.
 
 Pure JAX; no NNX imports anywhere in this subpackage. Each algorithm cites
@@ -35,7 +35,6 @@ from opifex.uncertainty.linalg.krylov import (
 )
 from opifex.uncertainty.linalg.logdet import slq_logdet
 from opifex.uncertainty.linalg.lowrank import cholesky_greedy, rp_cholesky
-from opifex.uncertainty.linalg.lstsq import lsmr
 from opifex.uncertainty.linalg.moments import trace_moments
 from opifex.uncertainty.linalg.rsvd import randomized_svd
 from opifex.uncertainty.linalg.trace import (
@@ -60,7 +59,6 @@ __all__ = [
     "hutch_plus_plus_trace",
     "hutchinson_trace",
     "lanczos_tridiag",
-    "lsmr",
     "randomized_svd",
     "rp_cholesky",
     "slq_logdet",
