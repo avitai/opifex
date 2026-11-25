@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `ipcw_conformal_quantile` normalizes finite weights by their maximum before prefix-sum tail evaluation (Tibshirani et al. 2019, Eq. 5), selects the exact `conformal_quantile_rank(n, alpha)` order statistic under equal positive weights in `float32` and `float64`, propagates `NaN` inputs, and returns `+inf` when calibration mass cannot reach `1 - alpha`.
 - `fit_exact_gp`, `fit_heteroscedastic_exact_gp`, and `nonpositive_message` preserve input floating dtypes and delegate concrete scalar extraction to `calibrax.core.eager_scalar_float`.
+- `predict_linear_multi_fidelity_gp` validates `target_level` bounds with `ValueError` and clamps posterior variance at `0.0` instead of `1e-6`.
 
 ### Changed
 
