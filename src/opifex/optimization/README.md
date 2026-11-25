@@ -22,7 +22,7 @@ This package provides advanced optimization algorithms for scientific machine le
   - `features.py`: per-parameter input features (momentum/RMS EMAs, tanh time embedding)
   - `learned.py`: `LearnedOptimizer` ABC, `MLPLearnedOptimizer`, `LearnableSGD`
   - `meta_train.py`: PES meta-training estimator + outer-Adam loop
-  - `baselines.py`: optimistix classical baselines and tuned-optax baselines
+  - `baselines.py`: pure-JAX BFGS classical baselines and tuned-optax baselines
   - `benchmark.py`: honest learning-curve and speedup-at-target benchmarking
   - `engine.py`: high-level `L2OEngine` (meta-train / apply / benchmark / persist)
 

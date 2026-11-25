@@ -8,23 +8,23 @@ Opifex is built on a carefully curated technology stack that provides high perfo
 
 The foundation of Opifex is built on the JAX ecosystem, providing high-performance numerical computing with automatic differentiation and GPU acceleration.
 
-- **JAX 0.8.0**: Core framework with CUDA support
+- **JAX 0.11.1+**: Core framework with CUDA support
 
     - Automatic differentiation for gradient-based optimization
     - Just-in-time (JIT) compilation for performance
     - Vectorization and parallelization support
     - GPU and TPU acceleration
 
-- **FLAX 0.12.0**: Modern neural network framework (exclusive)
+- **Flax 0.12.10+**: NNX neural network framework (exclusive)
     - Stateful neural network transformations
     - Modular and composable neural network components
     - Integration with JAX transformations
     - Type-safe parameter handling
 
-- **Optax 0.2.6+**: Optimization algorithms
+- **Optax 0.2.8+**: Optimization algorithms and line searches
 
-    - Gradient-based optimization algorithms
-    - Learning rate scheduling
+    - Gradient-based and quasi-Newton optimization algorithms
+    - Zoom and backtracking line searches
     - Gradient clipping and normalization
     - Composable optimization transformations
 
@@ -35,12 +35,11 @@ The foundation of Opifex is built on the JAX ecosystem, providing high-performan
     - Metropolis-Hastings algorithms
     - Bayesian inference support
 
-- **Diffrax 0.4.0+**: Differential equations
+- **Calibrax 0.1.23+ & Substrax 0.1.37+**: Calibration, statistics, profiling, and NNX foundations
 
-    - Ordinary differential equation (ODE) solvers
-    - Stochastic differential equation (SDE) solvers
-    - Neural differential equations
-    - Adaptive step size control
+    - Exact conformal order statistics, survival estimators, and scaling analysis
+    - Compilation and execution profiling harnesses
+    - Flax NNX RNG, module conformance, and directional gradient verification
 
 ### Quantum Chemistry Stack
 
@@ -144,10 +143,9 @@ Modern development tools ensuring code quality, testing, and documentation.
 
 ### Numerical Computing
 
-- **Optimistix**: Root finding & minimization
-- **Lineax**: Linear solvers
-- **Distrax**: Probabilistic programming
-- **Orbax**: Checkpointing system
+- **SciPy 1.10+**: Reference special functions and sparse utilities
+- **Distrax 0.1.0+**: Probabilistic distributions
+- **Orbax 0.11.13+**: Checkpointing system
 
 ### Data Management
 
@@ -201,11 +199,12 @@ All dependencies are pinned to specific versions to ensure reproducibility and s
 
 | Component | Version | Python | CUDA | Notes |
 |-----------|---------|--------|------|-------|
-| JAX | 0.8.0+ | 3.12+ | 12.0+ | Core framework |
-| FLAX | 0.12.1+ | 3.12+ | - | Neural networks |
-| Optax | 0.2.8+ | 3.12+ | - | Optimization |
+| JAX | 0.11.1+ | 3.12+ | 12.0+ | Core framework |
+| Flax | 0.12.10+ | 3.12+ | - | Neural networks (NNX) |
+| Optax | 0.2.8+ | 3.12+ | - | Optimization & line search |
 | BlackJAX | 1.2.5+ | 3.12+ | - | MCMC sampling |
-| Diffrax | 0.4.0+ | 3.12+ | - | Differential equations |
+| Calibrax | 0.1.23+ | 3.12+ | - | Metrics, statistics & profiling |
+| Substrax | 0.1.37+ | 3.12+ | - | NNX & testing utilities |
 
 ### Update Policy
 

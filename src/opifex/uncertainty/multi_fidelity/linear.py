@@ -41,12 +41,11 @@ import jax.numpy as jnp
 from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
-from opifex.uncertainty.gp import rbf_kernel
+from opifex.uncertainty.gp import kernel_diagonal, rbf_kernel
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _LINEAR_MF_SOURCE_PACKAGE = "opifex.uncertainty.multi_fidelity"
-_PSEUDO_NOISE_FLOOR: float = 1e-6
 
 
 KernelFn = Callable[..., jax.Array]
@@ -57,6 +56,7 @@ def _product_scaling(
     *,
     start: int,
     stop: int,
+    dtype: jnp.dtype,
 ) -> jax.Array:
     r"""``prod_{l=start+1}^{stop} scaling_factors[l-1]`` (1.0 if range is empty).
 
@@ -64,8 +64,8 @@ def _product_scaling(
     ``scaling_factors[i-1]`` couples fidelity ``i-1`` into ``i``.
     """
     if stop <= start:
-        return jnp.asarray(1.0)
-    factors = jnp.asarray(scaling_factors)
+        return jnp.asarray(1.0, dtype=dtype)
+    factors = jnp.asarray(scaling_factors, dtype=dtype)
     return jnp.prod(factors[start:stop])
 
 
@@ -104,11 +104,12 @@ def linear_multi_fidelity_kernel(
             "scaling_factors length must equal num_levels-1: got "
             f"{len(scaling_factors)} for {num_levels} levels."
         )
+    dtype = jnp.result_type(x1.dtype, x2.dtype, jnp.float32)
     levels_1 = x1[:, -1].astype(jnp.int32)
     levels_2 = x2[:, -1].astype(jnp.int32)
-    inputs_1 = x1[:, :-1]
-    inputs_2 = x2[:, :-1]
-    zeros_block: jax.Array = jnp.zeros((x1.shape[0], x2.shape[0]))
+    inputs_1 = x1[:, :-1].astype(dtype)
+    inputs_2 = x2[:, :-1].astype(dtype)
+    zeros_block: jax.Array = jnp.zeros((x1.shape[0], x2.shape[0]), dtype=dtype)
     base_gram_per_level: list[jax.Array] = [
         jnp.asarray(
             base_kernel_fn(
@@ -116,7 +117,8 @@ def linear_multi_fidelity_kernel(
                 inputs_2,
                 lengthscale=float(lengthscales[k]),
                 output_scale=float(output_scales[k]),
-            )
+            ),
+            dtype=dtype,
         )
         for k in range(num_levels)
     ]
@@ -129,9 +131,9 @@ def linear_multi_fidelity_kernel(
             min_ij = min(i, j)
             block_value: jax.Array = zeros_block
             for k in range(min_ij + 1):
-                coupling = _product_scaling(scaling_factors, start=k, stop=i) * _product_scaling(
-                    scaling_factors, start=k, stop=j
-                )
+                coupling = _product_scaling(
+                    scaling_factors, start=k, stop=i, dtype=dtype
+                ) * _product_scaling(scaling_factors, start=k, stop=j, dtype=dtype)
                 block_value = block_value + coupling * base_gram_per_level[k]
             gram = jnp.where(mask_ij, block_value, gram)
     return gram
@@ -168,9 +170,10 @@ class LinearMultiFidelityGPState:
 
 
 def _augment_with_level(x: jax.Array, level: int) -> jax.Array:
-    """Append a constant fidelity-level column to ``x``."""
-    level_column = jnp.full((x.shape[0], 1), float(level))
-    return jnp.concatenate([x, level_column], axis=1)
+    """Append a constant fidelity-level column to ``x`` preserving floating dtype."""
+    dtype = jnp.result_type(x.dtype, jnp.float32)
+    level_column = jnp.full((x.shape[0], 1), float(level), dtype=dtype)
+    return jnp.concatenate([x.astype(dtype), level_column], axis=1)
 
 
 def fit_linear_multi_fidelity_gp(
@@ -220,9 +223,12 @@ def fit_linear_multi_fidelity_gp(
         scaling_factors=scaling_factors,
         base_kernel_fn=base_kernel_fn,
     )
-    gram_jittered = gram + (noise_std**2) * jnp.eye(gram.shape[0])
+    dtype = gram.dtype
+    gram_jittered = gram + jnp.asarray(noise_std**2, dtype=dtype) * jnp.eye(
+        gram.shape[0], dtype=dtype
+    )
     cholesky = jnp.linalg.cholesky(gram_jittered)
-    alpha = jax.scipy.linalg.cho_solve((cholesky, True), y_train)
+    alpha = jax.scipy.linalg.cho_solve((cholesky, True), y_train.astype(dtype))
     return LinearMultiFidelityGPState(
         x_augmented=x_augmented,
         y_train=y_train,
@@ -236,6 +242,47 @@ def fit_linear_multi_fidelity_gp(
     )
 
 
+def _target_level_error(target_level: int, num_levels: int) -> str | None:
+    """Error message when ``target_level`` is outside ``[0, num_levels - 1]``."""
+    if (
+        isinstance(target_level, bool)
+        or not isinstance(target_level, int)
+        or not (0 <= target_level < num_levels)
+    ):
+        return f"target_level must be an integer in [0, {num_levels - 1}]; got {target_level!r}."
+    return None
+
+
+def _linear_mf_diagonal(
+    x_test: jax.Array,
+    *,
+    target_level: int,
+    lengthscales: Sequence[float],
+    output_scales: Sequence[float],
+    scaling_factors: Sequence[float],
+    base_kernel_fn: KernelFn,
+) -> jax.Array:
+    """Evaluate marginal prior variances ``K_{ii}(x_q, x_q)`` in ``O(m * L)`` without ``(m, m)``."""
+    if (err := _target_level_error(target_level, len(lengthscales))) is not None:
+        raise ValueError(err)
+    dtype = jnp.result_type(x_test.dtype, jnp.float32)
+    inputs = x_test.astype(dtype)
+    diag = jnp.zeros((inputs.shape[0],), dtype=dtype)
+    for k in range(target_level + 1):
+        coupling = _product_scaling(scaling_factors, start=k, stop=target_level, dtype=dtype)
+        k_diag = jnp.asarray(
+            kernel_diagonal(
+                base_kernel_fn,
+                inputs,
+                lengthscale=float(lengthscales[k]),
+                output_scale=float(output_scales[k]),
+            ),
+            dtype=dtype,
+        )
+        diag = diag + (coupling * coupling) * k_diag
+    return diag
+
+
 def predict_linear_multi_fidelity_gp(
     *,
     state: LinearMultiFidelityGPState,
@@ -247,11 +294,16 @@ def predict_linear_multi_fidelity_gp(
     Args:
         state: Fitted linear-MF state.
         x_test: ``(m, d)`` test inputs (without level column).
-        target_level: Integer fidelity level at which to predict.
+        target_level: Integer fidelity level in ``[0, num_levels - 1]``.
 
     Returns:
-        :class:`PredictiveDistribution` with mean and variance.
+        :class:`PredictiveDistribution` with mean and variance clamped at ``0.0``.
+
+    Raises:
+        ValueError: When ``target_level`` is out of ``[0, num_levels - 1]`` or a ``bool``.
     """
+    if (err := _target_level_error(target_level, len(state.lengthscales))) is not None:
+        raise ValueError(err)
     augmented_test = _augment_with_level(x_test, target_level)
     k_cross = linear_multi_fidelity_kernel(
         augmented_test,
@@ -261,18 +313,22 @@ def predict_linear_multi_fidelity_gp(
         scaling_factors=state.scaling_factors,
         base_kernel_fn=state.base_kernel_fn,
     )
-    k_test = linear_multi_fidelity_kernel(
-        augmented_test,
-        augmented_test,
+    k_test_diag = _linear_mf_diagonal(
+        x_test,
+        target_level=target_level,
         lengthscales=state.lengthscales,
         output_scales=state.output_scales,
         scaling_factors=state.scaling_factors,
         base_kernel_fn=state.base_kernel_fn,
     )
-    mean = k_cross @ state.alpha
-    v_solve = jax.scipy.linalg.solve_triangular(state.cholesky, k_cross.T, lower=True)
-    variance = jnp.diag(k_test) - jnp.sum(v_solve**2, axis=0)
-    variance = jnp.clip(variance, min=_PSEUDO_NOISE_FLOOR)
+    out_dtype = jnp.result_type(x_test.dtype, jnp.float32)
+    solve_dtype = jnp.result_type(k_cross.dtype, state.cholesky.dtype)
+    mean = (k_cross.astype(solve_dtype) @ state.alpha.astype(solve_dtype)).astype(out_dtype)
+    v_solve = jax.scipy.linalg.solve_triangular(
+        state.cholesky.astype(solve_dtype), k_cross.T.astype(solve_dtype), lower=True
+    )
+    variance = (k_test_diag.astype(solve_dtype) - jnp.sum(v_solve**2, axis=0)).astype(out_dtype)
+    variance = jnp.maximum(variance, jnp.asarray(0.0, dtype=out_dtype))
     return gaussian_process_predictive(
         mean,
         variance,

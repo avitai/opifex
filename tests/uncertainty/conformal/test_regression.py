@@ -22,6 +22,7 @@ Tests pin:
 from __future__ import annotations
 
 import dataclasses as dc
+import math
 import warnings
 
 import jax
@@ -88,13 +89,72 @@ def test_cqr_score_matches_definition() -> None:
 
 
 def test_conformal_quantile_applies_finite_sample_correction() -> None:
-    """For n samples and target ``1 - alpha``, the quantile rank is
-    ``ceil((n + 1)(1 - alpha)) / n``."""
+    """For n samples and target ``1 - alpha``, the exact order statistic is
+    ``sorted(scores)[ceil((n + 1)(1 - alpha)) - 1]``."""
+    import math
+
+    from calibrax.statistics import decimal_fraction
+
     conformal = _import_conformal()
     scores = jnp.arange(1.0, 11.0)  # n=10, values 1..10
     out = float(conformal.conformal_quantile(scores=scores, alpha=0.1))
-    # rank = ceil(11 * 0.9) / 10 = 10/10 = 1.0 → quantile at 1.0 → 10.0
+    # rank = ceil(11 * 0.9) = 10 → 10th order statistic → 10.0
     assert out == pytest.approx(10.0, abs=1e-6)
+
+    # n=20, alpha=0.1 -> ceil(21 * 0.9) = 19 -> 19th score = 1.90 (not 20th = 2.00)
+    scores_20 = jnp.linspace(0.1, 2.0, 20, dtype=jnp.float32)
+    q_20 = conformal.conformal_quantile(scores=scores_20, alpha=0.1)
+    assert float(q_20) == pytest.approx(1.90, abs=1e-6)
+
+    for n in (9, 10, 12, 15, 19, 20, 25, 30):
+        s_perm = jnp.asarray(np.random.default_rng(n).permutation(np.linspace(0.1, 3.0, n)))
+        s_sorted = np.sort(np.asarray(s_perm))
+        for alpha in (0.1, 0.15, 0.2, 0.3, 0.35):
+            rk = math.ceil((n + 1) * (1 - decimal_fraction(alpha)))
+            expected = float("inf") if rk > n else float(s_sorted[rk - 1])
+            got = float(conformal.conformal_quantile(scores=s_perm, alpha=alpha))
+            if math.isinf(expected):
+                assert math.isinf(got) and got > 0.0
+            else:
+                assert got == pytest.approx(expected, abs=1e-6), (n, alpha)
+
+    # Exact caller decimal boundary at n=19, alpha=0.15 (ceil(20 * 0.85) == 17, NOT 18)
+    scores_19 = jnp.arange(1.0, 20.0, dtype=jnp.float32)
+    assert float(conformal.conformal_quantile(scores=scores_19, alpha=0.15)) == pytest.approx(17.0)
+    with pytest.raises(TypeError):
+        conformal.conformal_quantile(scores=scores_19, alpha=jnp.bfloat16(0.1))  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        conformal.minimum_calibration_size(alpha=jnp.bfloat16(0.1))  # type: ignore[arg-type]
+
+    # NaN propagation in both finite-rank and +inf branches
+    assert bool(
+        jnp.isnan(
+            conformal.conformal_quantile(
+                scores=jnp.concatenate([jnp.array([jnp.nan]), jnp.ones(19)]), alpha=0.1
+            )
+        )
+    )
+    assert bool(
+        jnp.isnan(conformal.conformal_quantile(scores=jnp.array([jnp.nan, 1.0]), alpha=0.1))
+    )
+
+    # Exact rational boundary for minimum_calibration_size(1/3) == 3 and bounds validation
+    assert conformal.minimum_calibration_size(alpha=1.0 / 3.0) == 3
+    for bad_alpha in (0.0, 1.0, -0.1, 1.2, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="alpha"):
+            conformal.minimum_calibration_size(alpha=bad_alpha)
+
+    with jax.enable_x64(True):
+        q32 = conformal.conformal_quantile(
+            scores=jnp.linspace(0.1, 2.0, 20, dtype=jnp.float32), alpha=0.1
+        )
+        q64 = conformal.conformal_quantile(
+            scores=jnp.linspace(0.1, 2.0, 20, dtype=jnp.float64), alpha=0.1
+        )
+        assert q32.dtype == jnp.float32
+        assert q64.dtype == jnp.float64
+        assert float(q32) == pytest.approx(1.90, abs=1e-6)
+        assert float(q64) == pytest.approx(1.90, abs=1e-12)
 
 
 # ---------------------------------------------------------------------------
@@ -246,6 +306,8 @@ def test_public_conformal_surface_includes_regression_components() -> None:
         "SplitConformalState",
         "ConformalizedQuantileRegressor",
         "CQRState",
+        "GroupedConformalizedQuantileRegressor",
+        "GroupedCQRState",
         "GroupedSplitConformalRegressor",
         "GroupedSplitConformalState",
     }
@@ -504,3 +566,248 @@ def test_the_calibrated_groups_travel_on_the_interval() -> None:
     assert metadata["calibrated_groups"] == (0, 1)
     assert UNCALIBRATED_GROUP not in metadata["calibrated_groups"]
     assert tuple(state.group_ids.tolist()) == metadata["calibrated_groups"]
+
+
+# ---------------------------------------------------------------------------
+# Mondrian (group-conditional) Conformalized Quantile Regression (GroupedCQR)
+# ---------------------------------------------------------------------------
+
+
+def test_grouped_cqr_recovers_per_group_coverage_and_adapts_widths() -> None:
+    """GroupedCQR calibrates under-covered quantile bands separately per group."""
+    regression = _import_regression_module()
+    rng = np.random.default_rng(19)
+    n_per_group = 512
+    # Group 0: tight noise (sigma=0.4); Group 1: wide noise (sigma=2.5)
+    y0_cal = 0.4 * rng.standard_normal(n_per_group)
+    y1_cal = 2.5 * rng.standard_normal(n_per_group)
+    y_cal = jnp.asarray(np.concatenate([y0_cal, y1_cal]), dtype=jnp.float32)
+    groups_cal = jnp.asarray(
+        np.concatenate([np.zeros(n_per_group), np.ones(n_per_group)]).astype(np.int32)
+    )
+    # Intentionally narrow raw bands [-0.2, +0.2] everywhere
+    lo_cal = jnp.full_like(y_cal, -0.2)
+    hi_cal = jnp.full_like(y_cal, 0.2)
+
+    gcqr = regression.GroupedConformalizedQuantileRegressor(alpha=0.1)
+    state = gcqr.fit(
+        lower_predictions=lo_cal,
+        upper_predictions=hi_cal,
+        targets=y_cal,
+        groups=groups_cal,
+    )
+    fitted = gcqr.with_state(state)
+
+    y0_test = 0.4 * rng.standard_normal(n_per_group)
+    y1_test = 2.5 * rng.standard_normal(n_per_group)
+    y_test = jnp.asarray(np.concatenate([y0_test, y1_test]), dtype=jnp.float32)
+    interval = fitted.predict(
+        lower_predictions=lo_cal,
+        upper_predictions=hi_cal,
+        groups=groups_cal,
+    )
+    assert interval.method == "grouped_cqr"
+    covered = (y_test >= interval.lower) & (y_test <= interval.upper)
+    cov_g0 = float(jnp.mean(covered[:n_per_group].astype(jnp.float32)))
+    cov_g1 = float(jnp.mean(covered[n_per_group:].astype(jnp.float32)))
+    # Split conformal conditional coverage C ~ Beta(k, n_cal + 1 - k) with k = ceil(513 * 0.9)
+    # = 462 (Vovk 2012): marginal mean mu = k / (n_cal + 1) and exact variance over n_test=512
+    # test points Var(hat_c) = mu*(1-mu)/n_test + (n_test - 1)/n_test * mu*(1-mu)/(n_cal + 2).
+    # A 3.5 * SE band has two-sided normal false-failure probability 2 * Phi(-3.5) = 4.65e-4.
+    k_rank = math.ceil((n_per_group + 1) * 0.9)
+    mu_cov = k_rank / (n_per_group + 1)
+    var_cov = (mu_cov * (1.0 - mu_cov) / n_per_group) + ((n_per_group - 1) / n_per_group) * (
+        mu_cov * (1.0 - mu_cov) / (n_per_group + 2)
+    )
+    se_cov = math.sqrt(var_cov)
+    assert abs(cov_g0 - mu_cov) <= 3.5 * se_cov
+    assert abs(cov_g1 - mu_cov) <= 3.5 * se_cov
+
+    widths = interval.upper - interval.lower
+    assert float(jnp.mean(widths[n_per_group:])) > 2.5 * float(jnp.mean(widths[:n_per_group]))
+
+
+def test_grouped_cqr_underfilled_unseen_and_validation_contracts() -> None:
+    """Underfilled and unseen groups receive ``(-inf, +inf)``; invalid inputs raise."""
+    regression = _import_regression_module()
+    rng = np.random.default_rng(23)
+    y_cal = jnp.asarray(rng.standard_normal(40), dtype=jnp.float32)
+    lo_cal = y_cal - 0.1
+    hi_cal = y_cal + 0.1
+    # Group 0 has 37 samples (>= 9), Group 2 has 3 samples (< 9 for alpha=0.1)
+    groups_cal = jnp.asarray(np.concatenate([np.zeros(37), np.full(3, 2)]).astype(np.int32))
+
+    gcqr = regression.GroupedConformalizedQuantileRegressor(alpha=0.1)
+    with pytest.raises(RuntimeError, match=r"(?i)(fit|calibrate)"):
+        gcqr.predict(
+            lower_predictions=jnp.zeros((2,)),
+            upper_predictions=jnp.ones((2,)),
+            groups=jnp.zeros((2,), dtype=jnp.int32),
+        )
+
+    with pytest.warns(UserWarning, match=r"1 of 2 groups hold fewer: 2 \(n=3\)"):
+        state = gcqr.fit(
+            lower_predictions=lo_cal,
+            upper_predictions=hi_cal,
+            targets=y_cal,
+            groups=groups_cal,
+        )
+    fitted = gcqr.with_state(state)
+    # Test batch: calibrated group 0, underfilled group 2, unseen group 9
+    test_groups = jnp.asarray([0, 2, 9], dtype=jnp.int32)
+    test_lo = jnp.array([1.0, 2.0, 3.0], dtype=jnp.float32)
+    test_hi = jnp.array([1.5, 2.5, 3.5], dtype=jnp.float32)
+    iv = fitted.predict(
+        lower_predictions=test_lo,
+        upper_predictions=test_hi,
+        groups=test_groups,
+    )
+    assert bool(jnp.isfinite(iv.lower[0]) and jnp.isfinite(iv.upper[0]))
+    assert bool(jnp.isneginf(iv.lower[1]) and jnp.isposinf(iv.upper[1]))
+    assert bool(jnp.isneginf(iv.lower[2]) and jnp.isposinf(iv.upper[2]))
+
+    with pytest.raises(ValueError, match=r"alpha"):
+        regression.GroupedConformalizedQuantileRegressor(alpha=0.0).fit(
+            lower_predictions=lo_cal,
+            upper_predictions=hi_cal,
+            targets=y_cal,
+            groups=groups_cal,
+        )
+    with pytest.raises(TypeError, match="static_argnames"):
+        jax.jit(
+            lambda a: regression.GroupedConformalizedQuantileRegressor(alpha=a).fit(  # type: ignore[arg-type]
+                lower_predictions=lo_cal,
+                upper_predictions=hi_cal,
+                targets=y_cal,
+                groups=groups_cal,
+            )
+        )(jnp.float32(0.1))
+    with pytest.raises(ValueError, match=r"shape"):
+        gcqr.fit(
+            lower_predictions=lo_cal[:10],
+            upper_predictions=hi_cal,
+            targets=y_cal,
+            groups=groups_cal,
+        )
+    with pytest.raises(ValueError, match=r"shape"):
+        fitted.predict(
+            lower_predictions=test_lo[:2],
+            upper_predictions=test_hi,
+            groups=test_groups,
+        )
+
+
+def test_grouped_cqr_jit_vmap_grad_and_float64() -> None:
+    """GroupedCQR ``predict`` compiles in one trace and preserves ``grad`` and ``float64``."""
+    from substrax.testing import TraceCounter
+
+    regression = _import_regression_module()
+    rng = np.random.default_rng(31)
+    y_cal = jnp.asarray(rng.standard_normal(40), dtype=jnp.float32)
+    groups_cal = jnp.asarray((np.arange(40) % 2).astype(np.int32))
+    gcqr = regression.GroupedConformalizedQuantileRegressor(alpha=0.1)
+    state = gcqr.fit(
+        lower_predictions=y_cal - 0.2,
+        upper_predictions=y_cal + 0.2,
+        targets=y_cal,
+        groups=groups_cal,
+    )
+    fitted = gcqr.with_state(state)
+
+    counter = TraceCounter()
+    jitted = jax.jit(
+        counter.wrap(
+            lambda lo, hi, g: fitted.predict(lower_predictions=lo, upper_predictions=hi, groups=g)
+        )
+    )
+    lo = jnp.array([-1.0, 0.0, 1.0], dtype=jnp.float32)
+    hi = jnp.array([-0.5, 0.5, 1.5], dtype=jnp.float32)
+    g = jnp.array([0, 1, 0], dtype=jnp.int32)
+    with counter.expect(new_traces=1):
+        iv1 = jitted(lo, hi, g)
+    with counter.expect(new_traces=0):
+        _ = jitted(lo + 0.2, hi + 0.2, g)
+    assert iv1.lower.shape == (3,)
+
+    batched = jax.vmap(
+        lambda lo_b, hi_b: fitted.predict(lower_predictions=lo_b, upper_predictions=hi_b, groups=g)
+    )(jnp.stack([lo, lo + 1.0]), jnp.stack([hi, hi + 1.0]))
+    assert batched.lower.shape == (2, 3)
+
+    grad_lo, grad_hi = jax.grad(
+        lambda lo_x, hi_x: jnp.sum(
+            fitted.predict(lower_predictions=lo_x, upper_predictions=hi_x, groups=g).upper
+            - fitted.predict(lower_predictions=lo_x, upper_predictions=hi_x, groups=g).lower
+        ),
+        argnums=(0, 1),
+    )(lo, hi)
+    assert jnp.allclose(grad_lo, -jnp.ones_like(lo))
+    assert jnp.allclose(grad_hi, jnp.ones_like(hi))
+
+    with jax.enable_x64(True):
+        y64 = jnp.linspace(-1.0, 1.0, 24, dtype=jnp.float64)
+        g64 = jnp.asarray((np.arange(24) % 2).astype(np.int32))
+        s64 = gcqr.fit(
+            lower_predictions=y64 - 0.1,
+            upper_predictions=y64 + 0.1,
+            targets=y64,
+            groups=g64,
+        )
+        assert s64.quantiles.dtype == jnp.float64
+        iv64 = gcqr.with_state(s64).predict(
+            lower_predictions=jnp.zeros((3,), dtype=jnp.float64),
+            upper_predictions=jnp.ones((3,), dtype=jnp.float64),
+            groups=jnp.array([0, 1, 99], dtype=jnp.int32),
+        )
+        assert iv64.lower.dtype == jnp.float64
+        assert iv64.upper.dtype == jnp.float64
+
+
+def test_rational_alpha_boundary_and_integer_group_dtype_contracts() -> None:
+    """Exact Fraction(alpha) aligns minimum_calibration_size with conformal_quantile,
+    and non-integer group dtypes are rejected."""
+    import math
+
+    conformal = _import_conformal()
+    regression = _import_regression_module()
+
+    # IEEE-754 alpha = 1/49: 49 * alpha < 1 so min_size == 49, and n == 48 must emit +inf
+    alpha_49 = 1.0 / 49.0
+    assert conformal.minimum_calibration_size(alpha=alpha_49) == 49
+    assert bool(
+        jnp.isposinf(conformal.conformal_quantile(scores=jnp.arange(1.0, 49.0), alpha=alpha_49))
+    )
+    assert float(
+        conformal.conformal_quantile(scores=jnp.arange(1.0, 50.0), alpha=alpha_49)
+    ) == pytest.approx(49.0)
+
+    # alpha = nextafter(0.1, 0.0) < 1/10 -> n == 9 cannot attain 1 - alpha -> +inf
+    alpha_sub = math.nextafter(0.1, 0.0)
+    assert conformal.minimum_calibration_size(alpha=alpha_sub) == 10
+    assert bool(
+        jnp.isposinf(conformal.conformal_quantile(scores=jnp.arange(1.0, 10.0), alpha=alpha_sub))
+    )
+
+    with pytest.warns(UserWarning, match=r"needs at least 49"):
+        st_48 = regression.GroupedConformalizedQuantileRegressor(alpha=alpha_49).fit(
+            lower_predictions=jnp.zeros(48),
+            upper_predictions=jnp.ones(48),
+            targets=jnp.arange(48.0),
+            groups=jnp.zeros(48, dtype=jnp.int32),
+        )
+    assert bool(jnp.isposinf(st_48.quantiles[0]))
+
+    float_groups = jnp.array([0.1] * 10 + [0.9] * 10, dtype=jnp.float32)
+    with pytest.raises(ValueError, match="integer dtype"):
+        regression.GroupedSplitConformalRegressor(alpha=0.1).fit(
+            predictions=jnp.zeros(20),
+            targets=jnp.ones(20),
+            groups=float_groups,
+        )
+    with pytest.raises(ValueError, match="integer dtype"):
+        regression.GroupedConformalizedQuantileRegressor(alpha=0.1).fit(
+            lower_predictions=jnp.zeros(20),
+            upper_predictions=jnp.ones(20),
+            targets=jnp.ones(20),
+            groups=float_groups,
+        )

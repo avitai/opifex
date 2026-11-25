@@ -29,7 +29,7 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-import numpy as np
+from calibrax.metrics.functional import reverse_kaplan_meier
 from flax import struct
 
 from opifex.uncertainty.conformal.scores import (
@@ -168,6 +168,96 @@ class ConformalizedQuantileRegressor:
 # ---------------------------------------------------------------------------
 
 
+def _warn_underfilled_groups(
+    underfilled: list[tuple[int, int]],
+    *,
+    num_groups: int,
+    alpha: float,
+    required: int,
+) -> None:
+    """Emit a ``UserWarning`` naming calibration groups smaller than ``required``."""
+    if not underfilled:
+        return
+    shown = ", ".join(f"{gid} (n={size})" for gid, size in underfilled[:10])
+    if len(underfilled) > 10:
+        shown += f", ... and {len(underfilled) - 10} more"
+    warnings.warn(
+        f"alpha={alpha} needs at least {required} calibration scores per "
+        f"group; {len(underfilled)} of {num_groups} groups hold "
+        f"fewer: {shown}. Their quantile is +inf (unbounded interval). Merge "
+        f"groups, raise alpha, or calibrate more points in them.",
+        UserWarning,
+        stacklevel=4,
+    )
+
+
+def _fit_per_group_quantiles(
+    *,
+    scores: jax.Array,
+    groups: jax.Array,
+    alpha: float,
+    method: str,
+    score_type: str,
+) -> tuple[jax.Array, jax.Array, MetadataItems]:
+    """Compute per-group conformal quantiles and emit underfilled-group warnings.
+
+    Args:
+        scores: 1-D nonconformity scores of shape ``(n,)``.
+        groups: 1-D integer group identifiers of shape ``(n,)``.
+        alpha: Miscoverage level in ``(0, 1)``.
+        method: Method identifier stored in returned metadata.
+        score_type: Score identifier stored in returned metadata.
+
+    Returns:
+        Tuple ``(quantiles, unique_groups, metadata)``.
+
+    Raises:
+        ValueError: When ``alpha`` lies outside ``(0, 1)`` or ``scores`` and
+            ``groups`` shapes are empty or mismatched.
+    """
+    required = minimum_calibration_size(alpha=alpha)
+    if not jnp.issubdtype(groups.dtype, jnp.integer):
+        raise ValueError(f"groups must have an integer dtype; got {groups.dtype}.")
+    if scores.ndim != 1 or scores.shape != groups.shape or scores.shape[0] < 1:
+        raise ValueError(
+            "Calibration scores and groups must be non-empty 1-D arrays of matching shape; "
+            f"got {scores.shape} and {groups.shape}."
+        )
+    score_dtype = jnp.result_type(scores, jnp.float32)
+    scores_f = jnp.asarray(scores, dtype=score_dtype)
+    unique_groups = jnp.unique(groups)
+    group_id_tuple = tuple(int(gid) for gid in unique_groups.tolist())
+    quantiles_list: list[jax.Array] = []
+    underfilled: list[tuple[int, int]] = []
+    for gid in group_id_tuple:
+        group_scores = scores_f[groups == gid]
+        if group_scores.shape[0] < required:
+            underfilled.append((gid, int(group_scores.shape[0])))
+        quantile_value = conformal_quantile(scores=group_scores, alpha=alpha).astype(score_dtype)
+        quantiles_list.append(quantile_value)
+    quantiles = jnp.stack(quantiles_list)
+    _warn_underfilled_groups(
+        underfilled,
+        num_groups=len(group_id_tuple),
+        alpha=alpha,
+        required=required,
+    )
+    metadata: MetadataItems = (
+        ("method", method),
+        ("score_type", score_type),
+        ("alpha", float(alpha)),
+        ("calibration_size", int(scores_f.shape[0])),
+        ("num_groups", len(group_id_tuple)),
+        ("min_group_size", required),
+        ("underfilled_groups", tuple(underfilled)),
+        # Travels on every PredictionInterval predict returns, so a caller holding only
+        # the interval can see which groups were calibrated. num_groups alone cannot
+        # distinguish a sample whose group was absent from one that was calibrated.
+        ("calibrated_groups", group_id_tuple),
+    )
+    return quantiles, unique_groups, metadata
+
+
 @struct.dataclass(slots=True, kw_only=True)
 class GroupedSplitConformalState:
     """Per-group quantile thresholds keyed by integer group ID."""
@@ -210,44 +300,22 @@ class GroupedSplitConformalRegressor:
         which is the honest statement that this group's level is unattainable —
         and are named in a :class:`UserWarning` and in
         ``metadata['underfilled_groups']``.
+
+        Args:
+            predictions: Calibration point predictions of shape ``(n,)``.
+            targets: Calibration targets of shape ``(n,)``.
+            groups: Calibration integer group IDs of shape ``(n,)``.
+
+        Returns:
+            Fitted :class:`GroupedSplitConformalState`.
         """
         scores = absolute_residual_score(predictions=predictions, targets=targets)
-        unique_groups = jnp.unique(groups)
-        required = minimum_calibration_size(alpha=self.alpha)
-        quantiles_list = []
-        underfilled: list[tuple[int, int]] = []
-        for gid in unique_groups.tolist():
-            mask = groups == gid
-            group_scores = scores[mask]
-            if group_scores.shape[0] < required:
-                underfilled.append((int(gid), int(group_scores.shape[0])))
-            quantile_value = conformal_quantile(scores=group_scores, alpha=self.alpha)
-            quantiles_list.append(quantile_value)
-        quantiles = jnp.stack(quantiles_list)
-        if underfilled:
-            shown = ", ".join(f"{gid} (n={size})" for gid, size in underfilled[:10])
-            if len(underfilled) > 10:
-                shown += f", ... and {len(underfilled) - 10} more"
-            warnings.warn(
-                f"alpha={self.alpha} needs at least {required} calibration scores per "
-                f"group; {len(underfilled)} of {int(unique_groups.shape[0])} groups hold "
-                f"fewer: {shown}. Their quantile is +inf (unbounded interval). Merge "
-                f"groups, raise alpha, or calibrate more points in them.",
-                UserWarning,
-                stacklevel=2,
-            )
-        metadata: MetadataItems = (
-            ("method", "grouped_split_conformal"),
-            ("score_type", "absolute_residual"),
-            ("alpha", float(self.alpha)),
-            ("calibration_size", int(predictions.shape[0])),
-            ("num_groups", int(unique_groups.shape[0])),
-            ("min_group_size", required),
-            ("underfilled_groups", tuple(underfilled)),
-            # Travels on every PredictionInterval predict returns, so a caller holding only
-            # the interval can see which groups were calibrated. num_groups alone cannot
-            # distinguish a sample whose group was absent from one that was calibrated.
-            ("calibrated_groups", tuple(int(gid) for gid in unique_groups.tolist())),
+        quantiles, unique_groups, metadata = _fit_per_group_quantiles(
+            scores=scores,
+            groups=groups,
+            alpha=self.alpha,
+            method="grouped_split_conformal",
+            score_type="absolute_residual",
         )
         return GroupedSplitConformalState(
             quantiles=quantiles,
@@ -261,18 +329,164 @@ class GroupedSplitConformalRegressor:
 
         A sample whose group was not calibrated gets an unbounded interval rather than a
         zero-width one; ``metadata['calibrated_groups']`` names the groups that were.
+
+        Args:
+            predictions: Test point predictions of shape ``(m,)``.
+            groups: Test integer group IDs of shape ``(m,)``.
+
+        Returns:
+            Group-conditional :class:`PredictionInterval`.
+
+        Raises:
+            ValueError: When ``groups`` does not have an integer dtype or shapes mismatch.
         """
         state = require_fitted_state(self._state, surface="GroupedSplitConformalRegressor.predict")
+        if not jnp.issubdtype(groups.dtype, jnp.integer):
+            raise ValueError(f"groups must have an integer dtype; got {groups.dtype}.")
+        if predictions.ndim != 1 or predictions.shape != groups.shape:
+            raise ValueError(
+                "predictions and groups must be 1-D arrays of matching shape; "
+                f"got {predictions.shape} and {groups.shape}."
+            )
+        dtype = jnp.result_type(predictions, state.quantiles, jnp.float32)
+        preds = jnp.asarray(predictions, dtype=dtype)
         per_sample_quantile = _lookup_per_group_quantile(
             groups=groups,
             group_ids=state.group_ids,
-            quantiles=state.quantiles,
+            quantiles=state.quantiles.astype(dtype),
         )
         return PredictionInterval(
-            lower=predictions - per_sample_quantile,
-            upper=predictions + per_sample_quantile,
+            lower=preds - per_sample_quantile,
+            upper=preds + per_sample_quantile,
             coverage=1.0 - state.alpha,
             method="grouped_split_conformal",
+            metadata=state.metadata,
+        )
+
+
+@struct.dataclass(slots=True, kw_only=True)
+class GroupedCQRState:
+    """Per-group CQR quantile adjustments keyed by integer group ID."""
+
+    quantiles: jax.Array  # shape (num_groups,)
+    group_ids: jax.Array  # shape (num_groups,) — sorted unique IDs
+    alpha: float = struct.field(pytree_node=False)
+    metadata: MetadataItems = struct.field(pytree_node=False, default=())
+
+
+@dc.dataclass(frozen=True, slots=True, kw_only=True)
+class GroupedConformalizedQuantileRegressor:
+    """Mondrian (group-conditional) Conformalized Quantile Regressor.
+
+    Combines CQR conformity scores ``max(lo - y, y - hi)`` (Romano, Patterson &
+    Candès 2019, NeurIPS) with Mondrian per-group calibration (Vovk et al. 2005).
+    Groups with fewer than
+    :func:`~opifex.uncertainty.conformal.scores.minimum_calibration_size`
+    calibration points emit a :class:`UserWarning` and receive ``+inf`` quantile
+    adjustments; unseen groups at test time likewise yield ``(-inf, +inf)``.
+    """
+
+    alpha: float
+    _state: GroupedCQRState | None = dc.field(default=None)
+
+    def with_state(self, state: GroupedCQRState) -> GroupedConformalizedQuantileRegressor:
+        """Return a fresh regressor carrying ``state`` (immutable update)."""
+        return dc.replace(self, _state=state)
+
+    def fit(
+        self,
+        *,
+        lower_predictions: jax.Array,
+        upper_predictions: jax.Array,
+        targets: jax.Array,
+        groups: jax.Array,
+    ) -> GroupedCQRState:
+        """Fit per-group CQR adjustments from calibration quantile bounds and targets.
+
+        Args:
+            lower_predictions: Calibration lower-quantile predictions of shape ``(n,)``.
+            upper_predictions: Calibration upper-quantile predictions of shape ``(n,)``.
+            targets: Calibration ground-truth targets of shape ``(n,)``.
+            groups: Calibration integer group IDs of shape ``(n,)``.
+
+        Returns:
+            Fitted :class:`GroupedCQRState`.
+
+        Raises:
+            ValueError: When calibration array shapes mismatch.
+        """
+        if (
+            lower_predictions.shape != upper_predictions.shape
+            or lower_predictions.shape != targets.shape
+        ):
+            raise ValueError(
+                "lower_predictions, upper_predictions, and targets must share shape; "
+                f"got {lower_predictions.shape}, {upper_predictions.shape}, {targets.shape}."
+            )
+        scores = cqr_score(lower=lower_predictions, upper=upper_predictions, targets=targets)
+        quantiles, unique_groups, metadata = _fit_per_group_quantiles(
+            scores=scores,
+            groups=groups,
+            alpha=self.alpha,
+            method="grouped_cqr",
+            score_type="cqr",
+        )
+        return GroupedCQRState(
+            quantiles=quantiles,
+            group_ids=unique_groups,
+            alpha=self.alpha,
+            metadata=metadata,
+        )
+
+    def predict(
+        self,
+        *,
+        lower_predictions: jax.Array,
+        upper_predictions: jax.Array,
+        groups: jax.Array,
+    ) -> PredictionInterval:
+        """Return group-calibrated ``[lo - q_g, hi + q_g]`` intervals.
+
+        Args:
+            lower_predictions: Test lower-quantile predictions of shape ``(m,)``.
+            upper_predictions: Test upper-quantile predictions of shape ``(m,)``.
+            groups: Test integer group IDs of shape ``(m,)``.
+
+        Returns:
+            Group-conditional :class:`PredictionInterval` with ``method="grouped_cqr"``.
+
+        Raises:
+            ValueError: When ``groups`` does not have an integer dtype or
+                ``lower_predictions``, ``upper_predictions``, and ``groups`` shapes mismatch.
+        """
+        state = require_fitted_state(
+            self._state, surface="GroupedConformalizedQuantileRegressor.predict"
+        )
+        if not jnp.issubdtype(groups.dtype, jnp.integer):
+            raise ValueError(f"groups must have an integer dtype; got {groups.dtype}.")
+        if (
+            lower_predictions.ndim != 1
+            or lower_predictions.shape != upper_predictions.shape
+            or lower_predictions.shape != groups.shape
+        ):
+            raise ValueError(
+                "lower_predictions, upper_predictions, and groups must be 1-D arrays of "
+                f"matching shape; got {lower_predictions.shape}, "
+                f"{upper_predictions.shape}, {groups.shape}."
+            )
+        dtype = jnp.result_type(lower_predictions, upper_predictions, state.quantiles, jnp.float32)
+        lo = jnp.asarray(lower_predictions, dtype=dtype)
+        hi = jnp.asarray(upper_predictions, dtype=dtype)
+        per_sample_quantile = _lookup_per_group_quantile(
+            groups=groups,
+            group_ids=state.group_ids,
+            quantiles=state.quantiles.astype(dtype),
+        )
+        return PredictionInterval(
+            lower=lo - per_sample_quantile,
+            upper=hi + per_sample_quantile,
+            coverage=1.0 - state.alpha,
+            method="grouped_cqr",
             metadata=state.metadata,
         )
 
@@ -311,7 +525,11 @@ def _lookup_per_group_quantile(
     # (n_samples, n_groups) one-hot match.
     matches = groups[:, None] == group_ids[None, :]
     gathered = jnp.sum(matches * quantiles[None, :], axis=-1)
-    return jnp.where(jnp.any(matches, axis=-1), gathered, jnp.inf)
+    return jnp.where(
+        jnp.any(matches, axis=-1),
+        gathered,
+        jnp.asarray(jnp.inf, dtype=quantiles.dtype),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -323,29 +541,25 @@ _VALID_CENSORED_SCORE_TYPES: frozenset[str] = frozenset(
 )
 
 
-def _kaplan_meier_left_continuous_survival(
-    observed_times: np.ndarray,
-    censoring_events: np.ndarray,
-    eval_times: np.ndarray,
-) -> np.ndarray:
-    """Estimate left-continuous censoring survival ``P(C >= t)`` via Kaplan-Meier."""
-    cens_times = observed_times[censoring_events]
-    if cens_times.size == 0:
-        return np.ones_like(eval_times, dtype=np.float64)
-
-    unique_u = np.unique(cens_times)
-    # Risk set R(u_k) = #{j : T_tilde_j >= u_k}; censoring drops d_C(u_k) at u_k.
-    at_risk = np.sum(observed_times[:, None] >= unique_u[None, :], axis=0).astype(np.float64)
-    drops = np.sum(
-        (observed_times[:, None] == unique_u[None, :]) & censoring_events[:, None],
-        axis=0,
-    ).astype(np.float64)
-    step_factors = np.where(at_risk > 0.0, np.maximum(1.0 - drops / at_risk, 0.0), 1.0)
-    log_factors = np.log(np.maximum(step_factors, np.finfo(np.float64).tiny))
-    cum_log = np.concatenate([[0.0], np.cumsum(log_factors)])
-    # Left-continuous product over u_k < t corresponds to searchsorted(..., side="left").
-    idx = np.searchsorted(unique_u, eval_times, side="left")
-    return np.exp(cum_log[idx])
+def _validate_survival_probabilities(
+    censoring_survival: jax.Array,
+    *,
+    expected_shape: tuple[int, ...],
+) -> None:
+    """Validate 0-D or matching 1-D censoring survival shape and concrete ``(0, 1]`` bounds."""
+    if censoring_survival.ndim not in (0, 1) or (
+        censoring_survival.ndim == 1 and censoring_survival.shape != expected_shape
+    ):
+        raise ValueError(
+            f"censoring_survival must be scalar or 1-D of shape {expected_shape}; "
+            f"got shape {censoring_survival.shape}."
+        )
+    try:
+        in_bounds = bool(jnp.all((censoring_survival > 0.0) & (censoring_survival <= 1.0)))
+    except jax.errors.TracerBoolConversionError:
+        in_bounds = True
+    if not in_bounds:
+        raise ValueError("censoring_survival probabilities must lie in (0, 1].")
 
 
 def _validate_censored_hyperparams(
@@ -355,8 +569,7 @@ def _validate_censored_hyperparams(
     score_type: str,
 ) -> None:
     """Validate scalar hyperparameters for censored conformal calibration."""
-    if not 0.0 < alpha < 1.0:
-        raise ValueError(f"alpha must lie in (0, 1); got {alpha!r}.")
+    minimum_calibration_size(alpha=alpha)
     if positivity_floor <= 0.0:
         raise ValueError(f"positivity_floor must be strictly positive; got {positivity_floor!r}.")
     if score_type not in _VALID_CENSORED_SCORE_TYPES:
@@ -366,23 +579,37 @@ def _validate_censored_hyperparams(
         )
 
 
-def _validate_censored_fit_inputs(
+def _validate_optional_1d_match(
+    arr: jax.Array | None,
     *,
-    alpha: float,
-    positivity_floor: float,
-    score_type: str,
+    name: str,
+    expected_shape: tuple[int, ...],
+) -> None:
+    """Validate an optional 1-D array against ``expected_shape``."""
+    if arr is not None and arr.shape != expected_shape:
+        raise ValueError(
+            f"{name} must be a 1-D array matching shape {expected_shape}; got shape {arr.shape}."
+        )
+
+
+def _validate_censored_fit_inputs(
+    regressor: CensoredSplitConformalRegressor,
+    *,
     predictions: jax.Array,
     observed_targets: jax.Array,
     censoring_times: jax.Array | None,
     event_indicators: jax.Array | None,
+    censoring_survival: jax.Array | None,
     scales: jax.Array | None,
 ) -> None:
     """Validate configuration and calibration array shapes for censored conformal fit."""
     _validate_censored_hyperparams(
-        alpha=alpha, positivity_floor=positivity_floor, score_type=score_type
+        alpha=regressor.alpha,
+        positivity_floor=regressor.positivity_floor,
+        score_type=regressor.score_type,
     )
-    if predictions.ndim != 1 or observed_targets.ndim != 1:
-        raise ValueError("predictions and observed_targets must be 1-D calibration arrays.")
+    if predictions.ndim != 1 or observed_targets.ndim != 1 or predictions.shape[0] < 1:
+        raise ValueError("predictions and observed_targets must be non-empty 1-D arrays.")
     if predictions.shape != observed_targets.shape:
         raise ValueError(
             f"predictions shape {predictions.shape} must match observed_targets shape "
@@ -393,7 +620,16 @@ def _validate_censored_fit_inputs(
             "Supply either censoring_times (Type-I / known censoring thresholds) or "
             "event_indicators (general right-censored)."
         )
-    if score_type == "scaled_signed_residual" and scales is None:
+    _validate_optional_1d_match(
+        censoring_times, name="censoring_times", expected_shape=predictions.shape
+    )
+    _validate_optional_1d_match(
+        event_indicators, name="event_indicators", expected_shape=predictions.shape
+    )
+    _validate_optional_1d_match(scales, name="scales", expected_shape=predictions.shape)
+    if censoring_survival is not None:
+        _validate_survival_probabilities(censoring_survival, expected_shape=predictions.shape)
+    if regressor.score_type == "scaled_signed_residual" and scales is None:
         raise ValueError("scales is required when score_type='scaled_signed_residual'.")
 
 
@@ -427,14 +663,27 @@ def _compute_censored_weights(
     active = events_bool | (observed_targets >= c0)
     if censoring_survival is not None:
         surv = jnp.maximum(jnp.asarray(censoring_survival, dtype=dtype), positivity_floor)
+        default_test_surv = 1.0
     else:
-        obs_np = np.asarray(observed_targets, dtype=np.float64)
-        cens_events_np = ~np.asarray(events_bool, dtype=np.bool_)
-        trunc_np = np.minimum(obs_np, c0)
-        km_surv = _kaplan_meier_left_continuous_survival(obs_np, cens_events_np, trunc_np)
+        trunc_targets = jnp.minimum(observed_targets, jnp.asarray(c0, dtype=observed_targets.dtype))
+        km_surv = reverse_kaplan_meier(
+            observed_targets,
+            events_bool,
+            eval_times=trunc_targets,
+            left_continuous=True,
+        )
         surv = jnp.maximum(jnp.asarray(km_surv, dtype=dtype), positivity_floor)
+        km_c0 = float(
+            reverse_kaplan_meier(
+                observed_targets,
+                events_bool,
+                eval_times=jnp.asarray([c0], dtype=dtype),
+                left_continuous=True,
+            )[0]
+        )
+        default_test_surv = max(km_c0, positivity_floor)
     weights = jnp.where(active, 1.0 / surv, 0.0)
-    return active, weights, 1.0
+    return active, weights, default_test_surv
 
 
 @partial(jax.jit, static_argnames=("config",))
@@ -495,6 +744,7 @@ class CensoredConformalState:
     score_type: str = struct.field(pytree_node=False, default="signed_residual")
     doubly_robust: bool = struct.field(pytree_node=False, default=False)
     underfilled: bool = struct.field(pytree_node=False, default=False)
+    requires_test_censoring_survival: bool = struct.field(pytree_node=False, default=False)
     metadata: MetadataItems = struct.field(pytree_node=False, default=())
 
 
@@ -555,13 +805,12 @@ class CensoredSplitConformalRegressor:
             Fitted :class:`CensoredConformalState` PyTree.
         """
         _validate_censored_fit_inputs(
-            alpha=self.alpha,
-            positivity_floor=self.positivity_floor,
-            score_type=self.score_type,
+            self,
             predictions=predictions,
             observed_targets=observed_targets,
             censoring_times=censoring_times,
             event_indicators=event_indicators,
+            censoring_survival=censoring_survival,
             scales=scales,
         )
         raw_scores = signed_lower_residual_score(
@@ -592,6 +841,7 @@ class CensoredSplitConformalRegressor:
                 UserWarning,
                 stacklevel=2,
             )
+        requires_test_surv = censoring_survival is not None
         regime = "type1_cutoff" if censoring_times is not None else "right_censored_ipcw"
         metadata: MetadataItems = (
             ("method", "censored_split_conformal"),
@@ -605,6 +855,7 @@ class CensoredSplitConformalRegressor:
             ("minimum_calibration_size", required),
             ("doubly_robust", bool(self.doubly_robust)),
             ("underfilled", underfilled),
+            ("requires_test_censoring_survival", requires_test_surv),
         )
         return CensoredConformalState(
             calibration_scores=scores,
@@ -617,6 +868,7 @@ class CensoredSplitConformalRegressor:
             score_type=self.score_type,
             doubly_robust=bool(self.doubly_robust),
             underfilled=underfilled,
+            requires_test_censoring_survival=requires_test_surv,
             metadata=metadata,
         )
 
@@ -632,20 +884,35 @@ class CensoredSplitConformalRegressor:
         Args:
             predictions: 1-D test predictions of shape ``(n_test,)``.
             censoring_survival: Optional 1-D censoring survival ``G_hat(c_0 | X_test)`` at
-                test points. Defaults to ``state.default_test_survival``.
+                test points. Required when ``fit`` was called with explicit
+                ``censoring_survival``; otherwise defaults to ``state.default_test_survival``.
             scales: Optional 1-D positive scales when ``score_type='scaled_signed_residual'``.
 
         Returns:
             :class:`PredictionInterval` with ``upper = +inf`` and ``lower <= state.cutoff``.
 
         Raises:
-            ValueError: When ``score_type='scaled_signed_residual'`` and ``scales`` is omitted.
+            ValueError: When ``score_type='scaled_signed_residual'`` and ``scales`` is omitted,
+                or when ``state.requires_test_censoring_survival`` is ``True`` and
+                ``censoring_survival`` is omitted.
         """
         state = require_fitted_state(self._state, surface="CensoredSplitConformalRegressor.predict")
-        dtype = jnp.result_type(predictions, jnp.float32)
-        preds = jnp.asarray(predictions, dtype=dtype)
+        if predictions.ndim != 1:
+            raise ValueError(
+                f"predictions must be a 1-D test array; got shape {predictions.shape}."
+            )
+        if state.requires_test_censoring_survival and censoring_survival is None:
+            raise ValueError(
+                "censoring_survival is required in predict() when fit() was calibrated "
+                "with explicit censoring_survival."
+            )
+        if censoring_survival is not None:
+            _validate_survival_probabilities(censoring_survival, expected_shape=predictions.shape)
         if state.score_type == "scaled_signed_residual" and scales is None:
             raise ValueError("scales is required when score_type='scaled_signed_residual'.")
+        _validate_optional_1d_match(scales, name="scales", expected_shape=predictions.shape)
+        dtype = jnp.result_type(predictions, jnp.float32)
+        preds = jnp.asarray(predictions, dtype=dtype)
 
         test_surv = (
             jnp.broadcast_to(jnp.asarray(censoring_survival, dtype=dtype), preds.shape)

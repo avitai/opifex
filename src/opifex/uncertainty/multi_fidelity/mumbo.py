@@ -78,30 +78,39 @@ def _gumbel_fit_and_sample(
     The quartiles are interpolated on 200 levels spanning five standard
     deviations beyond the grid.
     """
-    y_low = jnp.min(grid_means - 5.0 * grid_stds)
-    y_high = jnp.max(grid_means + 5.0 * grid_stds)
-    levels = jnp.linspace(y_low, y_high, 200)
+    dtype = jnp.result_type(grid_means, grid_stds, jnp.float32)
+    means_f = jnp.asarray(grid_means, dtype=dtype)
+    stds_f = jnp.asarray(grid_stds, dtype=dtype)
+    y_low = jnp.min(means_f - 5.0 * stds_f)
+    y_high = jnp.max(means_f + 5.0 * stds_f)
+    levels = jnp.linspace(y_low, y_high, 200, dtype=dtype)
 
     def cdf_at(level: jax.Array) -> jax.Array:
         """Return the probability that every grid maximum lies at or below ``level``."""
-        normalised = (level - grid_means) / jnp.maximum(grid_stds, _PSEUDO_NOISE_FLOOR)
+        normalised = (level - means_f) / jnp.maximum(
+            stds_f, jnp.asarray(_PSEUDO_NOISE_FLOOR, dtype=dtype)
+        )
         # Probability that ALL grid maxima are <= level.
         return jnp.prod(jax.scipy.stats.norm.cdf(normalised))
 
     cdfs = jax.vmap(cdf_at)(levels)
-    quantile_25 = jnp.interp(0.25, cdfs, levels)
-    quantile_75 = jnp.interp(0.75, cdfs, levels)
-    scale = (quantile_75 - quantile_25) / jnp.log(jnp.log(4.0) / jnp.log(4.0 / 3.0))
-    location = quantile_25 + scale * jnp.log(jnp.log(4.0))
-    uniform_samples = jax.random.uniform(rng_key, (num_samples,), minval=1e-6, maxval=1.0 - 1e-6)
-    return location - scale * jnp.log(-jnp.log(uniform_samples))
+    quantile_25 = jnp.interp(jnp.asarray(0.25, dtype=dtype), cdfs, levels)
+    quantile_75 = jnp.interp(jnp.asarray(0.75, dtype=dtype), cdfs, levels)
+    log_denom = jnp.asarray(jnp.log(jnp.log(4.0) / jnp.log(4.0 / 3.0)), dtype=dtype)
+    log_log4 = jnp.asarray(jnp.log(jnp.log(4.0)), dtype=dtype)
+    scale = (quantile_75 - quantile_25) / log_denom
+    location = quantile_25 + scale * log_log4
+    uniform_samples = jax.random.uniform(
+        rng_key, (num_samples,), dtype=dtype, minval=1e-6, maxval=1.0 - 1e-6
+    )
+    return (location - scale * jnp.log(-jnp.log(uniform_samples))).astype(dtype)
 
 
-def _simpson_weights(num_points: int) -> jax.Array:
+def _simpson_weights(num_points: int, dtype: jnp.dtype) -> jax.Array:
     """Composite Simpson weights ``1, 4, 2, ..., 2, 4, 1`` for an odd number of points."""
-    weights = jnp.ones(num_points)
-    weights = weights.at[1:-1:2].set(4.0)
-    return weights.at[2:-1:2].set(2.0)
+    weights = jnp.ones(num_points, dtype=dtype)
+    weights = weights.at[1:-1:2].set(jnp.asarray(4.0, dtype=dtype))
+    return weights.at[2:-1:2].set(jnp.asarray(2.0, dtype=dtype))
 
 
 def _mumbo_information_gain(
@@ -150,22 +159,27 @@ def _mumbo_information_gain(
         raise ValueError(
             f"num_quadrature_points must be odd and at least 3; got {num_quadrature_points}."
         )
-    rho = jnp.clip(correlation, -1.0, 1.0)
-    log_cdf_gamma = jax.scipy.stats.norm.logcdf(gamma)
-    ratio = jnp.exp(jax.scipy.stats.norm.logpdf(gamma) - log_cdf_gamma)
+    dtype = jnp.result_type(correlation, gamma, jnp.float32)
+    rho = jnp.clip(jnp.asarray(correlation, dtype=dtype), -1.0, 1.0)
+    gamma_f = jnp.asarray(gamma, dtype=dtype)
+    floor = jnp.asarray(_PSEUDO_NOISE_FLOOR, dtype=dtype)
+    log_cdf_gamma = jax.scipy.stats.norm.logcdf(gamma_f)
+    ratio = jnp.exp(jax.scipy.stats.norm.logpdf(gamma_f) - log_cdf_gamma)
     mean = -rho * ratio
-    std = jnp.sqrt(jnp.maximum(1.0 - rho**2 * ratio * (gamma + ratio), _PSEUDO_NOISE_FLOOR))
+    std = jnp.sqrt(jnp.maximum(1.0 - rho**2 * ratio * (gamma_f + ratio), floor))
     lower = mean - 8.0 * std
     upper = mean + 8.0 * std
-    grid = jnp.linspace(lower, upper, num_quadrature_points)
-    skew = jnp.sqrt(jnp.maximum(1.0 - rho**2, _PSEUDO_NOISE_FLOOR))
-    log_skew_cdf = jax.scipy.stats.norm.logcdf((gamma - rho * grid) / skew)
+    grid = jnp.linspace(lower, upper, num_quadrature_points, dtype=dtype)
+    skew = jnp.sqrt(jnp.maximum(1.0 - rho**2, floor))
+    log_skew_cdf = jax.scipy.stats.norm.logcdf((gamma_f - rho * grid) / skew)
     density = jnp.exp(jax.scipy.stats.norm.logpdf(grid) + log_skew_cdf - log_cdf_gamma)
     step = (upper - lower) / (num_quadrature_points - 1)
     expectation = (
-        step * jnp.sum(_simpson_weights(num_quadrature_points) * density * log_skew_cdf) / 3.0
+        step
+        * jnp.sum(_simpson_weights(num_quadrature_points, dtype) * density * log_skew_cdf)
+        / 3.0
     )
-    return 0.5 * rho**2 * gamma * ratio - log_cdf_gamma + expectation
+    return (0.5 * rho**2 * gamma_f * ratio - log_cdf_gamma + expectation).astype(dtype)
 
 
 def mumbo_acquisition(
@@ -178,6 +192,7 @@ def mumbo_acquisition(
     grid_size: int = 1000,
     num_gumbel_samples: int = 10,
     num_quadrature_points: int = 5001,
+    x_grid: jax.Array | None = None,
 ) -> jax.Array:
     r"""MUMBO multi-fidelity acquisition score per candidate.
 
@@ -188,46 +203,75 @@ def mumbo_acquisition(
         target_level: Highest-fidelity (objective) level index.
         rng_key: JAX PRNG key for Gumbel sampling.
         grid_size: Random grid size used to fit the Gumbel
-            approximation to the target-level GP marginal.
+            approximation to the target-level GP marginal when ``x_grid`` is ``None``.
         num_gumbel_samples: Number of Monte-Carlo samples drawn from
             the fitted Gumbel for the outer expectation.
         num_quadrature_points: Odd number of Simpson-rule points for
             the expectation in eq. 5.
+        x_grid: Optional discrete ``(g, d)`` input pool evaluated directly for the
+            target-level Gumbel max-value approximation.
 
     Returns:
         ``(m,)`` acquisition scores (information gain in nats).
         Higher = more informative candidate.
+
+    Raises:
+        ValueError: If ``x_candidates``, ``candidate_levels``, or ``x_grid`` has
+            invalid rank or mismatched dimensions.
+        RuntimeError: If a target-level GP predictive distribution lacks variance.
     """
-    num_candidates = x_candidates.shape[0]
+    if x_candidates.ndim != 2:
+        raise ValueError(
+            f"x_candidates must be a 2-D array of shape (m, d); got shape {x_candidates.shape}."
+        )
+    if candidate_levels.ndim != 1 or candidate_levels.shape[0] != x_candidates.shape[0]:
+        raise ValueError(
+            f"candidate_levels must be 1-D of length {x_candidates.shape[0]}; "
+            f"got shape {candidate_levels.shape}."
+        )
+    dtype = jnp.result_type(x_candidates.dtype, jnp.float32)
+    x_cand = jnp.asarray(x_candidates, dtype=dtype)
+    num_candidates = x_cand.shape[0]
     grid_key, gumbel_key = jax.random.split(rng_key)
-    domain_low = jnp.min(state.x_augmented[:, :-1], axis=0)
-    domain_high = jnp.max(state.x_augmented[:, :-1], axis=0)
-    grid_inputs = (
-        jax.random.uniform(grid_key, (grid_size, x_candidates.shape[1]))
-        * (domain_high - domain_low)
-        + domain_low
-    )
+    if x_grid is not None:
+        if x_grid.ndim != 2 or x_grid.shape[1] != x_cand.shape[1] or x_grid.shape[0] < 1:
+            raise ValueError(
+                "x_grid must be a non-empty 2-D array matching x_candidates feature "
+                f"dimension {x_cand.shape[1]}; got shape {x_grid.shape}."
+            )
+        grid_inputs = jnp.asarray(x_grid, dtype=dtype)
+    else:
+        domain_low = jnp.min(state.x_augmented[:, :-1], axis=0).astype(dtype)
+        domain_high = jnp.max(state.x_augmented[:, :-1], axis=0).astype(dtype)
+        grid_inputs = (
+            jax.random.uniform(grid_key, (grid_size, x_cand.shape[1]), dtype=dtype)
+            * (domain_high - domain_low)
+            + domain_low
+        )
     target_grid_predictive = predict_linear_multi_fidelity_gp(
         state=state, x_test=grid_inputs, target_level=target_level
     )
     if target_grid_predictive.variance is None:
         raise RuntimeError("Target-level grid predictive missing variance.")
     gumbel_samples = _gumbel_fit_and_sample(
-        grid_means=target_grid_predictive.mean,
-        grid_stds=jnp.sqrt(target_grid_predictive.variance),
+        grid_means=target_grid_predictive.mean.astype(dtype),
+        grid_stds=jnp.sqrt(target_grid_predictive.variance.astype(dtype)),
         num_samples=num_gumbel_samples,
         rng_key=gumbel_key,
     )
 
     target_predictive = predict_linear_multi_fidelity_gp(
-        state=state, x_test=x_candidates, target_level=target_level
+        state=state, x_test=x_cand, target_level=target_level
     )
     if target_predictive.variance is None:
         raise RuntimeError("Target-level candidate predictive missing variance.")
-    target_means = target_predictive.mean
-    target_vars = jnp.clip(target_predictive.variance, min=_PSEUDO_NOISE_FLOOR)
+    target_means = target_predictive.mean.astype(dtype)
+    target_vars = jnp.clip(
+        target_predictive.variance.astype(dtype),
+        min=jnp.asarray(_PSEUDO_NOISE_FLOOR, dtype=dtype),
+    )
     target_stds = jnp.sqrt(target_vars)
-    noise_variance = state.noise_std**2
+    noise_variance = jnp.asarray(state.noise_std, dtype=dtype) ** 2
 
     def per_candidate_acquisition(
         candidate_x: jax.Array,
@@ -256,11 +300,14 @@ def mumbo_acquisition(
             scaling_factors=state.scaling_factors,
             base_kernel_fn=state.base_kernel_fn,
         )
-        v_solve = jax.scipy.linalg.solve_triangular(state.cholesky, k_train_c.T, lower=True)
-        candidate_var = jnp.maximum(
-            k_cc.squeeze() - jnp.sum(v_solve**2, axis=0).squeeze(),
-            _PSEUDO_NOISE_FLOOR,
+        solve_dtype = jnp.result_type(k_train_c.dtype, state.cholesky.dtype)
+        v_solve = jax.scipy.linalg.solve_triangular(
+            state.cholesky.astype(solve_dtype), k_train_c.T.astype(solve_dtype), lower=True
         )
+        candidate_var = jnp.maximum(
+            k_cc.astype(solve_dtype).squeeze() - jnp.sum(v_solve**2, axis=0).squeeze(),
+            jnp.asarray(_PSEUDO_NOISE_FLOOR, dtype=solve_dtype),
+        ).astype(dtype)
         # Joint cross-covariance between candidate and same-x target-level
         # posterior. Uses the closed-form posterior covariance:
         #   K_post(a, b) = K_prior(a, b) - K(a, X) (K + σ² I)^-1 K(X, b).
@@ -281,11 +328,18 @@ def mumbo_acquisition(
             scaling_factors=state.scaling_factors,
             base_kernel_fn=state.base_kernel_fn,
         )
-        v_solve_target = jax.scipy.linalg.solve_triangular(state.cholesky, k_train_t.T, lower=True)
-        k_ct_post = k_ct_prior.squeeze() - jnp.sum(v_solve * v_solve_target, axis=0).squeeze()
+        v_solve_target = jax.scipy.linalg.solve_triangular(
+            state.cholesky.astype(solve_dtype), k_train_t.T.astype(solve_dtype), lower=True
+        )
+        k_ct_post = (
+            k_ct_prior.astype(solve_dtype).squeeze()
+            - jnp.sum(v_solve * v_solve_target, axis=0).squeeze()
+        ).astype(dtype)
         # Correlation between the noisy observation y and the target g (Appendix A.1).
-        correlation = k_ct_post / (target_std * jnp.sqrt(candidate_var + noise_variance))
-        gammas = (gumbel_samples - target_mean) / target_std
+        correlation = (k_ct_post / (target_std * jnp.sqrt(candidate_var + noise_variance))).astype(
+            dtype
+        )
+        gammas = ((gumbel_samples - target_mean) / target_std).astype(dtype)
 
         def per_sample_gain(gamma: jax.Array) -> jax.Array:
             """Return eq. 5 for one sample of the maximum."""
@@ -295,22 +349,22 @@ def mumbo_acquisition(
                 num_quadrature_points=num_quadrature_points,
             )
 
-        return jnp.mean(jax.vmap(per_sample_gain)(gammas))
+        return jnp.mean(jax.vmap(per_sample_gain)(gammas)).astype(dtype)
 
     candidate_indices = jnp.arange(num_candidates)
 
-    def scan_step(_: jax.Array, idx: jax.Array) -> tuple[jax.Array, jax.Array]:
+    def scan_step(carry: jax.Array, idx: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Evaluate the acquisition for the candidate at index ``idx``."""
         score = per_candidate_acquisition(
-            x_candidates[idx],
+            x_cand[idx],
             candidate_levels[idx],
             target_means[idx],
             target_stds[idx],
         )
-        return _, score
+        return carry, score
 
-    _, scores = jax.lax.scan(scan_step, jnp.asarray(0.0), candidate_indices)
-    return scores
+    _, scores = jax.lax.scan(scan_step, jnp.zeros((), dtype=dtype), candidate_indices)
+    return scores.astype(dtype)
 
 
 __all__ = ["mumbo_acquisition"]

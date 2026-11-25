@@ -13,7 +13,7 @@ The framework is organized into 6 strictly hierarchical layers. Each layer build
 | **4** | **Solvers** | **The Core Abstraction** | `Solver` callable, `Solution` pytree, `PINNSolver`, `NeuralOperatorSolver` |
 | **3** | **Primitives** | Neural Architectures | `FourierNeuralOperator`, `DeepONet`, `MultiScalePINN` |
 | **2** | **Problem Definition** | Physics & Geometry | `PDEProblem`, `Geometry` Protocol, `Constraint` |
-| **1** | **Foundations** | Computation Engine | JAX, Flax NNX, Optax, Diffrax |
+| **1** | **Foundations** | Computation Engine | JAX, Flax NNX, Optax |
 
 ---
 

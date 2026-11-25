@@ -74,6 +74,9 @@ class Status(enum.IntEnum):
     STEP_TOO_SMALL = 9
     """The step size fell below what the scheme can represent."""
 
+    INITIAL_FAILURE = 10
+    """The initial inputs or bounds did not satisfy the problem preconditions."""
+
 
 _SUCCESSFUL: Final[tuple[int, ...]] = (
     Status.SUCCESS,
@@ -92,6 +95,9 @@ _MESSAGES: Final[dict[int, str]] = {
     Status.CONVERGENCE_FAILURE: "The iteration did not approach a solution.",
     Status.LINEAR_SOLVE_FAILED: "An inner linear solve failed, so the step could not be taken.",
     Status.STEP_TOO_SMALL: "The step size fell below what the scheme can represent.",
+    Status.INITIAL_FAILURE: (
+        "The initial inputs or bounds did not satisfy the problem preconditions."
+    ),
 }
 
 

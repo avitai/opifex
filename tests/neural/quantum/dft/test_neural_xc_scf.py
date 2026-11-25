@@ -245,3 +245,19 @@ def test_neural_xc_scf_energy_is_jittable() -> None:
     grad_leaves = jax.tree_util.tree_leaves(gradient)
     assert len(grad_leaves) > 0
     assert all(bool(jnp.all(jnp.isfinite(leaf))) for leaf in grad_leaves)
+
+
+def test_dropout_neural_xc_energy_from_state_grad_and_forces() -> None:
+    """Param-filtered neural XC with dropout_rate > 0 differentiates cleanly via IFT."""
+    with jax.enable_x64(True):
+        functional = _dropout_functional(use_attention=False)
+        functional.train()
+        _, params, _ = nnx.split(functional, nnx.Param, ...)
+        solver = SCFSolver(_h2_system(), neural_functional=functional, max_iterations=60)
+        grad_params = jax.grad(solver.energy_from_state)(params)
+        forces = solver.compute_forces()
+
+    param_leaves = jax.tree.leaves(grad_params)
+    assert len(param_leaves) > 0
+    assert all(bool(jnp.all(jnp.isfinite(leaf))) for leaf in param_leaves)
+    assert bool(jnp.all(jnp.isfinite(forces)))

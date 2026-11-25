@@ -1,11 +1,10 @@
 """Exact and approximate Gaussian-Process regression for opifex.
 
-Phase 11 Task 11.1 ships the foundational *exact conjugate-Gaussian*
-GP regression surface on top of the Task 6.3 adapter specs at
-:mod:`opifex.uncertainty.adapters.gp`. Subsequent slices will add deep
-kernels, multi-output ICM/LCM, RFF approximations, natural-gradient
-SVGP, heteroscedastic likelihoods, OAK kernels, and CARMA/Celerite/SHO
-state-space kernels per the Phase-11 plan.
+Provides exact conjugate-Gaussian GP regression, sparse variational GPs
+(Titsias collapsed SVGP and Hensman natural-gradient SVGP), deep kernels,
+multi-output ICM/LCM, random Fourier features, heteroscedastic likelihoods,
+orthogonal additive kernels (OAK), and CARMA/Celerite/SHO state-space kernels
+on top of the adapter specs at :mod:`opifex.uncertainty.adapters.gp`.
 
 References:
 ----------
@@ -22,6 +21,7 @@ from opifex.uncertainty.gp.exact import (
     ExactGPState,
     fit_exact_gp,
     fit_heteroscedastic_exact_gp,
+    kernel_diagonal,
     predict_exact_gp,
     rbf_kernel,
 )
@@ -130,6 +130,7 @@ __all__ = [
     "fit_svgp",
     "graph_diffusion_kernel",
     "init_stochastic_svgp_state",
+    "kernel_diagonal",
     "kernel_sum",
     "matern12_kernel",
     "matern32_kernel",

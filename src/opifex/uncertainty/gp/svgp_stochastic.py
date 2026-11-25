@@ -93,7 +93,7 @@ from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty._gauss_hermite import gauss_hermite_rule
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
-from opifex.uncertainty.gp.exact import rbf_kernel
+from opifex.uncertainty.gp.exact import kernel_diagonal, rbf_kernel
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
@@ -228,7 +228,12 @@ def _latent_marginal_moments(
     a_matrix = jax.scipy.linalg.solve_triangular(cholesky_kzz, k_zb, lower=True)
     mean_batch = a_matrix.T @ state.whitened_mean
     lw_a = state.whitened_root_cov.T @ a_matrix
-    diag_k_bb = jnp.full((x_batch.shape[0],), state.output_scale**2)
+    diag_k_bb = kernel_diagonal(
+        state.kernel_fn,
+        x_batch,
+        lengthscale=state.lengthscale,
+        output_scale=state.output_scale,
+    )
     var_batch = diag_k_bb - jnp.sum(a_matrix * a_matrix, axis=0) + jnp.sum(lw_a * lw_a, axis=0)
     return mean_batch, jnp.clip(var_batch, min=1e-12)
 

@@ -9,7 +9,9 @@ from opifex.solvers.neural_operator import NeuralOperatorSolver
 from opifex.solvers.nonlinear_least_squares import (
     levenberg_marquardt,
     LevenbergMarquardt,
+    LinearSolverKind,
     NonlinearLeastSquaresProblem,
+    ScalingKind,
 )
 from opifex.solvers.pinn import (
     heat_residual,
@@ -20,19 +22,30 @@ from opifex.solvers.pinn import (
     poisson_residual,
 )
 from opifex.solvers.stiff_ode import (
+    GridKind,
     InitialValueProblem,
     Kvaerno3,
     Rodas4,
     Ros34PW2,
     solve_stiff_ode,
 )
+from opifex.solvers.ude import (
+    create_ude,
+    NeuralODE,
+    tsit5_solve,
+    UDEConfig,
+    UDESolver,
+)
 
 
 __all__ = [
     "SOLVER_CAPABILITIES",
+    "GridKind",
     "InitialValueProblem",
     "Kvaerno3",
     "LevenbergMarquardt",
+    "LinearSolverKind",
+    "NeuralODE",
     "NeuralOperatorSolver",
     "NonlinearLeastSquaresProblem",
     "PINNConfig",
@@ -40,10 +53,15 @@ __all__ = [
     "PINNSolver",
     "Rodas4",
     "Ros34PW2",
+    "ScalingKind",
+    "UDEConfig",
+    "UDESolver",
     "additive_hybrid",
+    "create_ude",
     "heat_residual",
     "helmholtz_residual",
     "levenberg_marquardt",
     "poisson_residual",
     "solve_stiff_ode",
+    "tsit5_solve",
 ]

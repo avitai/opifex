@@ -42,11 +42,7 @@ After installation, verify that all core dependencies are working:
 import jax
 import flax.nnx as nnx
 import optax
-import diffrax
 import blackjax
-import distrax
-import optimistix
-import lineax
 import orbax.checkpoint
 import opifex
 
@@ -59,7 +55,7 @@ print("Opifex framework ready")
 Expected output:
 
 ```text
-JAX version: 0.8.0
+JAX version: 0.11.1
 JAX devices: [CudaDevice(id=0)] (or [CpuDevice(id=0)] without GPU)
 FLAX NNX available: True
 Opifex framework ready
@@ -71,14 +67,10 @@ The following JAX ecosystem dependencies are validated and operational:
 
 ### Core JAX Ecosystem
 
-- **JAX 0.8.0+**: Core framework with CUDA support
-- **FLAX 0.12.0+**: NNX neural network framework (exclusive)
-- **Optax 0.2.6+**: Optimization algorithms
-- **Optimistix 0.0.10+**: Root finding & minimization
-- **Lineax 0.0.8+**: Linear solvers
+- **JAX 0.11.1+**: Core framework with CUDA support
+- **FLAX 0.12.10+**: NNX neural network framework (exclusive)
+- **Optax 0.2.8+**: Optimization algorithms and line searches
 - **BlackJAX 1.2.5+**: MCMC sampling
-- **Distrax 0.1.0**: Probabilistic programming
-- **Diffrax 0.4.0+**: Differential equations
 - **Orbax 0.11.13+**: Checkpointing system
 
 ### Development Tools

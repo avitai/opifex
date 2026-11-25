@@ -55,7 +55,7 @@ class BayesianLinear(nnx.Module):
         out_features: int,
         prior_std: float = 1.0,
         *,
-        deterministic: bool | None = False,  # substrax-allow: mode-flag-default: as nnx.Dropout
+        deterministic: bool | None = False,
         rngs: nnx.Rngs,
     ) -> None:
         """Initialize variational parameters; ``rngs`` initializes parameters only.
@@ -187,7 +187,7 @@ class BayesianSpectralConvolution(nnx.Module):
         modes: tuple[int, ...],
         prior_std: float = 1.0,
         *,
-        deterministic: bool | None = False,  # substrax-allow: mode-flag-default: as nnx.Dropout
+        deterministic: bool | None = False,
         rngs: nnx.Rngs,
     ) -> None:
         """Initialize complex weight posteriors; ``rngs`` initializes parameters only.

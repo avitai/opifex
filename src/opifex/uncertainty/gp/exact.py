@@ -154,7 +154,7 @@ def fit_exact_gp(
         raise ValueError(message)
     k_train = kernel_fn(x_train, x_train, lengthscale=lengthscale, output_scale=output_scale)
     n = k_train.shape[0]
-    gram = k_train + (noise_std**2) * jnp.eye(n)
+    gram = k_train + (noise_std**2) * jnp.eye(n, dtype=k_train.dtype)
     cholesky = jnp.linalg.cholesky(gram)
     # alpha = L^T \ (L \ y)  via cho_solve, equivalent to
     # ``jsp.linalg.cho_solve((L, True), y)``.
@@ -171,6 +171,34 @@ def fit_exact_gp(
     )
 
 
+def kernel_diagonal(
+    kernel_fn: Callable[..., jax.Array],
+    x: jax.Array,
+    *,
+    lengthscale: PositiveScalar,
+    output_scale: PositiveScalar,
+) -> jax.Array:
+    """Evaluate marginal prior variances ``k(x_i, x_i)`` in O(m) without forming ``(m, m)``.
+
+    Args:
+        kernel_fn: Kernel callable ``(x1, x2, *, lengthscale, output_scale) -> Gram``.
+        x: Query inputs of shape ``(m, d)``.
+        lengthscale: Kernel length-scale parameter.
+        output_scale: Kernel output-scale parameter.
+
+    Returns:
+        1-D ``(m,)`` array holding ``k(x_i, x_i)`` for each row of ``x``.
+    """
+    return jax.vmap(
+        lambda x_i: kernel_fn(
+            x_i[None, :],
+            x_i[None, :],
+            lengthscale=lengthscale,
+            output_scale=output_scale,
+        )[0, 0]
+    )(x)
+
+
 def predict_exact_gp(
     *,
     state: ExactGPState,
@@ -184,7 +212,7 @@ def predict_exact_gp(
 
         v    = L \ K(X, X*)
         mean = K(X*, X) @ α
-        var  = K(X*, X*) - v^T v   (per test point)
+        var  = diag(K(X*, X*)) - v^T v   (per test point, O(m))
 
     Args:
         state: Fitted :class:`ExactGPState`.
@@ -204,10 +232,15 @@ def predict_exact_gp(
     )
     mean = k_cross.T @ state.alpha
     # ``v`` has shape ``(n, m)``; the per-test marginal variance is the
-    # the column-wise dot product with itself.
+    # column-wise dot product subtracted from the O(m) prior diagonal.
     v = jax.scipy.linalg.solve_triangular(state.cholesky, k_cross, lower=True)
-    k_diag = jnp.full((x_test.shape[0],), state.output_scale**2)
-    variance = k_diag - jnp.sum(v * v, axis=0)
+    k_diag = kernel_diagonal(
+        state.kernel_fn,
+        x_test,
+        lengthscale=state.lengthscale,
+        output_scale=state.output_scale,
+    )
+    variance = jnp.maximum(k_diag - jnp.sum(v * v, axis=0), jnp.asarray(0.0, dtype=k_diag.dtype))
     return gaussian_process_predictive(
         mean,
         variance,
@@ -272,13 +305,18 @@ def fit_heteroscedastic_exact_gp(
     # non-PD Gram and the Cholesky returns NaNs (surfacing downstream as
     # ``jnp.isfinite`` violations). We perform the eager Python-side
     # check only when the input is concrete; under jit we trust Cholesky.
-    if not isinstance(noise_std, jax.core.Tracer) and float(jnp.min(noise_std)) <= 0.0:  # type: ignore[attr-defined]
+    min_noise = jnp.min(noise_std)
+    try:
+        has_nonpositive = bool(min_noise <= 0.0)
+    except jax.errors.TracerBoolConversionError:
+        has_nonpositive = False
+    if has_nonpositive:
         raise ValueError(
             "All noise_std entries must be strictly positive; got "
-            f"min(noise_std)={float(jnp.min(noise_std))!r}."
+            f"min(noise_std)={float(min_noise)!r}."
         )
     k_train = kernel_fn(x_train, x_train, lengthscale=lengthscale, output_scale=output_scale)
-    gram = k_train + jnp.diag(noise_std**2)
+    gram = k_train + jnp.diag(jnp.asarray(noise_std, dtype=k_train.dtype) ** 2)
     cholesky = jnp.linalg.cholesky(gram)
     alpha = jax.scipy.linalg.cho_solve((cholesky, True), y_train)
     return ExactGPState(
@@ -318,7 +356,7 @@ def exact_gp_loocv_log_predictive(*, state: ExactGPState) -> jax.Array:
     """
     # K_inv from the Cholesky factor: K_inv = cho_solve((L, True), I).
     n = state.alpha.shape[0]
-    identity = jnp.eye(n)
+    identity = jnp.eye(n, dtype=state.cholesky.dtype)
     k_inv = jax.scipy.linalg.cho_solve((state.cholesky, True), identity)
     k_inv_diag = jnp.diag(k_inv)
     loo_variance = 1.0 / k_inv_diag
@@ -336,6 +374,7 @@ __all__ = [
     "exact_gp_loocv_log_predictive",
     "fit_exact_gp",
     "fit_heteroscedastic_exact_gp",
+    "kernel_diagonal",
     "predict_exact_gp",
     "rbf_kernel",
 ]

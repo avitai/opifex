@@ -101,6 +101,9 @@ class TestSuccessIsMoreThanOneCode:
             (Status.STALLED, False),
             (Status.NONFINITE, False),
             (Status.CONVERGENCE_FAILURE, False),
+            (Status.LINEAR_SOLVE_FAILED, False),
+            (Status.STEP_TOO_SMALL, False),
+            (Status.INITIAL_FAILURE, False),
         ],
     )
     def test_each_code_reports_the_intended_outcome(self, code: Status, expected: bool) -> None:
@@ -126,6 +129,8 @@ class TestSuccessIsMoreThanOneCode:
         # Codes are persisted and compared across versions, so they are append-only.
         assert Status.DEFAULT == 0
         assert Status.SUCCESS == 1
+        assert Status.STEP_TOO_SMALL == 9
+        assert Status.INITIAL_FAILURE == 10
         assert len(set(Status)) == len(list(Status)), "no duplicate values"
 
 

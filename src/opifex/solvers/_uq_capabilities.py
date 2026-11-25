@@ -100,6 +100,14 @@ _SOLVER_MODEL_CAPABILITIES: dict[str, UQCapability] = {
         "Pure-JAX Kvaerno (2004) 4-stage, 3rd-order A-L stable stiffly accurate ESDIRK "
         "ODE solver built on opifex.core.solver.integrate with jax.checkpoint."
     ),
+    "solver:NeuralODE": _adapter_baseline_with_notes(
+        "NeuralODE wraps an nnx.Module vector field integrated via pure-JAX adaptive "
+        "FSAL Tsit5 with 4th-degree continuous-extension dense output and jax.checkpoint."
+    ),
+    "solver:UDESolver": _adapter_baseline_with_notes(
+        "UDESolver combines a known physics vector field with an nnx.Module residual "
+        "integrated via pure-JAX adaptive FSAL Tsit5 with jax.checkpoint."
+    ),
 }
 
 

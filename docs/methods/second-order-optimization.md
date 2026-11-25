@@ -88,11 +88,12 @@ for step in range(num_steps):
 Gauss-Newton is effective for nonlinear least-squares problems, approximating the Hessian using only first derivatives.
 
 ```python
+from opifex.core.solver import solve
 from opifex.optimization.second_order import (
     create_gauss_newton_solver,
     GaussNewtonConfig,
 )
-import optimistix as optx
+from opifex.solvers import NonlinearLeastSquaresProblem
 
 # Configure solver
 config = GaussNewtonConfig(
@@ -101,25 +102,24 @@ config = GaussNewtonConfig(
     atol=1e-6,
 )
 
-# Create solver
+# Create pure-JAX Gauss-Newton solver
 solver = create_gauss_newton_solver(config)
 
-# Use with optimistix for least-squares
-def residual_fn(params, args):
+def residual_fn(params, data):
     """Residual function for least-squares."""
-    model = args['model']
-    x, y_true = args['x'], args['y_true']
+    model = data['model']
+    x, y_true = data['x'], data['y_true']
     y_pred = model(x)
     return y_pred - y_true
 
-# Solve
-result = optx.least_squares(
-    residual_fn,
-    solver=solver,
-    y0=initial_params,
-    args={'model': model, 'x': x, 'y_true': y_true},
+# Solve via opifex.core.solver
+problem = NonlinearLeastSquaresProblem(
+    residual_fn=residual_fn,
+    initial_params=initial_params,
+    data={'model': model, 'x': x, 'y_true': y_true},
 )
-optimal_params = result.value
+solution = solve(problem, solver)
+optimal_params = solution.fields["params"]
 ```
 
 ### Levenberg-Marquardt
@@ -162,18 +162,14 @@ from opifex.optimization.second_order import (
     create_bfgs_solver,
     GaussNewtonConfig,
 )
-import optimistix as optx
 
 solver = create_bfgs_solver(
     GaussNewtonConfig(rtol=1e-6, atol=1e-6)
 )
 
-# Use with optimistix minimise
-result = optx.minimise(
-    loss_fn,
-    solver=solver,
-    y0=initial_params,
-)
+# Minimize with pure-JAX BFGSSolver
+solution = solver.minimise(loss_fn, initial_params)
+optimal_params = solution.fields["params"]
 ```
 
 ### Hybrid Adam to L-BFGS Optimizer

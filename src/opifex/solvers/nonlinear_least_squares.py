@@ -7,38 +7,35 @@ Solves weighted nonlinear least-squares problems
     \theta^\star \in \arg\min_{\theta \in \mathbb{R}^p}
     \frac{1}{2} \|W^{1/2} r(\theta, d)\|_2^2, \qquad W = \operatorname{diag}(w),
 
-inside :func:`jax.jit`, :func:`jax.vmap`, and :func:`jax.grad` with zero ``equinox``-stack
-dependencies, conforming to :mod:`opifex.core.solver` and reusing
-:func:`opifex.uncertainty.linalg.lstsq.lsmr`.
+inside :func:`jax.jit`, :func:`jax.vmap`, and :func:`jax.grad`, conforming to
+:mod:`opifex.core.solver` and reusing :func:`opifex.core.solver.lsmr` and the shared
+implicit tangent linear solvers in :mod:`opifex.core.solver`.
 
-Algorithm & Reference Implementations
--------------------------------------
+Algorithm
+---------
 * **Forward trust-ratio iteration** follows Madsen & Nielsen (2010, Algorithm 6.18) and
-  Moré (1978, MINPACK), adapted from the permissive-licensed reference implementations in
-  ``google/jaxopt`` (``ca884af``, Apache-2.0, ``jaxopt/_src/levenberg_marquardt.py``),
-  ``patrick-kidger/optimistix`` (``5bad66f``, Apache-2.0, ``_least_squares.py`` &
-  ``_solver/trust_region.py``), and ``scipy.optimize._lsq`` (BSD-3-Clause, ``trf.py`` &
-  ``common.py``): each iteration runs inside a fixed-length :func:`jax.lax.scan` carrying
-  a per-instance :class:`~opifex.core.solver.status.Status` code and short-circuiting
-  converged batch elements via :func:`jax.lax.cond`.
+  Moré (1978, MINPACK): under ``implicit_diff=True`` the forward solve runs an
+  early-exiting :func:`jax.lax.while_loop`, while under ``implicit_diff=False`` it runs
+  :func:`~opifex.core.solver.bounded_while_loop` so batches halt as soon as all active
+  elements converge while preserving forward- and reverse-mode unrolled differentiation.
 * **Three linear subproblem solvers** are supported:
   1. ``"qr"`` (default): thin Householder QR on the augmented damped system
      :math:`\begin{bmatrix} W^{1/2} J \\ \sqrt{\mu}\,\operatorname{diag}(s) \end{bmatrix}
-     \delta = \begin{bmatrix} -W^{1/2} r \\ 0 \end{bmatrix}` (``jaxopt`` LM QR branch),
-     avoiding forming :math:`J^\top W J` so :math:`\kappa(J)` is never squared in ``float32``.
+     \delta = \begin{bmatrix} -W^{1/2} r \\ 0 \end{bmatrix}`, avoiding forming
+     :math:`J^\top W J` so :math:`\kappa(J)` is never squared in ``float32``.
   2. ``"cholesky"``: Cholesky factorization of the damped normal equations
      :math:`(J^\top W J + \mu\,\operatorname{diag}(s^2))\,\delta = -J^\top W r`.
   3. ``"lsmr"``: matrix-free Golub-Kahan bidiagonalization via
-     :func:`opifex.uncertainty.linalg.lstsq.lsmr` (Fong & Saunders 2011) using only
+     :func:`opifex.core.solver.lsmr` (Fong & Saunders 2011) using only
      :func:`jax.linearize` and :func:`jax.linear_transpose`, never materializing
      :math:`J \in \mathbb{R}^{m \times p}`.
 * **Implicit differentiation** (``implicit_diff=True``) wraps the converged optimum in
   :func:`jax.lax.custom_root` on the exact stationarity system
-  :math:`\nabla_\theta \Phi(\theta^\star) = J(\theta^\star)^\top W r(\theta^\star) = 0`,
-  evaluating exact second-order curvature (including the non-zero-residual term
-  :math:`\sum_i w_i r_i \nabla_{\theta\theta}^2 r_i`) via Pearlmutter forward-over-reverse
-  Hessian-vector products (dense solve or matrix-free :func:`jax.lax.custom_linear_solve`
-  backed by :func:`opifex.uncertainty.linalg.lstsq.lsmr`).
+  :math:`\nabla_\theta \Phi(\theta^\star) = J(\theta^\star)^\top W r(\theta^\star) = 0`
+  and solves the tangent linear system via ``tangent_solver`` (defaulting to
+  :func:`~opifex.core.solver.lsmr_tangent_solve` when ``linear_solver="lsmr"`` and
+  :func:`~opifex.core.solver.dense_tangent_solve` otherwise), returning ``NaN`` tangents
+  on singular Hessians or unconverged solves.
 
 References:
     * Marquardt, D. W. (1963). "An Algorithm for Least-Squares Estimation of Nonlinear
@@ -51,11 +48,10 @@ References:
       §17.4.2, Eq. 17.4.4.
     * Madsen, K., & Nielsen, H. B. (2010). *Introduction to Optimization and Data
       Fitting*. Technical University of Denmark, §6.3, Algorithm 6.18.
-    * Blondel, M., et al. (2022). *JAXopt: Hardware-Accelerated Implicit Differentiation*
-      (``google/jaxopt`` ``ca884af``, Apache-2.0).
+    * Blondel, M., et al. (2022). "Efficient and Modular Implicit Differentiation."
+      *NeurIPS* 35, 5230-5242.
 """
 
-import inspect
 from collections.abc import Callable
 from typing import Any, cast, Literal
 
@@ -66,10 +62,20 @@ import optax
 from flax import struct
 from jax.flatten_util import ravel_pytree
 
+from opifex.core.solver.implicit import (
+    call_unary_or_binary,
+    cast_inexact_pytree,
+    dense_tangent_solve,
+    guard_unconverged_tangents,
+    infer_inexact_dtype,
+    lsmr_tangent_solve,
+    TangentSolverFn,
+)
+from opifex.core.solver.loop import bounded_while_loop
+from opifex.core.solver.lsmr import lsmr
 from opifex.core.solver.problem import Method, Problem, solve
 from opifex.core.solver.solution import Solution
-from opifex.core.solver.status import Status
-from opifex.uncertainty.linalg.lstsq import lsmr
+from opifex.core.solver.status import is_successful, Status
 
 
 LinearSolverKind = Literal["qr", "cholesky", "lsmr"]
@@ -105,7 +111,7 @@ class LevenbergMarquardt(Method[NonlinearLeastSquaresProblem]):
     XLA program serves arbitrary batches of problem instances.
 
     Attributes:
-        max_iterations: Static scan iteration budget.
+        max_iterations: Static outer iteration budget.
         gtol: Infinity-norm tolerance on the normal-equation gradient :math:`J^\top W r`.
         xtol: Relative parameter-step norm tolerance.
         ftol: Relative cost-reduction tolerance.
@@ -114,12 +120,16 @@ class LevenbergMarquardt(Method[NonlinearLeastSquaresProblem]):
         damping_down: Minimum shrink factor :math:`\in (0, 1)` in Nielsen's cubic rule.
         linear_solver: Subproblem solver: ``"qr"`` (augmented Householder QR, default),
             ``"cholesky"`` (normal-equations Cholesky), or ``"lsmr"`` (matrix-free
-            :func:`opifex.uncertainty.linalg.lstsq.lsmr`).
+            :func:`opifex.core.solver.lsmr`).
         scaling: Trust-region diagonal scaling: ``"marquardt"`` (Moré 1978 monotone column
             norms, default) or ``"identity"`` (Madsen & Nielsen 2010).
         lsmr_iterations: Static Krylov iteration budget when ``linear_solver="lsmr"``.
         implicit_diff: Differentiate through :math:`\theta^\star` via
             :func:`jax.lax.custom_root` on :math:`\nabla_\theta \Phi(\theta) = 0`.
+        tangent_solver: Optional tangent linear solver ``(lin_op, rhs) -> v`` for implicit
+            differentiation; when ``None``, defaults to
+            :func:`~opifex.core.solver.lsmr_tangent_solve` for ``linear_solver="lsmr"`` and
+            :func:`~opifex.core.solver.dense_tangent_solve` otherwise.
     """
 
     max_iterations: int = struct.field(pytree_node=False, default=50)
@@ -133,6 +143,7 @@ class LevenbergMarquardt(Method[NonlinearLeastSquaresProblem]):
     scaling: ScalingKind = struct.field(pytree_node=False, default="marquardt")
     lsmr_iterations: int = struct.field(pytree_node=False, default=32)
     implicit_diff: bool = struct.field(pytree_node=False, default=True)
+    tangent_solver: TangentSolverFn | None = struct.field(pytree_node=False, default=None)
 
     def _validate_configuration(self) -> None:
         """Validate static solver hyperparameters on the host at trace time."""
@@ -157,6 +168,14 @@ class LevenbergMarquardt(Method[NonlinearLeastSquaresProblem]):
             msg = f"scaling must be 'marquardt' or 'identity', got {self.scaling!r}"
             raise ValueError(msg)
 
+    def _resolved_tangent_solver(self) -> TangentSolverFn:
+        """Return explicit ``tangent_solver`` or the ``linear_solver``-matched default."""
+        if self.tangent_solver is not None:
+            return self.tangent_solver
+        if self.linear_solver == "lsmr":
+            return lsmr_tangent_solve
+        return dense_tangent_solve
+
     def solve(self, problem: NonlinearLeastSquaresProblem) -> Solution:
         """Solve ``problem`` and return a traced :class:`~opifex.core.solver.solution.Solution`.
 
@@ -169,15 +188,8 @@ class LevenbergMarquardt(Method[NonlinearLeastSquaresProblem]):
             traced ``status``, and ``stats={"num_iterations": ...}``.
         """
         self._validate_configuration()
-        dtype = _common_floating_dtype(problem.initial_params, problem.data, problem.weights)
-        init_typed = jax.tree.map(
-            lambda x: (
-                jnp.asarray(x, dtype=dtype)
-                if jnp.issubdtype(jnp.asarray(x).dtype, jnp.inexact)
-                else x
-            ),
-            problem.initial_params,
-        )
+        dtype = infer_inexact_dtype(problem.initial_params, problem.data, problem.weights)
+        init_typed = cast_inexact_pytree(problem.initial_params, dtype)
         theta0, unravel_typed = ravel_pytree(init_typed)
 
         def raw_eval(theta_vec: jax.Array) -> jax.Array:
@@ -200,36 +212,33 @@ class LevenbergMarquardt(Method[NonlinearLeastSquaresProblem]):
 
         if self.implicit_diff:
             optimality = jax.grad(loss_fn)
+            resolved_tangent = self._resolved_tangent_solver()
 
             def root_solver(
                 _: Callable[[jax.Array], jax.Array],
                 init_vec: jax.Array,
             ) -> tuple[jax.Array, tuple[jax.Array, jax.Array, jax.Array]]:
-                """Run forward Levenberg-Marquardt scan with floating aux leaves."""
-                sol_vec, (st_i32, n_i32, damp_f) = _run_lm_loop(init_vec, weighted_eval, self)
-                # jax 0.11.1 custom_root creates aux tangents via zeros_like_jaxval rather
-                # than float0 on int32 leaves; carry integer codes as floating aux leaves and
-                # restore int32 immediately after custom_root returns.
+                """Run forward Levenberg-Marquardt while loop with floating aux leaves."""
+                sol_vec, (st_i32, n_i32, damp_f) = _run_lm_loop(
+                    init_vec, weighted_eval, self, use_plain_while=True
+                )
                 return sol_vec, (st_i32.astype(dtype), n_i32.astype(dtype), damp_f)
-
-            def tangent_solve(g: Callable[[jax.Array], jax.Array], b: jax.Array) -> jax.Array:
-                """Dispatch dense HVP Hessian solve vs matrix-free LSMR solve."""
-                if self.linear_solver == "lsmr":
-                    return _matrix_free_tangent_solve(g, b, self.lsmr_iterations)
-                return _dense_tangent_solve(g, b)
 
             root_out: Any = jax.lax.custom_root(
                 optimality,
                 theta0,
                 root_solver,
-                tangent_solve,
+                resolved_tangent,
                 has_aux=True,
             )
             theta_star, (status_f, steps_f, final_damping) = root_out
             status = status_f.astype(jnp.int32)
             steps = steps_f.astype(jnp.int32)
+            theta_star = guard_unconverged_tangents(theta_star, is_successful(status))
         else:
-            theta_star, (status, steps, final_damping) = _run_lm_loop(theta0, weighted_eval, self)
+            theta_star, (status, steps, final_damping) = _run_lm_loop(
+                theta0, weighted_eval, self, use_plain_while=False
+            )
 
         final_raw_res = raw_eval(theta_star)
         final_res_w = sqrt_w * final_raw_res
@@ -252,7 +261,7 @@ class LevenbergMarquardt(Method[NonlinearLeastSquaresProblem]):
 
 
 class _LMCarry(struct.PyTreeNode):
-    """Internal scan state for one Levenberg-Marquardt solve."""
+    """Internal loop state for one Levenberg-Marquardt solve."""
 
     theta: jax.Array
     res_w: jax.Array
@@ -272,26 +281,7 @@ def _call_residual(
     data: Any,
 ) -> jax.Array:
     """Invoke ``residual_fn`` with ``(params, data)`` or ``(params,)`` when ``data`` is ``None``."""
-    if data is None:
-        try:
-            sig = inspect.signature(residual_fn)
-            positional = [
-                p
-                for p in sig.parameters.values()
-                if p.kind
-                in (
-                    inspect.Parameter.POSITIONAL_ONLY,
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                )
-            ]
-            has_varargs = any(
-                p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig.parameters.values()
-            )
-            if len(positional) == 1 and not has_varargs:
-                return jnp.asarray(residual_fn(params)).reshape(-1)
-        except (TypeError, ValueError):
-            pass
-    return jnp.asarray(residual_fn(params, data)).reshape(-1)
+    return jnp.asarray(call_unary_or_binary(residual_fn, params, data)).reshape(-1)
 
 
 def _linearize_dense(
@@ -334,7 +324,7 @@ def _solve_qr_step(
     col_scale: jax.Array,
     damping: jax.Array,
 ) -> tuple[jax.Array, jax.Array]:
-    """Solve augmented damped least-squares step via thin Householder QR (jaxopt LM)."""
+    """Solve augmented damped least-squares step via thin Householder QR (Moré 1978)."""
     num_obs = res_w.shape[0]
     sqrt_mu_diag = jnp.diag(jnp.sqrt(damping) * col_scale)
     aug_jac = jnp.concatenate([jac_w, sqrt_mu_diag], axis=0)
@@ -370,7 +360,7 @@ def _solve_lsmr_step(
     damping: jax.Array,
     lsmr_iterations: int,
 ) -> tuple[jax.Array, jax.Array]:
-    """Solve matrix-free damped least squares via :func:`opifex.uncertainty.linalg.lstsq.lsmr`."""
+    """Solve matrix-free damped least squares via :func:`opifex.core.solver.lsmr`."""
     _, jvp_fn = jax.linearize(weighted_eval, theta)
     vjp_fn = jax.linear_transpose(jvp_fn, theta)
     delta = lsmr(
@@ -409,7 +399,7 @@ def _update_column_scale(
     scaling: ScalingKind,
     linear_solver: LinearSolverKind,
 ) -> jax.Array:
-    """Update diagonal scaling (Moré 1978 / ``scipy.optimize._lsq.common.compute_jac_scale``)."""
+    """Update monotone column-norm diagonal scaling (Moré 1978, §5)."""
     if scaling == "identity" or linear_solver == "lsmr":
         return prev_scale
     col_norms = jnp.sqrt(jnp.sum(jac_w * jac_w, axis=0))
@@ -471,17 +461,15 @@ def _lm_active_step(
     delta, j_delta = _compute_trial_step(carry, weighted_eval, method)
     step_norm = optax.safe_norm(delta, 0.0)
     step_tol = method.xtol * (method.xtol + optax.safe_norm(carry.theta, 0.0))
-    # Madsen & Nielsen (2010, Algorithm 6.18) & scipy.optimize._lsq.common.check_termination:
-    # check parameter-step convergence ||delta||_2 <= xtol * (xtol + ||theta||_2) directly.
+    # Madsen & Nielsen (2010, Algorithm 6.18): parameter-step convergence check.
     xtol_converged = step_norm <= step_tol
 
     theta_cand = carry.theta + delta
     res_cand = weighted_eval(theta_cand)
     cost_cand = 0.5 * jnp.sum(res_cand * res_cand)
 
-    # Factored quadratic reduction (optimistix ClassicalTrustRegion / scipy evaluate_quadratic)
-    # and difference-of-squares objective reduction with Conn, Gould & Toint (2000, §17.4.2,
-    # Eq. 17.4.4) rounding offset 10 * eps * max(cost, 1).
+    # Factored quadratic model reduction and difference-of-squares objective reduction
+    # with Conn, Gould & Toint (2000, §17.4.2, Eq. 17.4.4) rounding offset 10 * eps * max(cost, 1).
     pred_reduction = -jnp.dot(delta, carry.grad) - 0.5 * jnp.sum(j_delta * j_delta)
     actual_reduction = 0.5 * jnp.sum((carry.res_w - res_cand) * (carry.res_w + res_cand))
     delta_f = 10.0 * eps * jnp.maximum(carry.cost, jnp.asarray(1.0, dtype=dtype))
@@ -526,7 +514,7 @@ def _lm_active_step(
     damping_upd = jnp.where(accept, damping_acc, damping_rej)
     nu_upd = jnp.where(accept, jnp.asarray(method.damping_up, dtype=dtype), 2.0 * carry.nu)
 
-    # Residual-space Cauchy check (optimistix cauchy_termination + scipy ratio > 0.25 gate).
+    # Residual-space Cauchy check gated by trust-ratio quality rho > 0.25 (Moré 1978).
     res_tol = method.ftol * (method.ftol + optax.safe_norm(res_cand, 0.0))
     ftol_converged = (
         accept & (rho > 0.25) & (optax.safe_norm(res_cand - carry.res_w, 0.0) <= res_tol)
@@ -569,7 +557,7 @@ def _initial_scale_and_damping(
     theta0: jax.Array,
     method: LevenbergMarquardt,
 ) -> tuple[jax.Array, jax.Array]:
-    """Initialize column scaling and damping (``scipy.optimize._lsq.common`` / Madsen-Nielsen)."""
+    """Initialize column scaling and damping (Moré 1978; Madsen & Nielsen 2010)."""
     dtype = theta0.dtype
     tau = jnp.asarray(method.initial_damping, dtype=dtype)
     ones = jnp.ones((theta0.shape[0],), dtype=dtype)
@@ -587,8 +575,10 @@ def _run_lm_loop(
     theta0: jax.Array,
     weighted_eval: Callable[[jax.Array], jax.Array],
     method: LevenbergMarquardt,
+    *,
+    use_plain_while: bool,
 ) -> tuple[jax.Array, tuple[jax.Array, jax.Array, jax.Array]]:
-    """Run ``method.max_iterations`` scan steps and finalize ``Status``."""
+    """Run up to ``method.max_iterations`` trust-ratio steps with early termination."""
     dtype = theta0.dtype
     res0, jac0, grad0 = _eval_derivatives(weighted_eval, theta0, method.linear_solver)
     cost0 = 0.5 * jnp.sum(res0 * res0)
@@ -607,18 +597,28 @@ def _run_lm_loop(
         steps=jnp.asarray(0, dtype=jnp.int32),
     )
 
-    def body(carry: _LMCarry, _: None) -> tuple[_LMCarry, None]:
+    def cond_fn(carry: _LMCarry) -> jax.Array:
+        """Continue while the lane is unset and under ``max_iterations``."""
+        return (carry.status == jnp.asarray(Status.DEFAULT, dtype=jnp.int32)) & (
+            carry.steps < method.max_iterations
+        )
+
+    def step_fn(carry: _LMCarry) -> _LMCarry:
         """Short-circuit already-terminated elements via :func:`jax.lax.cond`."""
         active = carry.status == jnp.asarray(Status.DEFAULT, dtype=jnp.int32)
-        next_carry = jax.lax.cond(
+        return jax.lax.cond(
             active,
             lambda c: _lm_active_step(c, weighted_eval, method),
             lambda c: c,
             carry,
         )
-        return next_carry, None
 
-    final_carry, _ = jax.lax.scan(body, init_carry, None, length=method.max_iterations)
+    if use_plain_while:
+        final_carry = jax.lax.while_loop(cond_fn, step_fn, init_carry)
+    else:
+        final_carry = bounded_while_loop(
+            cond_fn, step_fn, init_carry, max_steps=method.max_iterations
+        )
 
     unset = final_carry.status == jnp.asarray(Status.DEFAULT, dtype=jnp.int32)
     final_grad_ok = jnp.max(jnp.abs(final_carry.grad)) <= method.gtol
@@ -636,65 +636,12 @@ def _run_lm_loop(
     return final_carry.theta, (status, final_carry.steps, final_carry.damping)
 
 
-def _dense_tangent_solve(
-    g: Callable[[jax.Array], jax.Array],
-    b: jax.Array,
-) -> jax.Array:
-    """Solve linearized stationarity system via Pearlmutter HVP columns ``g(e_j)``."""
-    eye = jnp.eye(b.shape[0], dtype=b.dtype)
-    hess = jax.vmap(g, out_axes=-1)(eye)
-    sym_h = 0.5 * (hess + hess.T)
-    safe_h = jnp.where(jnp.all(jnp.isfinite(sym_h)), sym_h, eye)
-    min_eig = jnp.linalg.eigvalsh(safe_h)[0]
-    scale = jnp.maximum(jnp.max(jnp.abs(jnp.diag(safe_h))), jnp.asarray(1.0, dtype=b.dtype))
-    eig_floor = jnp.finfo(b.dtype).eps * scale * 16.0
-    shift = jnp.maximum(jnp.asarray(0.0, dtype=b.dtype), eig_floor - min_eig)
-    return jnp.linalg.solve(safe_h + shift * eye, b)
-
-
-def _matrix_free_tangent_solve(
-    g: Callable[[jax.Array], jax.Array],
-    b: jax.Array,
-    lsmr_iterations: int,
-) -> jax.Array:
-    """Matrix-free implicit tangent solve via :func:`jax.lax.custom_linear_solve` + LSMR."""
-    ridge = jnp.finfo(b.dtype).eps * 16.0
-
-    def reg_matvec(v: jax.Array) -> jax.Array:
-        """Apply regularized symmetric Hessian-vector product."""
-        return g(v) + ridge * v
-
-    return jax.lax.custom_linear_solve(
-        reg_matvec,
-        b,
-        solve=lambda mv, rhs: lsmr(
-            matvec=mv,
-            matvec_transpose=mv,
-            rhs=rhs,
-            dim_cols=rhs.shape[0],
-            num_matvecs=lsmr_iterations,
-        ),
-        symmetric=True,
-    )
-
-
 def _validate_positive_scalars(values: dict[str, float]) -> None:
     """Ensure every named scalar hyperparameter is strictly positive."""
     for name, val in values.items():
         if val <= 0.0:
             msg = f"{name} must be strictly positive, got {val}"
             raise ValueError(msg)
-
-
-def _common_floating_dtype(*trees: Any) -> jnp.dtype:
-    """Promote all inexact array leaves across ``trees`` with a ``float32`` floor."""
-    dtypes = [jnp.float32]
-    for tree in trees:
-        for leaf in jax.tree_util.tree_leaves(tree):
-            arr_dtype = getattr(leaf, "dtype", None)
-            if arr_dtype is not None and jnp.issubdtype(arr_dtype, jnp.inexact):
-                dtypes.append(arr_dtype)
-    return jnp.result_type(*dtypes)
 
 
 def _prepare_sqrt_weights(
@@ -732,13 +679,15 @@ def levenberg_marquardt(
     Returns:
         Traced :class:`~opifex.core.solver.solution.Solution`.
     """
-    problem = NonlinearLeastSquaresProblem(
-        residual_fn=residual_fn,
-        initial_params=initial_params,
-        data=data,
-        weights=weights,
+    return solve(
+        NonlinearLeastSquaresProblem(
+            residual_fn=residual_fn,
+            initial_params=initial_params,
+            data=data,
+            weights=weights,
+        ),
+        method,
     )
-    return solve(problem, method)
 
 
 __all__ = [

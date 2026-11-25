@@ -105,6 +105,52 @@ def test_generic_fit_laplace_gp_runs_in_float64() -> None:
     assert bool(jnp.isfinite(state.log_marginal_likelihood))
 
 
+def test_laplace_gp_latent_moments_use_kernel_diagonal_for_sum_and_icm_kernels() -> None:
+    """Far from training points, ``predict_laplace_latent_moments`` recovers ``diag(K(x*, x*))``
+    rather than assuming ``output_scale**2`` on ``kernel_sum`` or ``multi_output_icm_kernel``."""
+    from opifex.uncertainty.gp import (
+        kernel_sum,
+        multi_output_icm_kernel,
+        predict_laplace_latent_moments,
+        rbf_kernel,
+    )
+
+    x_train = jnp.array([[-1.0], [0.0], [1.0]], dtype=jnp.float32)
+    y_train = jnp.array([-1.0, 1.0, -1.0], dtype=jnp.float32)
+    x_far = jnp.array([[100.0]], dtype=jnp.float32)
+
+    sum_k = kernel_sum(kernel_fns=(rbf_kernel, matern32_kernel))
+    state_sum = fit_laplace_gp(
+        log_likelihood_components_fn=_bernoulli_log_likelihood_components,
+        x_train=x_train,
+        y_train=y_train,
+        lengthscale=0.3,
+        output_scale=1.0,
+        num_newton_iterations=15,
+        kernel_fn=sum_k,
+    )
+    _, var_sum = predict_laplace_latent_moments(state=state_sum, x_test=x_far)
+    assert float(var_sum[0]) == pytest.approx(2.0, rel=1e-5)
+
+    icm_b = jnp.array([[1.0, 0.0], [0.0, 0.25]], dtype=jnp.float32)
+    icm_k = multi_output_icm_kernel(base_kernel_fn=rbf_kernel, coregionalisation=icm_b)
+    x_icm_train = jnp.array([[-1.0, 0.0], [0.0, 1.0], [1.0, 0.0]], dtype=jnp.float32)
+    state_icm = fit_laplace_gp(
+        log_likelihood_components_fn=_bernoulli_log_likelihood_components,
+        x_train=x_icm_train,
+        y_train=y_train,
+        lengthscale=0.3,
+        output_scale=1.0,
+        num_newton_iterations=15,
+        kernel_fn=icm_k,
+    )
+    _, var_icm = predict_laplace_latent_moments(
+        state=state_icm,
+        x_test=jnp.array([[100.0, 1.0]], dtype=jnp.float32),
+    )
+    assert float(var_icm[0]) == pytest.approx(0.25, rel=1e-5)
+
+
 # -----------------------------------------------------------------------------
 # Poisson likelihood (exp link)
 # -----------------------------------------------------------------------------

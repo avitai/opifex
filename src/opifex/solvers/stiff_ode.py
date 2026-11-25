@@ -8,29 +8,25 @@ Integrates stiff initial-value problems
 
 entirely in JAX on top of :func:`opifex.core.solver.integrate` (:func:`jax.lax.scan` +
 per-step :func:`jax.checkpoint` discretize-then-optimize reverse-mode AD, avoiding
-continuous-adjoint trajectory drift and requiring zero ``equinox`` or ``diffrax``
-dependencies).
+continuous-adjoint trajectory drift).
 
 Three canonical L-stable (:math:`R(\infty) = 0`) implicit methods are provided directly
-from their published tableaux and permissive-licensed reference implementations:
+from their published tableaux:
 
 * :class:`Rodas4` — Hairer & Wanner's 6-stage, **4th-order** L-stable stiffly accurate
-  Rosenbrock scheme (:math:`\gamma = 0.25`; Hairer & Wanner 1996, §IV.7), ported from
-  ``SciML/OrdinaryDiffEq.jl`` (``14f664a``, MIT, ``rosenbrock_tableaus.jl:77-111`` &
-  ``rosenbrock_perform_step.jl:431-504``). Uses Hairer & Wanner's transformed matrix
-  :math:`W = (h\gamma)^{-1} I - J` so each step performs **one**
-  :func:`jax.scipy.linalg.lu_factor`, **zero** :math:`J v` matrix-vector products, and
-  **one** :func:`jax.linearize` primal evaluation at stage 1 for :math:`(f_0, \partial_t f, J)`.
+  Rosenbrock scheme (:math:`\gamma = 0.25`; Hairer & Wanner 1996, §IV.7, Table 7.2). Uses
+  Hairer & Wanner's transformed matrix :math:`W = (h\gamma)^{-1} I - J` so each step
+  performs **one** :func:`jax.scipy.linalg.lu_factor`, **zero** :math:`J v` matrix-vector
+  products, and **one** :func:`jax.linearize` primal evaluation at stage 1 for
+  :math:`(f_0, \partial_t f, J)`.
 * :class:`Ros34PW2` — Rang & Angermann's 4-stage, **3rd-order** L-stable Rosenbrock-Wanner
-  W-method (:math:`\gamma \approx 0.4358665215`; Rang & Angermann 2005), ported from
-  ``SciML/OrdinaryDiffEq.jl`` (``14f664a``, MIT, ``rosenbrock_tableaus.jl:814-836``).
+  W-method (:math:`\gamma \approx 0.4358665215`; Rang & Angermann 2005, Table 4.2).
   Satisfies W-method stiff order conditions on singular-perturbation and non-autonomous
   Prothero-Robinson systems.
 * :class:`Kvaerno3` — Kværnø's 4-stage, **3rd-order** (stage order 2) A-L stable stiffly
   accurate ESDIRK3(2)4L[2]SA method with an explicit first stage (Kværnø 2004, *BIT*
-  44(3), 489-502), ported from ``patrick-kidger/diffrax`` (``e950aa2``, Apache-2.0,
-  ``diffrax/_solver/kvaerno3.py:15-42``) including its stage-derivative predictor tableau
-  and dimensionless :math:`f`-space simplified-Newton iteration.
+  44(3), 489-502), including stage-derivative predictors and dimensionless
+  :math:`f`-space simplified-Newton iteration.
 
 All three schemes preserve linear invariants :math:`c^\top y_n = c^\top y_0` (such as
 chemical mass conservation) to floating-point rounding precision and support both uniform
@@ -43,11 +39,6 @@ References:
       differential algebraic equations of index 1." *BIT Numer. Math.* 45(4), 761-787.
     * Kværnø, A. (2004). "Singly diagonally implicit Runge-Kutta methods with an explicit
       first stage." *BIT Numer. Math.* 44(3), 489-502.
-    * Rackauckas, C., & Nie, Q. (2017). "DifferentialEquations.jl — A Performant and
-      Feature-Rich Ecosystem for Solving Differential Equations in Julia"
-      (``SciML/OrdinaryDiffEq.jl`` ``14f664a``, MIT).
-    * Kidger, P. (2022). *On Neural Differential Equations* (``patrick-kidger/diffrax``
-      ``e950aa2``, Apache-2.0).
 """
 
 from collections.abc import Callable
@@ -61,6 +52,7 @@ import optax
 from flax import struct
 from jax.flatten_util import ravel_pytree
 
+from opifex.core.solver.implicit import cast_inexact_pytree, infer_inexact_dtype
 from opifex.core.solver.integrate import FINAL_STATE, integrate, Snapshots
 from opifex.core.solver.problem import Method, Problem, solve
 from opifex.core.solver.solution import Solution
@@ -82,8 +74,7 @@ class _RosenbrockTableau:
     b_weights: tuple[float, ...]
 
 
-# Hairer & Wanner (1996) 6-stage, 4th-order L-stable stiffly accurate Rodas4 tableau
-# (SciML/OrdinaryDiffEq.jl 14f664a, MIT, rosenbrock_tableaus.jl:77-111).
+# Hairer & Wanner (1996, §IV.7, Table 7.2) 6-stage, 4th-order L-stable Rodas4 tableau.
 _RODAS4_TABLEAU: Final[_RosenbrockTableau] = _RosenbrockTableau(
     gamma=0.25,
     a_rows=(
@@ -120,8 +111,7 @@ _RODAS4_TABLEAU: Final[_RosenbrockTableau] = _RosenbrockTableau(
     ),
 )
 
-# Rang & Angermann (2005) 4-stage, 3rd-order L-stable W-method Ros34PW2 tableau
-# (SciML/OrdinaryDiffEq.jl 14f664a, MIT, rosenbrock_tableaus.jl:814-836).
+# Rang & Angermann (2005, Table 4.2) 4-stage, 3rd-order L-stable W-method Ros34PW2 tableau.
 _ROS34PW2_TABLEAU: Final[_RosenbrockTableau] = _RosenbrockTableau(
     gamma=0.435866521508459,
     a_rows=(
@@ -146,8 +136,7 @@ _ROS34PW2_TABLEAU: Final[_RosenbrockTableau] = _RosenbrockTableau(
     b_weights=(4.1847604823191595, -0.28519201735549565, 2.2942803602790414, 1.0),
 )
 
-# Kværnø (2004) 4-stage, 3rd-order (stage order 2) A-L stable ESDIRK3(2)4L[2]SA tableau
-# with Diffrax stage-derivative predictors (patrick-kidger/diffrax e950aa2, Apache-2.0).
+# Kværnø (2004, §4) 4-stage, 3rd-order (stage order 2) A-L stable ESDIRK3(2)4L[2]SA tableau.
 _KV_GAMMA: Final[float] = 0.43586652150845899942
 _KV_A21: Final[float] = _KV_GAMMA
 _KV_A31: Final[float] = (-4.0 * _KV_GAMMA * _KV_GAMMA + 6.0 * _KV_GAMMA - 1.0) / (4.0 * _KV_GAMMA)
@@ -194,8 +183,8 @@ class InitialValueProblem(Problem):
 
     vector_field: Callable[[jax.Array, Any, Any], Any] = struct.field(pytree_node=False)
     y0: Any
-    t0: jax.Array
-    t1: jax.Array
+    t0: jax.Array | float
+    t1: jax.Array | float
     args: Any = None
 
 
@@ -313,17 +302,6 @@ def _kvaerno3_single_step(
     return y_next
 
 
-def _common_floating_dtype(*trees: Any) -> jnp.dtype:
-    """Promote all inexact array leaves across ``trees`` with a ``float32`` floor."""
-    dtypes = [jnp.float32]
-    for tree in trees:
-        for leaf in jax.tree_util.tree_leaves(tree):
-            arr_dtype = getattr(leaf, "dtype", None)
-            if arr_dtype is not None and jnp.issubdtype(arr_dtype, jnp.inexact):
-                dtypes.append(arr_dtype)
-    return jnp.result_type(*dtypes)
-
-
 def _execute_stiff_integration(
     problem: InitialValueProblem,
     step_fn: Callable[
@@ -338,13 +316,8 @@ def _execute_stiff_integration(
     checkpoint: bool,
 ) -> Solution:
     """Shared driver bridging flat vector-field steps to :func:`opifex.core.solver.integrate`."""
-    dtype = _common_floating_dtype(problem.y0, problem.t0, problem.t1, problem.args)
-    y0_typed = jax.tree.map(
-        lambda x: (
-            jnp.asarray(x, dtype=dtype) if jnp.issubdtype(jnp.asarray(x).dtype, jnp.inexact) else x
-        ),
-        problem.y0,
-    )
+    dtype = infer_inexact_dtype(problem.y0, problem.t0, problem.t1, problem.args)
+    y0_typed = cast_inexact_pytree(problem.y0, dtype)
     y0_vec, unravel = ravel_pytree(y0_typed)
     t0 = jnp.asarray(problem.t0, dtype=dtype)
     t1 = jnp.asarray(problem.t1, dtype=dtype)

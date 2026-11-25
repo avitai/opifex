@@ -8,19 +8,21 @@ conformal prediction:
 * :func:`cqr_score` — CQR score ``max(lo - y, y - hi)`` (Romano, Patterson,
   Candes 2019, arXiv:1905.03222).
 * :func:`conformal_quantile` — finite-sample-corrected
-  ``ceil((n + 1)(1 - alpha)) / n`` quantile, ``+inf`` when that rank exceeds
-  the sample (:func:`minimum_calibration_size` gives the smallest ``n`` that
-  attains ``1 - alpha``).
+  ``ceil((n + 1)(1 - alpha))``-th smallest order statistic, ``+inf`` when that
+  rank exceeds ``n`` (:func:`minimum_calibration_size` gives the smallest ``n``
+  that attains ``1 - alpha``).
 
 Functions are pure ``jax.Array → jax.Array`` so they jit / vmap cleanly.
 """
 
 from __future__ import annotations
 
-import math
-
 import jax
 import jax.numpy as jnp
+from calibrax.statistics import (
+    conformal_quantile_rank,
+    minimum_conformal_calibration_size,
+)
 
 
 def absolute_residual_score(*, predictions: jax.Array, targets: jax.Array) -> jax.Array:
@@ -42,49 +44,63 @@ def minimum_calibration_size(*, alpha: float) -> int:
     and :func:`conformal_quantile` returns ``+inf``.
 
     Args:
-        alpha: Miscoverage level in ``(0, 1)``.
+        alpha: Static miscoverage level in ``(0, 1)`` (validated via
+            :func:`calibrax.statistics.minimum_conformal_calibration_size`, raising
+            ``ValueError`` outside ``(0, 1)`` and ``TypeError`` if traced or ``bfloat16``).
 
     Returns:
         The smallest usable calibration size, e.g. 9 at ``alpha=0.1``.
-
     """
-    return math.ceil(1.0 / alpha) - 1
+    return minimum_conformal_calibration_size(alpha)
 
 
 def conformal_quantile(*, scores: jax.Array, alpha: float) -> jax.Array:
-    """Finite-sample-corrected ``(1 - alpha)`` quantile of ``scores``.
+    """Finite-sample-corrected ``(1 - alpha)`` order statistic of ``scores``.
 
-    Uses the finite-sample rank ``ceil((n + 1)(1 - alpha)) / n`` with the
-    ``'higher'`` interpolation rule (Angelopoulos & Bates 2021,
-    arXiv:2107.07511). The ``'higher'`` interpolation rule (a.k.a. ceil-based) preserves the
-    finite-sample coverage bound; default linear interpolation does not.
+    Selects the exact ``k = ceil((n + 1)(1 - alpha))``-th smallest element of
+    ``scores`` (the ``inverted_cdf`` discrete quantile rule used in Lei et al.
+    2018, Angelopoulos & Bates 2021 ``arXiv:2107.07511``, MAPIE, and puncc),
+    which guarantees marginal coverage at least ``1 - alpha`` for exchangeable
+    samples.
 
-    When ``ceil((n + 1)(1 - alpha)) > n`` the required rank is not a rank of
-    ``n`` scores: no threshold drawn from them attains ``1 - alpha``, and the
-    conformal quantile is ``+inf``. Returning the largest score instead would
-    give marginal coverage of exactly ``n / (n + 1)``, below the requested
-    level, with nothing to distinguish it from a valid threshold. MAPIE takes
-    the same branch (``signed * np.inf`` in ``mapie.utils``) and crepes emits
-    maximum-size intervals for a calibration set too small for the confidence
-    level. Use :func:`minimum_calibration_size` to check ``n`` up front.
+    When ``ceil((n + 1)(1 - alpha)) > n`` the required rank exceeds ``n``: no
+    threshold drawn from ``scores`` attains ``1 - alpha``, and the conformal
+    quantile is ``+inf``. Returning the largest score would give marginal
+    coverage of ``n / (n + 1)``, below the requested level, with nothing to
+    distinguish it from a valid threshold. MAPIE takes the same branch
+    (``signed * np.inf`` in ``mapie.utils``) and crepes emits maximum-size
+    intervals for a calibration set too small for the confidence level. Use
+    :func:`minimum_calibration_size` to check ``n`` up front.
 
     ``n`` and ``alpha`` are static, so the branch is resolved at trace time and
     this stays jit- and vmap-compatible.
 
     Args:
         scores: 1-D array of nonconformity scores.
-        alpha: Miscoverage level in ``(0, 1)``.
+        alpha: Static miscoverage level in ``(0, 1)`` (validated via
+            :func:`calibrax.statistics.conformal_quantile_rank`, raising ``TypeError``
+            when traced or ``bfloat16``).
 
     Returns:
-        Scalar quantile threshold using the ``'higher'`` rule, or ``+inf`` when
-        ``scores`` is too small to attain ``1 - alpha``.
+        Scalar ``ceil((n + 1)(1 - alpha))``-th order statistic, ``+inf`` when
+        ``scores`` has fewer than :func:`minimum_calibration_size` elements, or
+        ``NaN`` if ``scores`` contains ``NaN``.
 
+    Raises:
+        ValueError: When ``alpha`` lies outside ``(0, 1)`` or ``scores`` is not a
+            non-empty 1-D array.
     """
+    if scores.ndim != 1 or scores.shape[0] < 1:
+        raise ValueError(f"scores must be a non-empty 1-D array; got shape {scores.shape}.")
     n = scores.shape[0]
-    needed_rank = math.ceil((n + 1) * (1.0 - alpha))
+    needed_rank = conformal_quantile_rank(n, alpha)
+    dtype = jnp.result_type(scores, jnp.float32)
+    scores_f = jnp.asarray(scores, dtype=dtype)
+    has_nan = jnp.any(jnp.isnan(scores_f))
+    nan_val = jnp.asarray(jnp.nan, dtype=dtype)
     if needed_rank > n:
-        return jnp.asarray(jnp.inf, dtype=jnp.result_type(scores.dtype, float))
-    return jnp.quantile(scores, needed_rank / n, method="higher")
+        return jnp.where(has_nan, nan_val, jnp.asarray(jnp.inf, dtype=dtype))
+    return jnp.where(has_nan, nan_val, jnp.sort(scores_f)[needed_rank - 1])
 
 
 def signed_lower_residual_score(
@@ -168,6 +184,42 @@ def effective_sample_size(weights: jax.Array) -> jax.Array:
     return jnp.where(has_mass, (sum_w * sum_w) / safe_denom, jnp.asarray(0.0, dtype=dtype))
 
 
+def _require_nonnegative_weights(calibration_weights: jax.Array, w_test_arr: jax.Array) -> None:
+    """Reject concrete negative calibration or test weights."""
+    try:
+        has_negative = bool(jnp.any(calibration_weights < 0)) or bool(w_test_arr < 0)
+    except jax.errors.TracerBoolConversionError:
+        has_negative = False
+    if has_negative:
+        raise ValueError("calibration_weights and test_weight must be non-negative.")
+
+
+def _validate_ipcw_quantile_inputs(
+    *,
+    scores: jax.Array,
+    calibration_weights: jax.Array,
+    test_weight: jax.Array | float,
+    alpha: float,
+) -> int:
+    """Validate shapes, static ``alpha`` bounds, and concrete weight non-negativity."""
+    if scores.ndim != 1 or calibration_weights.ndim != 1:
+        raise ValueError(
+            "scores and calibration_weights must be non-empty 1-D arrays of matching shape; "
+            f"got {scores.shape} and {calibration_weights.shape}."
+        )
+    if scores.shape != calibration_weights.shape or scores.shape[0] < 1:
+        raise ValueError(
+            "scores and calibration_weights must be non-empty 1-D arrays of matching shape; "
+            f"got {scores.shape} and {calibration_weights.shape}."
+        )
+    needed_rank = conformal_quantile_rank(scores.shape[0], alpha)
+    w_test_arr = jnp.asarray(test_weight)
+    if w_test_arr.ndim != 0:
+        raise ValueError(f"test_weight must be a scalar (0-D); got shape {w_test_arr.shape}.")
+    _require_nonnegative_weights(calibration_weights, w_test_arr)
+    return needed_rank
+
+
 def ipcw_conformal_quantile(
     *,
     scores: jax.Array,
@@ -179,37 +231,62 @@ def ipcw_conformal_quantile(
 
     Implements Eq. (5) of Tibshirani, Foygel Barber, Candès & Ramdas (2019, NeurIPS,
     arXiv:1904.06019) over ``n`` calibration atoms plus the test atom ``w_{n+1}(x)`` placed
-    at ``+inf``. Excluded calibration entries (``calibration_weights <= 0``) are mapped to
+    at ``+inf``. Excluded calibration entries (``calibration_weights == 0``) are mapped to
     ``+inf`` before sorting so zero-weight points can never be selected as a finite quantile,
-    and ``+inf`` is returned whenever ``sum_i p_i(x) < 1 - alpha``.
+    and ``+inf`` is returned whenever ``sum_i p_i(x) < 1 - alpha``. Under equal positive
+    weights, selects the exact ``conformal_quantile_rank(n, alpha)`` order statistic without
+    floating-point rounding drift.
 
     Args:
         scores: 1-D array of calibration nonconformity scores of shape ``(n,)``.
         calibration_weights: 1-D array of non-negative IPCW weights of shape ``(n,)``.
-        test_weight: Positive test-point weight ``w_{n+1}(x) = 1 / G(c_0 | x)``.
-        alpha: Miscoverage level in ``(0, 1)``.
+        test_weight: Non-negative scalar test-point weight ``w_{n+1}(x)``.
+        alpha: Static miscoverage level in ``(0, 1)``.
 
     Returns:
-        Scalar ``jax.Array`` weighted conformal threshold (finite or ``+inf``).
+        Scalar ``jax.Array`` weighted conformal threshold (finite, ``+inf``, or ``NaN``).
     """
+    needed_rank = _validate_ipcw_quantile_inputs(
+        scores=scores,
+        calibration_weights=calibration_weights,
+        test_weight=test_weight,
+        alpha=alpha,
+    )
     dtype = jnp.result_type(scores, calibration_weights, test_weight, jnp.float32)
     scores_f = jnp.asarray(scores, dtype=dtype)
-    weights_f = jnp.maximum(jnp.asarray(calibration_weights, dtype=dtype), 0.0)
+    weights_f = jnp.asarray(calibration_weights, dtype=dtype)
     w_test = jnp.asarray(test_weight, dtype=dtype)
 
+    has_nan = (
+        jnp.any(jnp.isnan(scores_f))
+        | jnp.any(jnp.isnan(weights_f))
+        | jnp.isnan(w_test)
+        | (jnp.any(weights_f < 0.0))
+        | (w_test < 0.0)
+    )
     active_scores = jnp.where(weights_f > 0.0, scores_f, jnp.asarray(jnp.inf, dtype=dtype))
     aug_scores = jnp.concatenate([active_scores, jnp.asarray([jnp.inf], dtype=dtype)], axis=0)
     aug_weights = jnp.concatenate([weights_f, w_test[None]], axis=0)
 
-    total_weight = jnp.sum(aug_weights)
-    safe_total = jnp.where(total_weight > 0.0, total_weight, jnp.asarray(1.0, dtype=dtype))
+    clean_weights = jnp.where(has_nan, jnp.zeros_like(aug_weights), aug_weights)
+    has_posinf_w = jnp.any(jnp.isposinf(clean_weights))
+    finite_weights = jnp.where(
+        has_posinf_w, jnp.isposinf(clean_weights).astype(dtype), clean_weights
+    )
+    w_max = jnp.max(finite_weights)
+    all_equal = (w_max > 0.0) & jnp.all(finite_weights == w_max)
+    safe_max = jnp.where(w_max > 0.0, w_max, jnp.ones_like(w_max))
+    unit_weights = finite_weights / safe_max
 
     order = jnp.argsort(aug_scores, stable=True)
     sorted_scores = aug_scores[order]
-    sorted_weights = aug_weights[order]
-    cumulative = jnp.cumsum(sorted_weights) / safe_total
+    sorted_weights = unit_weights[order]
+    prefix = jnp.cumsum(sorted_weights)
+    total = prefix[-1]
+    tail = total - prefix
 
-    # Guard tiny float32 cumsum shortfall at the final +inf atom via explicit fallback to n.
-    reached = cumulative >= jnp.asarray(1.0 - alpha, dtype=dtype)
+    reached = tail <= jnp.asarray(alpha, dtype=dtype) * total
     idx = jnp.where(jnp.any(reached), jnp.argmax(reached), sorted_scores.shape[0] - 1)
-    return jnp.where(total_weight > 0.0, sorted_scores[idx], jnp.asarray(jnp.inf, dtype=dtype))
+    idx = jnp.where(all_equal, jnp.int32(needed_rank - 1), idx)
+    quantile = jnp.where(total > 0.0, sorted_scores[idx], jnp.asarray(jnp.inf, dtype=dtype))
+    return jnp.where(has_nan, jnp.asarray(jnp.nan, dtype=dtype), quantile)

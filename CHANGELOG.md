@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `GroupedConformalizedQuantileRegressor` and `GroupedCQRState` in `opifex.uncertainty.conformal` for Mondrian (group-conditional) Conformalized Quantile Regression (Romano, Patterson & Candès 2019; Vovk et al. 2005), returning `(-inf, +inf)` intervals for underfilled calibration groups (`< minimum_calibration_size`) and unseen test groups.
+- `cv_plus_cqr_intervals`, `CrossConformalizedQuantileRegressor`, and `CrossCQRState` in `opifex.uncertainty.conformal` for K-fold cross-conformalized quantile regression using exact Barber et al. (2021) CV+ finite-sample order statistics.
+- `feedback_covariate_shift_weights` and `feedback_covariate_shift_intervals` in `opifex.uncertainty.conformal` for conformal prediction under adaptive design / feedback covariate shift (Fannjiang et al., *PNAS* 2022, Theorem 1), supporting both factorized `(log_calibration_ratios, log_test_ratios)` and swapped-policy `(n_test, n_calib + 1)` log-likelihood-ratio matrices with row-max log-space stabilization.
+- `excess_aurc` in `opifex.uncertainty.selective` (Geifman, Uziel & El-Yaniv 2019), paired with tie-invariant `risk_coverage_curve` (`jax.ops.segment_sum` group-mean error averaging across tied confidences) so constant or tied confidence rankings are permutation-invariant.
+- `Status.INITIAL_FAILURE` (`10`) in `opifex.core.solver.status` for violated traced solver preconditions (such as non-monotone save times `ts` under `jax.jit`).
+- Checkpointed bounded while-loop primitive (`bounded_while_loop` and `custom_vmap` `unvmap_any`) in `opifex.core.solver` for early-exiting batched adaptive loops with forward- and reverse-mode automatic differentiation.
+- Implicit-differentiation helpers (`TangentSolverFn`, `dense_tangent_solve`, `lsmr_tangent_solve`, stagnation-aware `gmres_tangent_solve`, `infer_inexact_dtype`, `cast_inexact_pytree`, and `guard_unconverged_tangents`) in `opifex.core.solver`: `dense_tangent_solve` materializes and LU-factors the Jacobian once per operator across batched right-hand sides with an `O(n^2)` alternating triangular-solve condition gate and normwise backward-error contract; `lsmr_tangent_solve` runs matrix-free Fong & Saunders (2011) Golub-Kahan bidiagonalization without forming `A^T A`; and `gmres_tangent_solve` tracks consecutive non-decreasing Arnoldi cycles (`stagnation_iters=20`), all returning `NaN` on singular or stagnated systems.
+- Adaptive and constant-step 7-stage FSAL Tsitouras (2011) 5(4) integrator `tsit5_solve` in `opifex.solvers.ude` (`UDEConfig.adaptive=True` by default) with recursive checkpointed bounded `while_loop` batch early exit, in-step cursor-driven 4th-degree continuous-extension dense output (`O(h^5)` global dense accuracy) across `ts`, Hairer-Nørsett-Wanner (§II.4) deadbeat I-controller step-size adaptation (`dtmin`, `force_dtmin`, and number-spacing floor returning `Status.STEP_TOO_SMALL`), traced `ts` monotonicity validation (`Status.INITIAL_FAILURE`), and discretize-then-optimize reverse-mode AD.
+- JAX-native `anderson_fixed_point` and `FixedPointSolution` in `opifex.neural.quantum.dft._fixed_point` (`jax.lax.while_loop` + `jax.lax.custom_root` with configurable `tangent_solver`, defaulting to `dense_tangent_solve`, threaded through `scf_fixed_point`, `converged_density_implicit`, and `SCFSolver`), while `converged_density_direct` uses hoisted trust-bounded `optax.lbfgs` with zoom line search.
+- `OptimizationProblem`, `BFGSSolver` (Nocedal & Wright 2006 Algorithm 6.1 with zoom line search and scale-aware Cauchy stopping), and `bfgs_minimise` in `opifex.optimization.second_order` and `opifex.optimization.l2o`.
+- Public `kernel_diagonal` helper in `opifex.uncertainty.gp` for `O(m)` marginal prior variance evaluation across `ExactGP`, `SVGP`, `LaplaceGP`, `StochasticSVGP`, `LinearMultiFidelityGP`, and `NonLinearMultiFidelityGP` (replacing `output_scale**2` prior variance assumptions on composite or multi-output kernels).
+- Optional discrete candidate-grid parameter `x_grid` `(g, d)` on `mumbo_acquisition` in `opifex.uncertainty.multi_fidelity` for target-level Gumbel max-value estimation on discrete candidate domains, preserving `float32` candidate dtypes when `jax_enable_x64` is enabled.
+
+### Fixed
+
+- `ipcw_conformal_quantile` normalizes finite weights by their maximum before prefix-sum tail evaluation (Tibshirani et al. 2019, Eq. 5), selects the exact `conformal_quantile_rank(n, alpha)` order statistic under equal positive weights in `float32` and `float64`, propagates `NaN` inputs, and returns `+inf` when calibration mass cannot reach `1 - alpha`.
+- `fit_exact_gp`, `fit_heteroscedastic_exact_gp`, and `nonpositive_message` preserve input floating dtypes and delegate concrete scalar extraction to `calibrax.core.eager_scalar_float`.
+- `predict_linear_multi_fidelity_gp` validates `target_level` bounds with `ValueError` and clamps posterior variance at `0.0` instead of `1e-6`.
+- `local_penalization` in `opifex.uncertainty.active` uses `optax.safe_norm` so gradients at coinciding pending points are finite `0.0`.
+- `LevenbergMarquardt` in `opifex.solvers.nonlinear_least_squares` routes implicit differentiation through `opifex.core.solver` (`tangent_solver`, returning `NaN` on singular Hessians consistently with `BFGSSolver`) and runs an early-exiting `jax.lax.while_loop` under `implicit_diff=True` and `bounded_while_loop` under `implicit_diff=False`.
+- `solve_stiff_ode` in `opifex.solvers.stiff_ode` deduplicates working floating-dtype inference and pytree casting through `opifex.core.solver`.
+
 ### Changed
 
 - `.python-version` pins 3.12, the oldest Python the package supports, so `./setup.sh` and
@@ -14,6 +38,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installed (a free-threaded 3.14 on one development machine).
   Every CI job with a Python matrix sets `UV_PYTHON` to its matrix version, which the pin
   would otherwise override for its uv commands.
+- `_DeterministicLinear.__call__` in `opifex.neural.bayesian.probabilistic_pinns` drops unread `deterministic` and `rngs` flags (dispatching via `_apply_pinn_layer`) and `BayesianLinear` and `BayesianSpectralConvolution` drop redundant `substrax-allow` comments.
+- Raised minimum dependency floors to `jax>=0.11.1`, `flax>=0.12.10`, `calibrax[publication]>=0.1.23`, and `substrax>=0.1.37`. Under `calibrax>=0.1.23`, `CompilationProfiler` times tracing, lowering, and XLA compilation (`lower(...).compile()`) only rather than the first program execution, so `avg_compilation_time_ms` and `max_compilation_time_ms` in `opifex.benchmarking.profiling.profiling_harness` read lower wherever a first run was slow.
+- Moved `exponax>=0.2.0` from `[project.optional-dependencies] test` into `[dependency-groups] benchmark`, marked `test_burgers_matches_exponax_etdrk4` with `@pytest.mark.benchmark`, and added a closed-form periodic Cole-Hopf viscous Burgers analytical oracle test in `tests/physics/spectral/test_steppers.py`.
+- **Breaking:** Moved `lsmr` from `opifex.uncertainty.linalg` to `opifex.core.solver.lsmr` and updated `opifex.fields.pressure` and `opifex.solvers.nonlinear_least_squares` to import it from `opifex.core.solver`.
+- **Breaking:** `NeuralODE.solve` and `UDESolver.solve` return `Solution` directly (`fields["y"]`, `fields["t"]`, `status`, and `stats["num_steps"]`), dispatch through `self.vector_field`, validate that submodules do not carry active `.train()` stochastic `Dropout` (`deterministic=False`) or batch-statistics `BatchNorm` (`use_running_average=False`), and emit `NaN` from `UDESolver.trajectory_loss` when `not is_successful(sol.status)`; re-exported `nonlinear_least_squares`, `stiff_ode`, and `ude` symbols from `opifex.solvers`.
+- **Breaking:** `create_gauss_newton_solver`, `create_levenberg_marquardt_solver`, and `create_bfgs_solver` in `opifex.optimization.second_order` return `LevenbergMarquardt` and `BFGSSolver` (`opifex.core.solver.Method`) instances, mapping `GaussNewtonConfig.atol` to `gtol` and `GaussNewtonConfig.rtol` to `xtol`/`ftol` with optional `tangent_solver`.
+- **Breaking:** `fit_nonlinear_multi_fidelity_gp` and keyword-only `flax.struct.dataclass` `NonLinearMultiFidelityGPState` evaluate the Perdikaris et al. (2017, Eq. 2.12) two-term composite kernel (`nargp_composite_kernel`) on unnormalized `[x, f_{*,i-1}(x)]` with unit output scale on `k_f` for multiplicative variance identifiability and traceable `jax.Array` PyTree leaves (`lengthscales`, `output_scales`, `noise_stds`, `f_lengthscales`, `bias_lengthscales`, `bias_output_scales`).
+- **Breaking:** `weighted_conformal_quantile` requires keyword-only `test_weight` and `weighted_split_conformal_intervals` requires keyword-only `test_weights` alongside 1-D `predictions`.
+- **Breaking:** `CensoredSplitConformalRegressor` delegates left-continuous reverse Kaplan-Meier censoring survival `P(C >= t)` to `calibrax.metrics.functional.reverse_kaplan_meier(..., left_continuous=True)` over the full risk set `observed_times >= u_k` (Uno et al. 2011; Candès, Lei & Ren 2023), preserves `G_hat(c_0)` at the cutoff as `default_test_survival` under general right censoring, validates `censoring_survival` `(0, 1]` bounds and 1-D shapes, and requires test `censoring_survival` in `predict()` whenever `fit()` calibrated against explicit `censoring_survival`.
+- **Breaking:** All conformal quantile, jackknife+, CV+, Mondrian, and censored entry points validate static `alpha` via `calibrax.statistics` (raising `ValueError` outside `(0, 1)` and `TypeError` on `bfloat16` or traced `alpha`).
+- **Breaking:** `AbstentionDecision` in `opifex.uncertainty.selective` stores `threshold` and count metadata entries as traceable `jax.Array` PyTree leaves rather than static Python scalars.
+
+### Removed
+
+- `optimistix_minimise` in `opifex.optimization.l2o` (replaced by `bfgs_minimise`).
+- `opifex.uncertainty.linalg.lstsq` (moved to `opifex.core.solver.lsmr`).
+- Runtime `diffrax` and `optimistix` package dependencies in `pyproject.toml`.
 
 ## [0.2.14] - 2026-11-21
 

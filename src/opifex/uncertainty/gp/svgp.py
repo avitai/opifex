@@ -33,9 +33,8 @@ Implementation notes
   ``jax.scipy.linalg.cho_solve`` /
   ``solve_triangular``; the full fit + predict pipeline compiles
   end-to-end under ``jax.jit``.
-* **No equinox dependency**: the fitted state is a plain
-  ``@dataclass(frozen=True, slots=True, kw_only=True)`` carrying
-  ``jax.Array`` leaves.
+* **Pure-JAX PyTree state**: the fitted state is a frozen ``flax.struct.dataclass``
+  carrying traceable ``jax.Array`` leaves and static kernel metadata.
 * **Closed-form correctness**: the collapsed ELBO and predictive follow
   Titsias 2009 with a zero-mean prior and the ``A / B / L_B``
   factorisation.
@@ -64,45 +63,12 @@ from flax import struct
 from opifex.core.capabilities import DefaultStrategy
 from opifex.uncertainty._predictive import gaussian_process_predictive
 from opifex.uncertainty.adapters.base import compose_method_metadata
-from opifex.uncertainty.gp.exact import rbf_kernel
+from opifex.uncertainty.gp._validation import nonpositive_message, PositiveScalar
+from opifex.uncertainty.gp.exact import kernel_diagonal, rbf_kernel
 from opifex.uncertainty.types import PredictiveDistribution  # noqa: TC001 — eager per convention
 
 
 _SVGP_SOURCE_PACKAGE = "opifex.uncertainty.gp"
-
-
-def _kernel_diagonal(
-    kernel_fn: Callable[..., jax.Array],
-    x: jax.Array,
-    *,
-    lengthscale: float,
-    output_scale: float,
-) -> jax.Array:
-    r"""Return per-point ``K(x_i, x_i)`` of shape ``(n,)`` via ``jax.vmap``.
-
-    For stationary single-output kernels this equals ``output_scale^2``
-    at every point (and the vmap collapses to a trivial repeat). For
-    **multi-output ICM/LCM kernels** (slices 2-3) the diagonal varies
-    per point — ``k_base(x, x) * B[task, task]`` for ICM, the
-    component sum for LCM — so the per-point evaluation is required
-    for the ``K_{xx}``-diagonal term in the Titsias collapsed ELBO
-    and the predictive variance.
-
-    Args:
-        kernel_fn: Any callable matching the standard kernel signature
-            ``(x1, x2, *, lengthscale, output_scale) -> Gram``.
-        x: Inputs of shape ``(n, d)``.
-        lengthscale: Kernel length-scale.
-        output_scale: Kernel output-scale.
-
-    Returns:
-        ``(n,)`` array of diagonal entries.
-    """
-    return jax.vmap(
-        lambda xi: kernel_fn(
-            xi[None], xi[None], lengthscale=lengthscale, output_scale=output_scale
-        )[0, 0]
-    )(x)
 
 
 @struct.dataclass(slots=True, kw_only=True)
@@ -138,10 +104,10 @@ class SVGPState:
     cholesky_kmm: jax.Array
     cholesky_b: jax.Array
     scaled_alpha: jax.Array
-    lengthscale: float
-    output_scale: float
-    noise_std: float
-    jitter: float
+    lengthscale: PositiveScalar
+    output_scale: PositiveScalar
+    noise_std: PositiveScalar
+    jitter: PositiveScalar
     kernel_fn: Callable[..., jax.Array] = struct.field(pytree_node=False, default=rbf_kernel)
     cached_y_squared_norm: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
     cached_a_y_inside_norm: jax.Array = field(default_factory=lambda: jnp.asarray(0.0))
@@ -156,11 +122,11 @@ def fit_svgp(
     x_train: jax.Array,
     y_train: jax.Array,
     x_inducing: jax.Array,
-    lengthscale: float,
-    output_scale: float,
-    noise_std: float,
+    lengthscale: PositiveScalar,
+    output_scale: PositiveScalar,
+    noise_std: PositiveScalar,
     kernel_fn: Callable[..., jax.Array] = rbf_kernel,
-    jitter: float = 1e-6,
+    jitter: PositiveScalar = 1e-6,
 ) -> SVGPState:
     r"""Fit the Titsias-collapsed sparse-variational GP.
 
@@ -183,8 +149,9 @@ def fit_svgp(
     Raises:
         ValueError: If ``noise_std`` is not strictly positive.
     """
-    if noise_std <= 0.0:
-        raise ValueError(f"noise_std must be strictly positive; got {noise_std!r}.")
+    msg = nonpositive_message("noise_std", noise_std)
+    if msg is not None:
+        raise ValueError(msg)
     n = int(x_train.shape[0])
     m = int(x_inducing.shape[0])
     sigma = noise_std
@@ -212,7 +179,7 @@ def fit_svgp(
     # kernels each diagonal entry is k_base(x_i, x_i) * B[task_i, task_i] (or
     # the LCM sum thereof), which varies per point. The vmap form handles
     # both transparently.
-    kxx_diag = _kernel_diagonal(
+    kxx_diag = kernel_diagonal(
         kernel_fn, x_train, lengthscale=lengthscale, output_scale=output_scale
     )
     cached_kxx_diag_sum = jnp.sum(kxx_diag)
@@ -264,7 +231,7 @@ def predict_svgp(*, state: SVGPState, x_test: jax.Array) -> PredictiveDistributi
     )
     mean = v_test.T @ inner
     # Var(x*) = K(x*, x*) - ||v_test||² + ||L_B^{-1} v_test||²
-    kxx_diag = _kernel_diagonal(
+    kxx_diag = kernel_diagonal(
         state.kernel_fn,
         x_test,
         lengthscale=state.lengthscale,

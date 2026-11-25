@@ -41,9 +41,9 @@ from collections.abc import Callable  # noqa: TC003 — imported at runtime by d
 import jax
 import jax.numpy as jnp
 
+from opifex.core.solver import lsmr
 from opifex.fields.field import CenteredGrid, Extrapolation
 from opifex.fields.operations import divergence, gradient
-from opifex.uncertainty.linalg.lstsq import lsmr
 
 
 _DEFAULT_MATVECS = 500

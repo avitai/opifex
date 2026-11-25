@@ -494,7 +494,7 @@ wheels = [
 
 [[package]]
 name = "calibrax"
-version = "0.1.21"
+version = "0.1.23"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -509,9 +509,9 @@ dependencies = [
     { name = "scipy" },
     { name = "substrax" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ac/47/e449b833dccab2b3647647023d46fa10a9087aeacfbfab5590e7607f6867/calibrax-0.1.21.tar.gz", hash = "sha256:3bf906685d9b257f2f6e96e4e49862dae221b30652fbea25d1b325ae473fba27", size = 241974, upload-time = "2026-11-20T03:39:28.313Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/d9/1fca4c683d88dcc093b1648c35bbad3d675f07f19fb7a7660b7c9a1638e2/calibrax-0.1.23.tar.gz", hash = "sha256:5bf8921d0020b5090ab1ab80a71e6b76238e61f72e20887fc4d97f9858693c02", size = 259929, upload-time = "2026-11-25T04:57:14.511Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/29/09/fda8b33573d0f36f4ed25e09fe2e7805267d8690316cfe273a380ae09666/calibrax-0.1.21-py3-none-any.whl", hash = "sha256:688dea4a87ef816f87594982ce310f26353f6258c77bae47961169d0072546ac", size = 305429, upload-time = "2026-11-20T03:39:26.105Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/93/c74423a967af4043973a72c0205d3691d6f4d039005b8e9eac2024ba2bbc/calibrax-0.1.23-py3-none-any.whl", hash = "sha256:a9606b120b383fa98cc57ec2c5b8fe06ec7bf0bc5928613acb8b3ece5e3836b8", size = 326606, upload-time = "2026-11-25T04:57:12.536Z" },
 ]
 
 [package.optional-dependencies]
@@ -1071,24 +1071,6 @@ wheels = [
 ]
 
 [[package]]
-name = "diffrax"
-version = "0.7.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "equinox" },
-    { name = "jax" },
-    { name = "jaxtyping" },
-    { name = "lineax" },
-    { name = "optimistix" },
-    { name = "typing-extensions" },
-    { name = "wadler-lindig" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/ea/a22853377a840d70d1d174d43183f12990c66eecf34ba7e76eec781249d0/diffrax-0.7.2.tar.gz", hash = "sha256:9adc70fe90dba83f7dd839845839b2531a3dd736a3944fe1aa26598507cfb48e", size = 155159, upload-time = "2026-02-18T01:14:04.964Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/48/c42f657f3d6b4d9d9674c9bc48e763d024511ea4cc1d6e0c68c7b4380c43/diffrax-0.7.2-py3-none-any.whl", hash = "sha256:1beee2f991cd049962fe3c89da28f933753aa66d80bef857533276c9f23301ed", size = 199673, upload-time = "2026-02-18T01:14:03.38Z" },
-]
-
-[[package]]
 name = "distlib"
 version = "0.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1313,7 +1295,7 @@ wheels = [
 
 [[package]]
 name = "flax"
-version = "0.12.9"
+version = "0.12.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jax" },
@@ -1327,9 +1309,9 @@ dependencies = [
     { name = "treescope" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/78/67/58e872c2e9f99ce777df991f285b44748f83817b60eb6fcc5b78033a9509/flax-0.12.9.tar.gz", hash = "sha256:2870e491c32ad3360a40838b1b33cf1a8ae7f18a118681a767b08ad648ffc567", size = 15714212, upload-time = "2026-08-18T21:44:28.778Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/2e/81f5a423c67dd1a075b77aba93a8a889b488272e82075aee38772024dd6d/flax-0.12.12.tar.gz", hash = "sha256:103cc503c94219513b73027aa0e93aac408adfd3fcdfb1df85e9d147219e4896", size = 15770479, upload-time = "2026-10-27T01:31:00.703Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/2c/e42cbf7c1c3ac7905fd4a4c6578267dff4e541b38d28c08357fdae02a176/flax-0.12.9-py3-none-any.whl", hash = "sha256:091d1c01aba582c53b078269d90fa721c537b6383885a86fc591ac7a8f990209", size = 532147, upload-time = "2026-08-18T21:44:27.021Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/13/1ff65631ded9bc0395894109bcc5d0645816cd09b80aa5dd3ccb8495078c/flax-0.12.12-py3-none-any.whl", hash = "sha256:42714e509a754d769a22b01013202a81f0cb4fd7c52988eb5592cca14167eb0f", size = 533938, upload-time = "2026-10-27T01:30:58.831Z" },
 ]
 
 [[package]]
@@ -2656,21 +2638,6 @@ wheels = [
 ]
 
 [[package]]
-name = "lineax"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "equinox" },
-    { name = "jax" },
-    { name = "jaxtyping" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/35/d6/4e28416a6fe58dd6bc7565b1ffa330f4d0ba7d74212642b1b734c511299e/lineax-0.1.0.tar.gz", hash = "sha256:5f1a8f060142af2cdbf7d66b99e8d3071c3aa734b677df6339df4b4c4c0554d2", size = 50209, upload-time = "2026-01-27T21:17:26.652Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/0c/2ed47112fc1958a0a81c9b015d4e1861953a1ec3a17b081c0180a25ce82c/lineax-0.1.0-py3-none-any.whl", hash = "sha256:f00911c6b07d427c4835db46856970c8348bc82a035b51f4386ad09382af957a", size = 74600, upload-time = "2026-01-27T21:17:25.33Z" },
-]
-
-[[package]]
 name = "mako"
 version = "1.4.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3807,7 +3774,6 @@ dependencies = [
     { name = "blackjax" },
     { name = "calibrax", extra = ["publication"] },
     { name = "datarax" },
-    { name = "diffrax" },
     { name = "flax" },
     { name = "jax" },
     { name = "jaxtyping" },
@@ -3815,7 +3781,6 @@ dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "optax" },
-    { name = "optimistix" },
     { name = "orbax-checkpoint" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
@@ -3836,7 +3801,6 @@ all = [
     { name = "build" },
     { name = "coverage" },
     { name = "distrax" },
-    { name = "exponax" },
     { name = "fastapi" },
     { name = "grain" },
     { name = "greenlet" },
@@ -3907,7 +3871,6 @@ all-cpu = [
     { name = "build" },
     { name = "coverage" },
     { name = "distrax" },
-    { name = "exponax" },
     { name = "fastapi" },
     { name = "grain" },
     { name = "greenlet" },
@@ -3964,7 +3927,6 @@ all-macos = [
     { name = "build" },
     { name = "coverage" },
     { name = "distrax" },
-    { name = "exponax" },
     { name = "fastapi" },
     { name = "grain" },
     { name = "greenlet" },
@@ -4213,7 +4175,6 @@ test = [
     { name = "asyncpg" },
     { name = "beartype" },
     { name = "coverage" },
-    { name = "exponax" },
     { name = "fastapi" },
     { name = "grain" },
     { name = "greenlet" },
@@ -4239,6 +4200,11 @@ test = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 
+[package.dev-dependencies]
+benchmark = [
+    { name = "exponax" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", marker = "extra == 'platform'", specifier = ">=0.20.0" },
@@ -4253,15 +4219,13 @@ requires-dist = [
     { name = "beartype", marker = "extra == 'test'", specifier = ">=0.14.1" },
     { name = "blackjax", specifier = ">=1.2.5" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.0.3" },
-    { name = "calibrax", extras = ["publication"], specifier = ">=0.1.21" },
+    { name = "calibrax", extras = ["publication"], specifier = ">=0.1.23" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.9.2" },
     { name = "coverage", marker = "extra == 'test'", specifier = ">=7.9.2" },
     { name = "datarax", specifier = ">=0.1.17" },
-    { name = "diffrax", specifier = ">=0.4.0" },
     { name = "distrax", marker = "extra == 'probabilistic'", specifier = ">=0.1.0,<0.2.0" },
-    { name = "exponax", marker = "extra == 'test'", specifier = ">=0.2.0" },
     { name = "fastapi", marker = "extra == 'platform'", specifier = ">=0.115.13" },
-    { name = "flax", specifier = ">=0.12.1" },
+    { name = "flax", specifier = ">=0.12.10" },
     { name = "grain", marker = "extra == 'scientific-data'", specifier = ">=0.2.3" },
     { name = "greenlet", marker = "extra == 'test'", specifier = ">=3.0.0" },
     { name = "griffe", marker = "extra == 'docs'", specifier = ">=1.7.3" },
@@ -4273,8 +4237,8 @@ requires-dist = [
     { name = "hypothesis", marker = "extra == 'test'", specifier = ">=6.100" },
     { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "interrogate", marker = "extra == 'dev'", specifier = ">=1.5" },
-    { name = "jax", specifier = ">=0.8.0" },
-    { name = "jax", extras = ["cuda12"], marker = "extra == 'cuda12'", specifier = ">=0.8.0" },
+    { name = "jax", specifier = ">=0.11.1" },
+    { name = "jax", extras = ["cuda12"], marker = "extra == 'cuda12'", specifier = ">=0.11.1" },
     { name = "jax-metal", marker = "extra == 'metal'", specifier = ">=0.1.0" },
     { name = "jaxtyping", specifier = ">=0.2.20" },
     { name = "lazy-loader", specifier = ">=0.6" },
@@ -4310,7 +4274,6 @@ requires-dist = [
     { name = "opifex", extras = ["platform"], marker = "extra == 'test'" },
     { name = "opifex", extras = ["scientific-data"], marker = "extra == 'test'" },
     { name = "optax", specifier = ">=0.2.8" },
-    { name = "optimistix", specifier = ">=0.0.10" },
     { name = "orbax-checkpoint", specifier = ">=0.11.13" },
     { name = "pandas", marker = "extra == 'pdebench'", specifier = ">=2.0.0" },
     { name = "pgcli", marker = "extra == 'platform'", specifier = ">=4.0.0" },
@@ -4355,10 +4318,10 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.10.0" },
     { name = "sqlalchemy", marker = "extra == 'platform'", specifier = ">=2.0.0" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'platform'", specifier = ">=2.0.0" },
-    { name = "substrax", specifier = ">=0.1.32" },
-    { name = "substrax", extras = ["mlflow"], marker = "extra == 'mlflow'", specifier = ">=0.1.32" },
-    { name = "substrax", extras = ["modal"], marker = "extra == 'dev'", specifier = ">=0.1.32" },
-    { name = "substrax", extras = ["notebooks", "testing"], marker = "extra == 'test'", specifier = ">=0.1.32" },
+    { name = "substrax", specifier = ">=0.1.37" },
+    { name = "substrax", extras = ["mlflow"], marker = "extra == 'mlflow'", specifier = ">=0.1.37" },
+    { name = "substrax", extras = ["modal"], marker = "extra == 'dev'", specifier = ">=0.1.37" },
+    { name = "substrax", extras = ["notebooks", "testing"], marker = "extra == 'test'", specifier = ">=0.1.37" },
     { name = "tensorboard-plugin-profile", marker = "extra == 'profiling'", specifier = ">=2.20.6" },
     { name = "tensorflow", marker = "extra == 'profiling'", specifier = ">=2.20.0" },
     { name = "tensorly", specifier = ">=0.9.0" },
@@ -4370,6 +4333,9 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'platform'", specifier = ">=0.34.3" },
 ]
 provides-extras = ["all", "all-cpu", "all-macos", "cuda-dev", "cuda12", "dev", "docs", "metal", "mlflow", "neural-dft", "opifex-dev", "pdebench", "platform", "probabilistic", "profiling", "quantum-chemistry", "scientific-data", "test"]
+
+[package.metadata.requires-dev]
+benchmark = [{ name = "exponax", specifier = ">=0.2.0" }]
 
 [[package]]
 name = "opt-einsum"
@@ -4393,22 +4359,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8c/f9/e3d11ae6f298ee941a0690e353a323d158ba5dedc436e75621c310845c5c/optax-0.2.8.tar.gz", hash = "sha256:5b225b35066fc3eebaa4d798f1b4173b4d57d1a480610908981f8343b50af0b0", size = 301193, upload-time = "2026-03-20T23:30:05.465Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/69/6a93d8600c339d7687a05857c7907bd4dd8cf88691a5ea106d7a50af90a1/optax-0.2.8-py3-none-any.whl", hash = "sha256:e3ca2d36c99daab1800ae9dbc0545034382d6bc780b24d969e1b0df65fa31cb4", size = 402960, upload-time = "2026-03-20T23:30:03.886Z" },
-]
-
-[[package]]
-name = "optimistix"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "equinox" },
-    { name = "jax" },
-    { name = "jaxtyping" },
-    { name = "lineax" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5c/0b/3bdc0e698cb0d264e5dca0b5bb171342a950a43fa6e046d8c57189298422/optimistix-0.1.0.tar.gz", hash = "sha256:f05c9104748e87e1dc10a0b4a2be94e427f98c3eab0b1d41ea24a593d76be03d", size = 70164, upload-time = "2026-02-16T13:35:43.991Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/63/53/6a81a6ebb1739f19c32002139719d4ee021a349d5bdbe066910feed327a1/optimistix-0.1.0-py3-none-any.whl", hash = "sha256:c8edda7bf7fe48839c93fcd72bce750c950ed9f7033158303150b7ab395add81", size = 101740, upload-time = "2026-02-16T13:35:42.971Z" },
 ]
 
 [[package]]
@@ -6082,7 +6032,7 @@ wheels = [
 
 [[package]]
 name = "substrax"
-version = "0.1.32"
+version = "0.1.37"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "etils", extra = ["epath"] },
@@ -6094,9 +6044,9 @@ dependencies = [
     { name = "orbax-checkpoint" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/16/f8/8328df8a07d258ed0dd252fb6087054886c51e9d66fb897ac7d2c8846153/substrax-0.1.32.tar.gz", hash = "sha256:4fb742b0b5a5dfdc74c2985978b1effae7ab3d69f22ba80243c8d669e5cbb06c", size = 218271, upload-time = "2026-11-20T23:33:07.366Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/24/4e4c065270b30b5ef40c55141e6b17551cb8c92f162d68bb92ca6cc57012/substrax-0.1.37.tar.gz", hash = "sha256:63599dd1bcb9b2f70f95eb5b59c3d96755e0a648ee56bb31ab49ecc46ab3ddd2", size = 223685, upload-time = "2026-11-25T01:05:59.749Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e9/a7/a00db2deebcbd10632b1cba3bd2144cd758c2006418e966f4e0733e4869a/substrax-0.1.32-py3-none-any.whl", hash = "sha256:ac1d79f027247f916277e622597d660dd36d8d4c8a129a0994403f80936496f5", size = 263186, upload-time = "2026-11-20T23:33:05.79Z" },
+    { url = "https://files.pythonhosted.org/packages/40/cc/4588bdc50af1502f3068e7174c30d44530c02cd8773ea4f33022ea28b49a/substrax-0.1.37-py3-none-any.whl", hash = "sha256:8f8499fe11554ea91f928fb58b7e5f13b1b0e2a150dbb4f062279daa1e643aaa", size = 268782, upload-time = "2026-11-25T01:05:57.756Z" },
 ]
 
 [package.optional-dependencies]
