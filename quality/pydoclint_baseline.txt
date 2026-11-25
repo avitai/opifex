@@ -653,12 +653,6 @@ src/opifex/uncertainty/calibration/temperature.py
     DOC201: Method `TemperatureScaling.predict` does not have a return section in docstring
     DOC502: Method `TemperatureScaling.predict` has a "Raises" section in the docstring, but there are not "raise" statements in the body
 --------------------
-src/opifex/uncertainty/conformal/advanced.py
-    DOC501: Function `jackknife_plus_intervals` has raise statements, but the docstring does not have a "Raises" section
-    DOC503: Function `jackknife_plus_intervals` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
-    DOC501: Function `cv_plus_intervals` has raise statements, but the docstring does not have a "Raises" section
-    DOC503: Function `cv_plus_intervals` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
---------------------
 src/opifex/uncertainty/conformal/fields.py
     DOC201: Method `FieldSplitConformalRegressor.fit` does not have a return section in docstring
 --------------------
