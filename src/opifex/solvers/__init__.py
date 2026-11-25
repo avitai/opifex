@@ -20,6 +20,7 @@ from opifex.solvers.pinn import (
     poisson_residual,
 )
 from opifex.solvers.stiff_ode import (
+    GridKind,
     InitialValueProblem,
     Kvaerno3,
     Rodas4,
@@ -30,6 +31,7 @@ from opifex.solvers.stiff_ode import (
 
 __all__ = [
     "SOLVER_CAPABILITIES",
+    "GridKind",
     "InitialValueProblem",
     "Kvaerno3",
     "LevenbergMarquardt",

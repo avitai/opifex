@@ -4,7 +4,8 @@ Covers three verification pillars across ``Rodas4``, ``Ros34PW2``, and ``Kvaerno
 1. Numerical and theoretical accuracy in ``float32`` and ``float64`` for both primal
    trajectories and reverse-mode gradients (bit-exact steady-state invariance,
    Robertson chemical kinetics mass conservation over ``[0, 1e5]`` in ``float32`` &
-   ``float64``, SciPy ``Radau`` parity, empirical convergence orders via
+   ``float64``, exact matrix-exponential ``expm(A) y0`` trajectories and analytical
+   rate/initial-state gradients, empirical convergence orders via
    ``calibrax.analysis.scaling_fit`` on smooth non-autonomous, Kaps ``eps=1e-3``, and
    Prothero-Robinson ``lam=-1e4`` benchmarks, pyadjoint Taylor remainder rate >= 1.9,
    ``checkpoint=True`` vs ``checkpoint=False`` adjoint parity, and ``float32``-vs-``float64``
@@ -13,11 +14,12 @@ Covers three verification pillars across ``Rodas4``, ``Ros34PW2``, and ``Kvaerno
    agreement, ``expect_compiles`` single-trace caching, ``check_input_gradients``, and
    end-to-end ``@nnx.jit`` + ``nnx.Optimizer`` Neural Stiff UDE training).
 3. Speed, FLOP accounting, and architectural contracts (batched ``vmap`` ensemble
-   simulation timed via ``calibrax.profiling.time_calls`` + ``FlopsCounter``, zero
-   ``equinox``/``diffrax`` imports, and ``opifex.core.solver`` integration).
+   simulation timed via ``calibrax.profiling.time_calls`` + ``FlopsCounter``, declared
+   import isolation, and ``opifex.core.solver`` integration).
 """
 
 import ast
+import math
 import typing
 from pathlib import Path
 
@@ -30,7 +32,6 @@ from calibrax.analysis import scaling_fit
 from calibrax.profiling import FlopsCounter, time_calls
 from flax import nnx
 from jax.test_util import check_grads
-from scipy.integrate import solve_ivp
 from substrax.testing.compiles import expect_compiles
 from substrax.testing.gradients import check_input_gradients, check_parameter_gradients
 from tests.fields.staggered_support import (
@@ -98,11 +99,20 @@ ALL_STIFF_FACTORIES = [
 ]
 
 
-def test_zero_equinox_imports_and_capability_contracts() -> None:
-    """Module must have zero equinox/diffrax imports and register all solver capabilities."""
+def test_stiff_ode_import_isolation_and_capability_contracts() -> None:
+    """Module imports only declared JAX/Flax/Optax/Opifex foundations and registers capabilities."""
     source = Path(stiff_mod.__file__).read_text(encoding="utf-8")
     tree = ast.parse(source)
-    banned = {"equinox", "diffrax", "optimistix", "lineax"}
+    allowed_roots = {
+        "__future__",
+        "collections",
+        "dataclasses",
+        "flax",
+        "jax",
+        "opifex",
+        "optax",
+        "typing",
+    }
     imported_roots: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -110,7 +120,7 @@ def test_zero_equinox_imports_and_capability_contracts() -> None:
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             imported_roots.add(node.module.split(".")[0])
 
-    assert imported_roots.isdisjoint(banned)
+    assert imported_roots <= allowed_roots
     assert "TYPE_CHECKING" not in source
     for obj in (InitialValueProblem, Rodas4, Ros34PW2, Kvaerno3, solve_stiff_ode):
         assert typing.get_type_hints(obj)
@@ -259,11 +269,11 @@ def test_empirical_convergence_orders_via_calibrax_scaling_fit() -> None:
 
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
 @pytest.mark.parametrize("factory", ALL_STIFF_FACTORIES)
-def test_robertson_mass_conservation_and_scipy_radau_parity(
+def test_robertson_mass_conservation_and_nonnegativity(
     dtype: jnp.dtype,
     factory: type,
 ) -> None:
-    """Robertson stiff benchmark conserves mass in float32 & float64 and matches Radau."""
+    """Robertson stiff benchmark conserves exact invariant sum(y_i) == 1 in float32 & float64."""
     enable_x64 = dtype == jnp.float64
     num_steps = 256
     with jax.enable_x64(enable_x64):
@@ -291,18 +301,251 @@ def test_robertson_mass_conservation_and_scipy_radau_parity(
         mass_drift = float(jnp.max(jnp.abs(jnp.sum(traj, axis=-1) - 1.0)))
         assert mass_drift <= 16.0 * num_steps * eps
 
-        if enable_x64:
-            radau = solve_ivp(
-                lambda _t, u: np.asarray(_robertson_rhs(jnp.array(0.0), jnp.asarray(u), rates)),
-                (0.0, 1e5),
-                [1.0, 0.0, 0.0],
-                method="Radau",
-                t_eval=np.asarray(sol.fields["t"]),
-                rtol=1e-12,
-                atol=1e-14,
+
+def _eval_stiff_stability_scalar(factory: type, z_pos: jax.Array) -> jax.Array:
+    """Evaluate rational stability function ``R(-z_pos)`` via the normalized stage recurrence.
+
+    Evaluates the lower-triangular stage recurrence directly rather than the closed form
+    ``1 - z b^T (I + z A)^{-1} 1``, which loses ``O(eps * z)`` precision to cancellation
+    at stiff ``z >> 1`` (Hairer & Wanner 1996, §IV.3 & §IV.7).
+    """
+    if factory in (Rodas4, Ros34PW2):
+        tab = stiff_mod._RODAS4_TABLEAU if factory is Rodas4 else stiff_mod._ROS34PW2_TABLEAU
+        inv_gamma = 1.0 / tab.gamma
+        denom = inv_gamma + z_pos
+        ks: list[jax.Array] = []
+        for j in range(len(tab.b_weights)):
+            a_sum = sum(
+                (tab.a_rows[j][ell] * ks[ell] for ell in range(j)),
+                start=jnp.zeros_like(z_pos),
             )
-            max_err = float(np.max(np.abs(np.asarray(traj) - radau.y.T)))
-            assert max_err < 1.5e-3
+            c_sum = sum(
+                (tab.c_rows[j][ell] * ks[ell] for ell in range(j)),
+                start=jnp.zeros_like(z_pos),
+            )
+            ks.append((-z_pos * (1.0 + a_sum) + c_sum) / denom)
+        return 1.0 + sum(
+            (tab.b_weights[j] * ks[j] for j in range(len(tab.b_weights))),
+            start=jnp.zeros_like(z_pos),
+        )
+
+    gamma = stiff_mod._KV_GAMMA
+    denom = 1.0 + gamma * z_pos
+    fs: list[jax.Array] = [-z_pos]
+    for imp_idx in range(3):
+        partial = 1.0 + sum(
+            (stiff_mod._KV_LOWER[imp_idx][ell] * fs[ell] for ell in range(imp_idx + 1)),
+            start=jnp.zeros_like(z_pos),
+        )
+        fs.append(-z_pos * partial / denom)
+    return 1.0 + sum(
+        (stiff_mod._KV_WEIGHTS[j] * fs[j] for j in range(4)),
+        start=jnp.zeros_like(z_pos),
+    )
+
+
+@pytest.mark.parametrize("factory", ALL_STIFF_FACTORIES)
+def test_robertson_mazzia_magherini_published_endpoint_convergence(factory: type) -> None:
+    """Verify ROBER on [0, 1e11] against Mazzia & Magherini (2008, Table II.10.3).
+
+    Checks status SUCCESS, mass conservation within accumulated LU rounding, componentwise
+    relative error < 1 in all three species (ruling out early-stopped trajectories by ~5e7),
+    and strictly decreasing maximum relative error across N in (256, 512, 1024).
+    """
+    with jax.enable_x64(True):
+        y0 = jnp.array([1.0, 0.0, 0.0], dtype=jnp.float64)
+        rates = jnp.array([0.04, 3e7, 1e4], dtype=jnp.float64)
+        # Mazzia & Magherini, "Test Set for Initial Value Problem Solvers", Release 2.4
+        # (Feb. 2008), Problem ROBER, Table II.10.3 at t = 1e11:
+        y_ref = jnp.array(
+            [0.2083340149701255e-7, 0.8333360770334713e-13, 0.9999999791665050],
+            dtype=jnp.float64,
+        )
+        eps64 = float(jnp.finfo(jnp.float64).eps)
+        max_rel_errs: list[float] = []
+
+        for num_steps in (256, 512, 1024):
+            sol = solve_stiff_ode(
+                _robertson_rhs,
+                y0,
+                t0=0.0,
+                t1=1e11,
+                args=rates,
+                method=factory(
+                    num_steps=num_steps,
+                    grid="geometric",
+                    geometric_ratio=1e16,
+                ),
+            )
+            assert int(sol.status) == int(Status.SUCCESS)
+            yf = sol.fields["y"][-1]
+            assert abs(float(jnp.sum(yf) - 1.0)) <= 16.0 * num_steps * eps64
+            rel_vec = jnp.abs(yf - y_ref) / y_ref
+            assert bool(jnp.all(rel_vec < 1.0))
+            max_rel_errs.append(float(jnp.max(rel_vec)))
+
+        assert max_rel_errs[2] < max_rel_errs[1] < max_rel_errs[0]
+
+
+def _stiff_linear_propagator_oracles(
+    factory: type,
+    hs_actual: jax.Array,
+    grid_ts: jax.Array,
+    dtype: jnp.dtype,
+    num_steps: int,
+) -> dict[str, jax.Array | float]:
+    """Evaluate exact discrete stability propagator and continuous telescoping bounds in float64."""
+    with jax.enable_x64(True):
+        rng = np.random.default_rng(5)
+        q_np, _ = np.linalg.qr(rng.standard_normal((3, 3)))
+        q_64 = jnp.asarray(q_np, dtype=jnp.float64)
+        q_work_64 = q_64.astype(dtype).astype(jnp.float64)
+        rates_64 = jnp.array([1e4, 1e2, 1.0], dtype=jnp.float64)
+        y0_64 = jnp.array([1.2, -0.7, 0.9], dtype=jnp.float64)
+        y0_work_64 = y0_64.astype(dtype).astype(jnp.float64)
+        w_64 = jnp.array([0.6, -1.1, 0.8], dtype=jnp.float64)
+        w_work_64 = w_64.astype(dtype).astype(jnp.float64)
+
+        a_64 = (q_64 * (-rates_64)) @ q_64.T
+        expm_ref = jax.scipy.linalg.expm(a_64) @ y0_64
+        y_exact_64 = q_64 @ (jnp.exp(-rates_64) * (q_64.T @ y0_64))
+        assert float(jnp.linalg.norm(expm_ref - y_exact_64)) < 1e-13
+
+        assert abs(float(_eval_stiff_stability_scalar(factory, jnp.float64(1e12)))) < 1e-10
+        hs_64 = hs_actual.astype(jnp.float64)
+        ts_start_64 = grid_ts[:-1].astype(jnp.float64)
+        r_and_dr = jax.vmap(jax.value_and_grad(lambda z: _eval_stiff_stability_scalar(factory, z)))
+
+        disc_modes: list[float] = []
+        disc_drates: list[float] = []
+        mode_deltas: list[float] = []
+        rate_deltas: list[float] = []
+        eps64 = float(jnp.finfo(jnp.float64).eps)
+
+        for i in range(3):
+            r_val = float(rates_64[i])
+            z_steps = hs_64 * r_val
+            r_vals, dr_dz = r_and_dr(z_steps)
+            assert float(jnp.max(jnp.abs(r_vals))) <= 1.0 + 16.0 * eps64
+            r_np = np.asarray(r_vals, dtype=np.float64)
+            dr_np = np.asarray(dr_dz, dtype=np.float64)
+            h_np = np.asarray(hs_64, dtype=np.float64)
+            prefix = np.concatenate([[1.0], np.cumprod(r_np[:-1])])
+            suffix = np.concatenate([np.cumprod(r_np[:0:-1])[::-1], [1.0]])
+            p_mode = float(np.prod(r_np))
+            dp_dr = float(np.sum(prefix * (dr_np * h_np) * suffix))
+            disc_modes.append(p_mode)
+            disc_drates.append(dp_dr)
+            local_diff = np.abs(r_np - np.exp(-np.asarray(z_steps, dtype=np.float64)))
+            damping = np.exp(-r_val * np.asarray(ts_start_64, dtype=np.float64))
+            delta_i = float(np.sum(damping * local_diff))
+            assert abs(p_mode - math.exp(-r_val)) <= delta_i + num_steps * 4.0 * eps64
+            mode_deltas.append(delta_i)
+            rate_deltas.append(abs(dp_dr - (-math.exp(-r_val))))
+
+        p_vec = jnp.asarray(disc_modes, dtype=jnp.float64)
+        dp_vec = jnp.asarray(disc_drates, dtype=jnp.float64)
+        return {
+            "q_64": q_64,
+            "rates_64": rates_64,
+            "y0_64": y0_64,
+            "w_64": w_64,
+            "y_exact_64": y_exact_64,
+            "grad_y0_exact_64": q_64 @ (jnp.exp(-rates_64) * (q_64.T @ w_64)),
+            "grad_rates_exact_64": -(q_64.T @ w_64) * (q_64.T @ y0_64) * jnp.exp(-rates_64),
+            "y_disc_64": q_work_64 @ (p_vec * (q_work_64.T @ y0_work_64)),
+            "grad_y0_disc_64": q_work_64 @ (p_vec * (q_work_64.T @ w_work_64)),
+            "grad_r_disc_64": (q_work_64.T @ w_work_64) * (q_work_64.T @ y0_work_64) * dp_vec,
+            "y0_norm": float(jnp.linalg.norm(y0_64)),
+            "w_norm": float(jnp.linalg.norm(w_64)),
+            "y_exact_norm": float(jnp.linalg.norm(y_exact_64)),
+            "max_delta": max(mode_deltas),
+            "max_rate_delta": max(rate_deltas),
+        }
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.parametrize("factory", ALL_STIFF_FACTORIES)
+def test_stiff_linear_system_exact_expm_values_and_analytical_gradients(
+    dtype: jnp.dtype,
+    factory: type,
+) -> None:
+    r"""Verify coupled stiff linear IVP ``y' = Q diag(-rates) Q^T y`` against both its
+    exact discrete rational stability propagator and continuous ``expm(A)``.
+    """
+    enable_x64 = dtype == jnp.float64
+    num_steps = 192
+    ratio = 1e5
+
+    with jax.enable_x64(enable_x64):
+        idx_arr = jnp.arange(num_steps + 1, dtype=jnp.int32)
+        grid_ts = jax.vmap(
+            lambda idx: stiff_mod._grid_time_at_index(
+                idx,
+                jnp.asarray(0.0, dtype=dtype),
+                jnp.asarray(1.0, dtype=dtype),
+                num_steps=num_steps,
+                grid="geometric",
+                geometric_ratio=ratio,
+            )
+        )(idx_arr)
+        hs_actual = jnp.diff(grid_ts)
+
+    oracles = _stiff_linear_propagator_oracles(factory, hs_actual, grid_ts, dtype, num_steps)
+    u_round = 0.5 * float(jnp.finfo(dtype).eps)
+    disc_round = num_steps * 64.0 * u_round
+    y0_norm = float(oracles["y0_norm"])
+    w_norm = float(oracles["w_norm"])
+    max_delta = float(oracles["max_delta"])
+    max_rate_delta = float(oracles["max_rate_delta"])
+    assert (max_delta + disc_round) * y0_norm < float(oracles["y_exact_norm"])
+
+    with jax.enable_x64(enable_x64):
+        q_mat = jnp.asarray(oracles["q_64"]).astype(dtype)
+        rates = jnp.asarray(oracles["rates_64"]).astype(dtype)
+        y0 = jnp.asarray(oracles["y0_64"]).astype(dtype)
+        w_vec = jnp.asarray(oracles["w_64"]).astype(dtype)
+        method = factory(num_steps=num_steps, grid="geometric", geometric_ratio=ratio)
+
+        def linear_rhs(_t: jax.Array, y: jax.Array, r_in: jax.Array) -> jax.Array:
+            return (q_mat * (-r_in)) @ (q_mat.T @ y)
+
+        def scalar_obj(y_in: jax.Array, r_in: jax.Array) -> tuple[jax.Array, jax.Array]:
+            sol = solve_stiff_ode(
+                linear_rhs,
+                y_in,
+                t0=jnp.asarray(0.0, dtype=dtype),
+                t1=jnp.asarray(1.0, dtype=dtype),
+                args=r_in,
+                method=method,
+            )
+            yf = sol.fields["y"][-1]
+            return jnp.dot(yf, w_vec), yf
+
+        (_, y_num), (g_y0, g_rates) = jax.value_and_grad(scalar_obj, argnums=(0, 1), has_aux=True)(
+            y0, rates
+        )
+
+    with jax.enable_x64(True):
+        y_num_64 = y_num.astype(jnp.float64)
+        gy0_64 = g_y0.astype(jnp.float64)
+        gr_64 = g_rates.astype(jnp.float64)
+
+        assert float(jnp.linalg.norm(y_num_64 - oracles["y_disc_64"])) <= disc_round * y0_norm
+        assert float(jnp.linalg.norm(gy0_64 - oracles["grad_y0_disc_64"])) <= disc_round * w_norm
+        assert float(jnp.linalg.norm(gr_64 - oracles["grad_r_disc_64"])) <= (
+            disc_round * w_norm * y0_norm
+        )
+        assert float(jnp.linalg.norm(y_num_64 - oracles["y_exact_64"])) <= (
+            (max_delta + disc_round) * y0_norm
+        )
+        assert (
+            float(jnp.linalg.norm(gy0_64 - oracles["grad_y0_exact_64"]))
+            <= (max_delta + disc_round) * w_norm
+        )
+        assert float(jnp.linalg.norm(gr_64 - oracles["grad_rates_exact_64"])) <= (
+            (max_rate_delta + disc_round) * w_norm * y0_norm
+        )
 
 
 @pytest.mark.parametrize("factory", ALL_STIFF_FACTORIES)
@@ -540,3 +783,63 @@ def test_batched_ensemble_profile_report_and_solution_distribution() -> None:
     agg = aggregate_solver_solutions([sol_1, sol_2])
     assert agg.fields["y"].shape == (1, 3)
     assert agg.auxiliary_data["uq"]["variance"]["y"].shape == (1, 3)
+
+
+@pytest.mark.parametrize("factory", ALL_STIFF_FACTORIES)
+def test_three_group_y0_params_teval_central_finite_difference_parity(factory: type) -> None:
+    """3-group (y0, params, t_eval) float64 AD matches central finite differences."""
+    with jax.enable_x64(True):
+
+        def nonauto_stiff_rhs(t: jax.Array, y: jax.Array, params: jax.Array) -> jax.Array:
+            k_fast, k_slow, forcing = params[0], params[1], params[2]
+            return jnp.stack(
+                [
+                    -k_fast * (y[0] - jnp.cos(forcing * t)) + 0.25 * y[1],
+                    -k_slow * y[1] + 0.4 * jnp.sin(forcing * t) * y[0],
+                ]
+            )
+
+        y0 = jnp.array([1.15, -0.65], dtype=jnp.float64)
+        params = jnp.array([40.0, 1.5, 0.9], dtype=jnp.float64)
+        t_bounds = jnp.array([0.05, 1.25], dtype=jnp.float64)
+        weights = jnp.array(
+            [[0.3, -0.2], [0.5, 0.4], [-0.6, 0.8], [0.9, -0.5], [1.1, 0.7]],
+            dtype=jnp.float64,
+        )
+        method = factory(num_steps=64, save=Snapshots(count=4, include_initial=True))
+
+        def loss_three_groups(inputs: tuple[jax.Array, ...]) -> jax.Array:
+            y_in, p_in, tb_in = inputs
+            sol = solve_stiff_ode(
+                nonauto_stiff_rhs,
+                y_in,
+                t0=tb_in[0],
+                t1=tb_in[1],
+                args=p_in,
+                method=method,
+            )
+            return jnp.sum(sol.fields["y"] * weights) + 0.1 * jnp.sum(sol.fields["t"] ** 2)
+
+        rel_gap = gradient_versus_central_difference(
+            loss_three_groups,
+            (y0, params, t_bounds),
+            step=1e-5,
+            seed=41,
+        )
+        assert rel_gap < 1e-8
+
+        ad_y0, ad_p, ad_tb = jax.grad(loss_three_groups)((y0, params, t_bounds))
+        eps = 1e-5
+        fd_tb = jnp.stack(
+            [
+                (
+                    loss_three_groups((y0, params, t_bounds.at[idx].add(eps)))
+                    - loss_three_groups((y0, params, t_bounds.at[idx].add(-eps)))
+                )
+                / (2.0 * eps)
+                for idx in range(t_bounds.shape[0])
+            ]
+        )
+        assert bool(jnp.all(jnp.isfinite(ad_y0)))
+        assert bool(jnp.all(jnp.isfinite(ad_p)))
+        assert float(jnp.max(jnp.abs(ad_tb - fd_tb))) < 1e-7
