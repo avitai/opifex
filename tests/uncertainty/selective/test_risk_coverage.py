@@ -142,6 +142,67 @@ def test_abstention_decision_threshold_stored_in_state() -> None:
     assert decision.threshold == pytest.approx(0.5)
 
 
+def test_abstention_decision_is_jit_and_vmap_compatible() -> None:
+    """``abstention_decision`` traces once under ``jit`` and composes under ``vmap``."""
+    from substrax.testing import TraceCounter
+
+    selective = _import_selective()
+    counter = TraceCounter()
+    jitted = jax.jit(
+        counter.wrap(lambda c: selective.abstention_decision(confidences=c, threshold=0.5))
+    )
+    c1 = jnp.array([0.1, 0.5, 0.8, 0.3], dtype=jnp.float32)
+    with counter.expect(new_traces=1):
+        d1 = jitted(c1)
+    with counter.expect(new_traces=0):
+        d2 = jitted(c1 + 0.1)
+    assert bool(jnp.array_equal(d1.accepted_mask, jnp.array([False, True, True, False])))
+    assert bool(jnp.array_equal(d1.rejected_mask, jnp.array([True, False, False, True])))
+    assert d2.accepted_mask.shape == (4,)
+
+    batch_c = jnp.stack([c1, 1.0 - c1])
+    batched = jax.vmap(lambda c: selective.abstention_decision(confidences=c, threshold=0.5))(
+        batch_c
+    )
+    assert batched.accepted_mask.shape == (2, 4)
+    assert batched.rejected_mask.shape == (2, 4)
+
+    # vmap over traced threshold, eager == jit PyTree structure, zero downstream retraces, 2-D counts
+    thresholds = jnp.array([0.2, 0.5, 0.85], dtype=jnp.float32)
+    by_thresh = jax.vmap(lambda t: selective.abstention_decision(confidences=c1, threshold=t))(
+        thresholds
+    )
+    assert by_thresh.accepted_mask.shape == (3, 4)
+    assert jnp.allclose(by_thresh.threshold, thresholds)
+
+    d_eager = selective.abstention_decision(confidences=c1, threshold=jnp.float32(0.5))
+    d_jit = jax.jit(lambda c, t: selective.abstention_decision(confidences=c, threshold=t))(
+        c1, jnp.float32(0.5)
+    )
+    assert jax.tree.structure(d_eager) == jax.tree.structure(d_jit)
+    assert all(
+        bool(jnp.array_equal(a, b))
+        for a, b in zip(jax.tree.leaves(d_eager), jax.tree.leaves(d_jit), strict=True)
+    )
+
+    consumer_counter = TraceCounter()
+    consume = jax.jit(
+        consumer_counter.wrap(lambda d: jnp.sum(d.accepted_mask.astype(jnp.float32)) + d.threshold)
+    )
+    d_all = selective.abstention_decision(confidences=jnp.ones(4, dtype=jnp.float32), threshold=0.5)
+    with consumer_counter.expect(new_traces=1):
+        _ = consume(d_eager)
+    with consumer_counter.expect(new_traces=0):
+        _ = consume(d_all)
+
+    d_2d = selective.abstention_decision(
+        confidences=jnp.ones((2, 2), dtype=jnp.float32), threshold=0.5
+    )
+    md_2d = dict(d_2d.metadata)
+    assert int(md_2d["num_accepted"]) == 4
+    assert int(md_2d["num_rejected"]) == 0
+
+
 # ---------------------------------------------------------------------------
 # Transform compatibility
 # ---------------------------------------------------------------------------
@@ -168,8 +229,76 @@ def test_public_selective_surface() -> None:
     expected = {
         "risk_coverage_curve",
         "area_under_risk_coverage",
+        "excess_aurc",
         "abstention_decision",
         "AbstentionDecision",
     }
     missing = expected - set(dir(selective))
     assert not missing, f"missing public selective symbols: {sorted(missing)}"
+
+
+def test_risk_coverage_curve_tie_invariance_and_excess_aurc_contracts() -> None:
+    """Tied confidences are permutation-invariant, and ``excess_aurc`` equals ``0.0``
+    at oracle rankings and composes under ``jit``, ``vmap``, ``grad``, and ``float64``."""
+    from substrax.testing import restored_jax_config, TraceCounter
+
+    selective = _import_selective()
+    # Constant confidences -> every point on RC curve equals exact mean(errors)
+    errors = jnp.array([0.0, 1.0, 0.0, 1.0, 1.0, 0.0], dtype=jnp.float32)
+    const_conf = jnp.full_like(errors, 0.5)
+    _, const_risks = selective.risk_coverage_curve(confidences=const_conf, errors=errors)
+    assert jnp.allclose(const_risks, jnp.full_like(const_risks, jnp.mean(errors)), atol=1e-6)
+
+    # Partial ties: permutation invariance across arbitrary sample shuffles
+    tied_conf = jnp.array([0.9, 0.9, 0.5, 0.5, 0.5, 0.1], dtype=jnp.float32)
+    ref_cov, ref_risks = selective.risk_coverage_curve(confidences=tied_conf, errors=errors)
+    rng = np.random.default_rng(7)
+    for _ in range(10):
+        perm = rng.permutation(tied_conf.shape[0])
+        p_cov, p_risks = selective.risk_coverage_curve(
+            confidences=tied_conf[perm], errors=errors[perm]
+        )
+        assert jnp.allclose(p_cov, ref_cov, atol=1e-6)
+        assert jnp.allclose(p_risks, ref_risks, atol=1e-6)
+
+    # Oracle ranking on binary errors gives excess_aurc == 0.0; reversed ranking > 0.0
+    oracle_conf = jnp.array([0.95, 0.2, 0.85, 0.1, 0.3, 0.8], dtype=jnp.float32)
+    e_oracle = float(selective.excess_aurc(confidences=oracle_conf, errors=errors))
+    e_bad = float(selective.excess_aurc(confidences=-oracle_conf, errors=errors))
+    assert e_oracle == pytest.approx(0.0, abs=1e-7)
+    assert e_bad > 0.2
+
+    # Single-trace jit + vmap + grad + float64
+    counter = TraceCounter()
+    jitted_eaurc = jax.jit(
+        counter.wrap(lambda c, e: selective.excess_aurc(confidences=c, errors=e))
+    )
+    with counter.expect(new_traces=1):
+        val1 = jitted_eaurc(tied_conf, errors)
+    with counter.expect(new_traces=0):
+        _ = jitted_eaurc(oracle_conf, errors)
+    assert float(val1) >= 0.0
+
+    batched = jax.vmap(lambda c: selective.excess_aurc(confidences=c, errors=errors))(
+        jnp.stack([oracle_conf, -oracle_conf])
+    )
+    assert batched.shape == (2,)
+    assert float(batched[0]) == pytest.approx(0.0, abs=1e-7)
+    assert float(batched[1]) > 0.2
+
+    grad_err = jax.grad(lambda e: selective.excess_aurc(confidences=tied_conf, errors=e))(
+        jnp.array([0.1, 0.8, 0.2, 0.9, 0.7, 0.3], dtype=jnp.float32)
+    )
+    assert bool(jnp.all(jnp.isfinite(grad_err)))
+
+    with restored_jax_config():
+        jax.config.update("jax_enable_x64", True)
+        e64 = selective.excess_aurc(
+            confidences=oracle_conf.astype(jnp.float64),
+            errors=errors.astype(jnp.float64),
+        )
+        assert e64.dtype == jnp.float64
+        assert float(e64) == pytest.approx(0.0, abs=1e-15)
+
+    with pytest.raises(ValueError, match=r"matching shape"):
+        selective.risk_coverage_curve(confidences=jnp.zeros((3,)), errors=jnp.zeros((4,)))
