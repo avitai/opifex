@@ -9,9 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `GroupedConformalizedQuantileRegressor` and `GroupedCQRState` in `opifex.uncertainty.conformal` for Mondrian (group-conditional) Conformalized Quantile Regression (Romano, Patterson & Candès 2019; Vovk et al. 2005), returning `(-inf, +inf)` intervals for underfilled calibration groups (`< minimum_calibration_size`) and unseen test groups.
 - `Status.INITIAL_FAILURE` (`10`) in `opifex.core.solver.status` for violated traced solver preconditions (such as non-monotone save times `ts` under `jax.jit`).
 - Checkpointed bounded while-loop primitive (`bounded_while_loop` and `custom_vmap` `unvmap_any`) in `opifex.core.solver` for early-exiting batched adaptive loops with forward- and reverse-mode automatic differentiation.
 - Implicit-differentiation helpers (`TangentSolverFn`, `dense_tangent_solve`, `lsmr_tangent_solve`, stagnation-aware `gmres_tangent_solve`, `infer_inexact_dtype`, `cast_inexact_pytree`, and `guard_unconverged_tangents`) in `opifex.core.solver`: `dense_tangent_solve` materializes and LU-factors the Jacobian once per operator across batched right-hand sides with an `O(n^2)` alternating triangular-solve condition gate and normwise backward-error contract; `lsmr_tangent_solve` runs matrix-free Fong & Saunders (2011) Golub-Kahan bidiagonalization without forming `A^T A`; and `gmres_tangent_solve` tracks consecutive non-decreasing Arnoldi cycles (`stagnation_iters=20`), all returning `NaN` on singular or stagnated systems.
+
+### Fixed
+
+- `ipcw_conformal_quantile` normalizes finite weights by their maximum before prefix-sum tail evaluation (Tibshirani et al. 2019, Eq. 5), selects the exact `conformal_quantile_rank(n, alpha)` order statistic under equal positive weights in `float32` and `float64`, propagates `NaN` inputs, and returns `+inf` when calibration mass cannot reach `1 - alpha`.
 
 ### Changed
 
@@ -23,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `_DeterministicLinear.__call__` in `opifex.neural.bayesian.probabilistic_pinns` drops unread `deterministic` and `rngs` flags (dispatching via `_apply_pinn_layer`) and `BayesianLinear` and `BayesianSpectralConvolution` drop redundant `substrax-allow` comments.
 - Raised minimum dependency floors to `jax>=0.11.1`, `flax>=0.12.10`, `calibrax[publication]>=0.1.23`, and `substrax>=0.1.37`. Under `calibrax>=0.1.23`, `CompilationProfiler` times tracing, lowering, and XLA compilation (`lower(...).compile()`) only rather than the first program execution, so `avg_compilation_time_ms` and `max_compilation_time_ms` in `opifex.benchmarking.profiling.profiling_harness` read lower wherever a first run was slow.
 - **Breaking:** Moved `lsmr` from `opifex.uncertainty.linalg` to `opifex.core.solver.lsmr` and updated `opifex.fields.pressure` and `opifex.solvers.nonlinear_least_squares` to import it from `opifex.core.solver`.
+- **Breaking:** `CensoredSplitConformalRegressor` delegates left-continuous reverse Kaplan-Meier censoring survival `P(C >= t)` to `calibrax.metrics.functional.reverse_kaplan_meier(..., left_continuous=True)` over the full risk set `observed_times >= u_k` (Uno et al. 2011; Candès, Lei & Ren 2023), preserves `G_hat(c_0)` at the cutoff as `default_test_survival` under general right censoring, validates `censoring_survival` `(0, 1]` bounds and 1-D shapes, and requires test `censoring_survival` in `predict()` whenever `fit()` calibrated against explicit `censoring_survival`.
+- **Breaking:** All conformal quantile, jackknife+, CV+, Mondrian, and censored entry points validate static `alpha` via `calibrax.statistics` (raising `ValueError` outside `(0, 1)` and `TypeError` on `bfloat16` or traced `alpha`).
 
 ### Removed
 
