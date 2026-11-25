@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `optimistix_minimise` in `opifex.optimization.l2o` (replaced by `bfgs_minimise`).
 - `opifex.uncertainty.linalg.lstsq` (moved to `opifex.core.solver.lsmr`).
+- Runtime `diffrax` and `optimistix` package dependencies in `pyproject.toml`.
 
 ## [0.2.14] - 2026-11-21
 

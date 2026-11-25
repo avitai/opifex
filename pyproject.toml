@@ -22,16 +22,11 @@ dependencies = [
   # 0.11.1, so importing flax.nnx fails with 0.12.9 on jax>=0.11.2; 0.12.10 is the first
   # release that picks the primitive name dynamically for the installed jax.
   "flax>=0.12.10",
-  "diffrax>=0.4.0",
-  # differential equations
   # 0.2.8 removed optax/contrib/_complex_valued.py's module-level
   # jax.config.update("jax_pmap_shmap_merge", False). jax removed that config option, so
   # any optax below 0.2.8 raises AttributeError while flax.nnx imports optax, which takes
   # out collection for the entire suite rather than one test.
   "optax>=0.2.8",
-  # optimization - upgraded for Flax 0.12.0 compatibility
-  "optimistix>=0.0.10",
-  # root finding, minimisation, fixed points, and least squares.
   "blackjax>=1.2.5",
   # MCMC and sampling
   "numpy>=1.24.0",

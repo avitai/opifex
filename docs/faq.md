@@ -33,9 +33,9 @@ uv pip install -e .
 **Minimum Requirements:**
 
 - Python 3.12+
-- JAX 0.8.0+
-- NumPy 1.24+
-- Flax 0.12.0+
+- JAX 0.11.1+
+- NumPy 1.24.0+
+- Flax 0.12.10+
 
 **Recommended:**
 
@@ -313,7 +313,7 @@ Key considerations:
 - Per-parameter learned optimisers (`MLPLearnedOptimizer`) meta-trained with Persistent
   Evolution Strategies (`meta_train`), orchestrated by `L2OEngine`
 - Objective-carrying `Task` / `TaskFamily` (`QuadraticTaskFamily`, `MLPTaskFamily`)
-- Honest benchmarking against tuned `optimistix` / optax baselines (`benchmark_on_held_out_tasks`)
+- Honest benchmarking against tuned pure-JAX BFGS / optax baselines (`benchmark_on_held_out_tasks`)
 
 **Second-Order Methods:**
 
