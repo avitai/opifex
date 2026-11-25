@@ -25,6 +25,7 @@ Implements:
 
 import jax
 import jax.numpy as jnp
+import optax
 from flax import nnx
 from jax.typing import DTypeLike
 from substrax.rng import key_from
@@ -704,7 +705,7 @@ def local_penalization(
     from jax.scipy.special import erfc
 
     diff = candidates[:, None, :] - pending_points[None, :, :]
-    distances = jnp.linalg.norm(diff, axis=-1)
+    distances = optax.safe_norm(diff, min_norm=jnp.finfo(diff.dtype).tiny, axis=-1)
     arg = -(lipschitz_constant * distances - max_value) / jnp.sqrt(2.0)
     factors = 0.5 * erfc(arg)
     penalty = jnp.prod(factors, axis=1)

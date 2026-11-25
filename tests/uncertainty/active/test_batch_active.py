@@ -1064,3 +1064,99 @@ class TestQEHVITransformsAgree:
                 f"objective {axis}: autodiff {float(gradient[0, axis])!r} against central "
                 f"difference {central!r}, budget {budget!r}"
             )
+
+
+class TestLocalPenalizationSafeNorm:
+    """Gradient stability of ``local_penalization`` at coinciding candidate/pending points."""
+
+    def test_gradient_at_coinciding_pending_point_is_zero_not_nan(self) -> None:
+        """``optax.safe_norm`` yields finite ``0.0`` gradient when ``candidate == pending_point``."""
+        from substrax.testing import restored_jax_config, TraceCounter
+
+        from opifex.uncertainty.active.batch_active import local_penalization
+
+        pending_single = jnp.array([[0.5, -0.25]], dtype=jnp.float32)
+        pending = jnp.array([[0.5, -0.25], [1.0, 2.0]], dtype=jnp.float32)
+        candidates = jnp.array([[0.5, -0.25], [0.8, 0.1]], dtype=jnp.float32)
+        base_scores = jnp.array([1.2, 0.9], dtype=jnp.float32)
+
+        grads_single = jax.grad(
+            lambda cands: jnp.sum(
+                local_penalization(
+                    candidates=cands,
+                    pending_points=pending_single,
+                    base_scores=base_scores,
+                    lipschitz_constant=2.0,
+                    max_value=1.5,
+                )
+            )
+        )(candidates)
+        assert bool(jnp.all(jnp.isfinite(grads_single)))
+        assert jnp.allclose(grads_single[0], jnp.zeros_like(grads_single[0]), atol=1e-7)
+
+        def objective(cands: jax.Array) -> jax.Array:
+            return jnp.sum(
+                local_penalization(
+                    candidates=cands,
+                    pending_points=pending,
+                    base_scores=base_scores,
+                    lipschitz_constant=2.0,
+                    max_value=1.5,
+                )
+            )
+
+        counter = TraceCounter()
+        jitted_grad = jax.jit(counter.wrap(jax.grad(objective)))
+        with counter.expect(new_traces=1):
+            grads = jitted_grad(candidates)
+        with counter.expect(new_traces=0):
+            _ = jitted_grad(candidates + 0.01)
+
+        assert bool(jnp.all(jnp.isfinite(grads)))
+        # Product rule: at x_0 == p_0, grad_x0(pi(x_0, p_0) * pi(x_0, p_1))
+        # equals pi(p_0, p_0) * grad_x0(pi(x_0, p_1)) without NaN from p_0.
+        pi_00 = local_penalization(
+            candidates=candidates[:1],
+            pending_points=pending[:1],
+            base_scores=jnp.ones((1,), dtype=jnp.float32),
+            lipschitz_constant=2.0,
+            max_value=1.5,
+        )[0]
+        grad_from_p1 = jax.grad(
+            lambda cands: jnp.sum(
+                local_penalization(
+                    candidates=cands,
+                    pending_points=pending[1:],
+                    base_scores=base_scores,
+                    lipschitz_constant=2.0,
+                    max_value=1.5,
+                )
+            )
+        )(candidates)[0]
+        assert jnp.allclose(grads[0], pi_00 * grad_from_p1, rtol=1e-6, atol=1e-7)
+
+        # Central finite-difference check in float64 away from coincidence
+        with restored_jax_config():
+            jax.config.update("jax_enable_x64", True)
+            c64 = jnp.array([[0.2, 0.4], [0.8, 0.1]], dtype=jnp.float64)
+            p64 = pending.astype(jnp.float64)
+            s64 = base_scores.astype(jnp.float64)
+
+            def obj64(x: jax.Array) -> jax.Array:
+                return jnp.sum(
+                    local_penalization(
+                        candidates=x,
+                        pending_points=p64,
+                        base_scores=s64,
+                        lipschitz_constant=2.0,
+                        max_value=1.5,
+                    )
+                )
+
+            g64 = jax.grad(obj64)(c64)
+            eps = 1e-6
+            for i in range(2):
+                for j in range(2):
+                    delta = jnp.zeros_like(c64).at[i, j].set(eps)
+                    fd = (float(obj64(c64 + delta)) - float(obj64(c64 - delta))) / (2.0 * eps)
+                    assert float(g64[i, j]) == pytest.approx(fd, rel=1e-6, abs=1e-9)
