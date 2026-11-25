@@ -16,10 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Status.INITIAL_FAILURE` (`10`) in `opifex.core.solver.status` for violated traced solver preconditions (such as non-monotone save times `ts` under `jax.jit`).
 - Checkpointed bounded while-loop primitive (`bounded_while_loop` and `custom_vmap` `unvmap_any`) in `opifex.core.solver` for early-exiting batched adaptive loops with forward- and reverse-mode automatic differentiation.
 - Implicit-differentiation helpers (`TangentSolverFn`, `dense_tangent_solve`, `lsmr_tangent_solve`, stagnation-aware `gmres_tangent_solve`, `infer_inexact_dtype`, `cast_inexact_pytree`, and `guard_unconverged_tangents`) in `opifex.core.solver`: `dense_tangent_solve` materializes and LU-factors the Jacobian once per operator across batched right-hand sides with an `O(n^2)` alternating triangular-solve condition gate and normwise backward-error contract; `lsmr_tangent_solve` runs matrix-free Fong & Saunders (2011) Golub-Kahan bidiagonalization without forming `A^T A`; and `gmres_tangent_solve` tracks consecutive non-decreasing Arnoldi cycles (`stagnation_iters=20`), all returning `NaN` on singular or stagnated systems.
+- Public `kernel_diagonal` helper in `opifex.uncertainty.gp` for `O(m)` marginal prior variance evaluation across `ExactGP`, `SVGP`, `LaplaceGP`, `StochasticSVGP`, `LinearMultiFidelityGP`, and `NonLinearMultiFidelityGP` (replacing `output_scale**2` prior variance assumptions on composite or multi-output kernels).
 
 ### Fixed
 
 - `ipcw_conformal_quantile` normalizes finite weights by their maximum before prefix-sum tail evaluation (Tibshirani et al. 2019, Eq. 5), selects the exact `conformal_quantile_rank(n, alpha)` order statistic under equal positive weights in `float32` and `float64`, propagates `NaN` inputs, and returns `+inf` when calibration mass cannot reach `1 - alpha`.
+- `fit_exact_gp`, `fit_heteroscedastic_exact_gp`, and `nonpositive_message` preserve input floating dtypes and delegate concrete scalar extraction to `calibrax.core.eager_scalar_float`.
 
 ### Changed
 

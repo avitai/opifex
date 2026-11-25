@@ -191,3 +191,41 @@ def test_heteroscedastic_predict_returns_predictive_distribution() -> None:
     assert isinstance(predictive, PredictiveDistribution)
     assert predictive.variance is not None
     assert predictive.mean.shape == (2,)
+
+
+def test_heteroscedastic_fit_avoids_private_tracer_check_and_supports_vmap_grad() -> None:
+    """``fit_heteroscedastic_exact_gp`` uses public JAX error guards and composes under vmap/grad."""
+    import inspect
+
+    import opifex.uncertainty.gp.exact as exact_mod
+
+    src = inspect.getsource(exact_mod)
+    assert "jax.core.Tracer" not in src
+
+    x_train = jnp.linspace(-1.0, 1.0, 5, dtype=jnp.float32).reshape(-1, 1)
+    y_train = jnp.sin(x_train.squeeze(-1))
+    x_test = jnp.array([[0.0], [0.5]], dtype=jnp.float32)
+
+    def loss_fn(noise_vec: jax.Array) -> jax.Array:
+        st = fit_heteroscedastic_exact_gp(
+            x_train=x_train,
+            y_train=y_train,
+            lengthscale=0.5,
+            output_scale=1.0,
+            noise_std=noise_vec,
+        )
+        pd = predict_exact_gp(state=st, x_test=x_test)
+        assert pd.variance is not None
+        return jnp.sum(pd.mean**2 + pd.variance)
+
+    noise_batch = jnp.stack(
+        [
+            jnp.full((5,), 0.05, dtype=jnp.float32),
+            jnp.linspace(0.05, 0.25, 5, dtype=jnp.float32),
+        ]
+    )
+    vals = jax.vmap(loss_fn)(noise_batch)
+    assert vals.shape == (2,)
+    assert bool(jnp.all(jnp.isfinite(vals)))
+    grad_noise = jax.grad(loss_fn)(noise_batch[1])
+    assert bool(jnp.all(jnp.isfinite(grad_noise)))

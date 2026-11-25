@@ -28,9 +28,8 @@ Implementation notes — **jittability**
 * ``predict_laplace_latent_moments`` uses ``cho_solve`` /
   ``solve_triangular`` on the ``B``-Cholesky and avoids any data-
   dependent control flow.
-* **No equinox dependency**: the fitted state is a plain
-  ``@dataclass(frozen=True, slots=True, kw_only=True)`` carrying
-  ``jax.Array`` leaves.
+* **Pure-JAX PyTree state**: the fitted state is a frozen ``flax.struct.dataclass``
+  carrying traceable ``jax.Array`` leaves and static kernel metadata.
 
 References:
 ----------
@@ -48,7 +47,7 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 
-from opifex.uncertainty.gp.exact import rbf_kernel
+from opifex.uncertainty.gp.exact import kernel_diagonal, rbf_kernel
 
 
 LikelihoodComponentsFn = Callable[
@@ -239,7 +238,13 @@ def predict_laplace_latent_moments(
     v = jax.scipy.linalg.solve_triangular(
         state.cholesky_b, state.sqrt_w[:, None] * k_cross, lower=True
     )
-    latent_variance = state.output_scale**2 - jnp.sum(v * v, axis=0)
+    k_test_diag = kernel_diagonal(
+        state.kernel_fn,
+        x_test,
+        lengthscale=state.lengthscale,
+        output_scale=state.output_scale,
+    )
+    latent_variance = k_test_diag - jnp.sum(v * v, axis=0)
     latent_variance = jnp.clip(latent_variance, min=1e-12)
     return latent_mean, latent_variance
 

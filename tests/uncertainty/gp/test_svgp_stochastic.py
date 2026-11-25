@@ -15,7 +15,7 @@ Efficiency properties of the opifex implementation:
 * **Closed-form vectorised batch predictive moments** — a single
   ``solve_triangular(L_z, K_zb)`` then per-batch matmuls; no per-
   point ``vmap`` over a function that re-references K_zz / L_z.
-* Pure-JAX, no equinox dependency.
+* Pure-JAX ``flax.struct.dataclass`` variational state.
 
 References
 ----------
@@ -293,6 +293,43 @@ def test_predict_stochastic_svgp_is_jit_compatible() -> None:
     out = predict(x_test)
     assert out.shape == (6,)
     assert jnp.all(jnp.isfinite(out))
+
+
+def test_stochastic_svgp_uses_kernel_diagonal_for_sum_and_icm_kernels() -> None:
+    """Far from inducing points, ``predict_stochastic_svgp`` recovers ``diag(K(x*, x*))``
+    rather than assuming ``output_scale**2`` on ``kernel_sum`` or ``multi_output_icm_kernel``."""
+    import pytest
+
+    from opifex.uncertainty.gp import kernel_sum, matern32_kernel, multi_output_icm_kernel
+
+    x_ind = jnp.array([[-1.0], [0.0], [1.0]], dtype=jnp.float32)
+    x_far = jnp.array([[100.0]], dtype=jnp.float32)
+    sum_state = init_stochastic_svgp_state(
+        x_inducing=x_ind,
+        lengthscale=0.3,
+        output_scale=1.0,
+        log_likelihood_fn=bernoulli_log_likelihood,
+        kernel_fn=kernel_sum(kernel_fns=(rbf_kernel, matern32_kernel)),
+    )
+    pred_sum = predict_stochastic_svgp(state=sum_state, x_test=x_far)
+    assert pred_sum.variance is not None
+    assert float(pred_sum.variance[0]) == pytest.approx(2.0, rel=1e-5)
+
+    icm_b = jnp.array([[1.0, 0.0], [0.0, 0.25]], dtype=jnp.float32)
+    icm_k = multi_output_icm_kernel(base_kernel_fn=rbf_kernel, coregionalisation=icm_b)
+    icm_state = init_stochastic_svgp_state(
+        x_inducing=jnp.array([[-1.0, 0.0], [0.0, 1.0], [1.0, 0.0]], dtype=jnp.float32),
+        lengthscale=0.3,
+        output_scale=1.0,
+        log_likelihood_fn=bernoulli_log_likelihood,
+        kernel_fn=icm_k,
+    )
+    pred_icm = predict_stochastic_svgp(
+        state=icm_state,
+        x_test=jnp.array([[100.0, 1.0]], dtype=jnp.float32),
+    )
+    assert pred_icm.variance is not None
+    assert float(pred_icm.variance[0]) == pytest.approx(0.25, rel=1e-5)
 
 
 # -----------------------------------------------------------------------------

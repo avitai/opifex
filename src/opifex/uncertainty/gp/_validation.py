@@ -28,6 +28,7 @@ device-side failure with no Python traceback.
 from __future__ import annotations
 
 import jax
+from calibrax.core import eager_scalar_float
 
 
 #: Scale parameters accept a traced scalar as well as a Python float, because a caller
@@ -41,7 +42,7 @@ def nonpositive_message(name: str, value: PositiveScalar) -> str | None:
     Returns the message rather than raising so the ``raise`` stays at the call site. That
     keeps each public function's documented ``Raises:`` section truthful about its own body,
     which a helper that raised on its behalf would not --- and it keeps the trace-aware part
-    in one place.
+    in one place via :func:`calibrax.core.eager_scalar_float`.
 
     Args:
         name: Parameter name, used in the message.
@@ -53,8 +54,15 @@ def nonpositive_message(name: str, value: PositiveScalar) -> str | None:
         trace time, and refusing to compile would make the parameter impossible to optimise
         under ``jit`` --- which is what the LOOCV objective exists for.
     """
-    try:
-        nonpositive = bool(value <= 0.0)
-    except jax.errors.TracerBoolConversionError:
-        return None
+    eager = eager_scalar_float(value)
+    if eager is not None:
+        nonpositive = eager <= 0.0
+    else:
+        # Eager jax.grad wraps a concrete primal in a JVPTracer: float(value) refuses to drop
+        # the tangent, whereas `value <= 0.0` has float0 tangent so bool() reads the concrete
+        # primal; under jit/vmap bool() raises TracerBoolConversionError and returns None.
+        try:
+            nonpositive = bool(value <= 0.0)
+        except jax.errors.TracerBoolConversionError:
+            return None
     return f"{name} must be strictly positive; got {value!r}." if nonpositive else None
