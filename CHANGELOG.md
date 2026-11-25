@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Status.INITIAL_FAILURE` (`10`) in `opifex.core.solver.status` for violated traced solver preconditions (such as non-monotone save times `ts` under `jax.jit`).
+
 ### Changed
 
 - `.python-version` pins 3.12, the oldest Python the package supports, so `./setup.sh` and
