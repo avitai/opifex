@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Status.INITIAL_FAILURE` (`10`) in `opifex.core.solver.status` for violated traced solver preconditions (such as non-monotone save times `ts` under `jax.jit`).
 - Checkpointed bounded while-loop primitive (`bounded_while_loop` and `custom_vmap` `unvmap_any`) in `opifex.core.solver` for early-exiting batched adaptive loops with forward- and reverse-mode automatic differentiation.
+- Implicit-differentiation helpers (`TangentSolverFn`, `dense_tangent_solve`, `lsmr_tangent_solve`, stagnation-aware `gmres_tangent_solve`, `infer_inexact_dtype`, `cast_inexact_pytree`, and `guard_unconverged_tangents`) in `opifex.core.solver`: `dense_tangent_solve` materializes and LU-factors the Jacobian once per operator across batched right-hand sides with an `O(n^2)` alternating triangular-solve condition gate and normwise backward-error contract; `lsmr_tangent_solve` runs matrix-free Fong & Saunders (2011) Golub-Kahan bidiagonalization without forming `A^T A`; and `gmres_tangent_solve` tracks consecutive non-decreasing Arnoldi cycles (`stagnation_iters=20`), all returning `NaN` on singular or stagnated systems.
 
 ### Changed
 

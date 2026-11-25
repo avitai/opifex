@@ -1,4 +1,4 @@
-"""Tests for matrix-free least-squares (LSMR).
+"""Tests for matrix-free least-squares (LSMR) in ``opifex.core.solver``.
 
 References
 ----------
@@ -6,10 +6,6 @@ References
   problems*, SIAM J. Sci. Comput.
 * Roy, Hauberg, Krämer arXiv:2510.19634 — custom gradients for matrix-free
   least-squares solvers.
-
-opifex's implementation provides the forward pass via Golub-Kahan
-bidiagonalisation + small least-squares solve; differentiable VJP
-support is a separate task (custom_vjp is non-trivial here).
 """
 
 from __future__ import annotations
@@ -164,9 +160,6 @@ class TestAgainstTheReferenceImplementation:
         return left * scale, jax.random.normal(jax.random.key(1), (rows,), dtype)
 
     def test_a_rank_deficient_system_gets_the_minimum_norm_solution(self) -> None:
-        # The property the pressure projection depends on: where the operator is singular,
-        # LSMR picks the solution of least norm rather than any least-squares solution, so
-        # the iterate never wanders into the null space.
         from scipy.sparse.linalg import lsmr as scipy_lsmr
 
         matrix, _ = self._system(12, 4)
@@ -207,8 +200,6 @@ class TestAgainstTheReferenceImplementation:
 
         with jax.enable_x64(True):
             matrix, rhs = self._system(60, 10, condition=1e4, dtype=jnp.float64)
-            # SciPy stops at min(rows, columns) steps by default, which this system
-            # outruns: it needs 22.
             reference = scipy_lsmr(
                 np.asarray(matrix), np.asarray(rhs), atol=1e-14, btol=1e-14, maxiter=200
             )[0]
@@ -242,13 +233,7 @@ class TestAgainstTheReferenceImplementation:
 
 
 class TestAnExhaustedKrylovSpace:
-    """Steps taken after the bidiagonalisation has nothing left to build on.
-
-    The recurrence divides by the lengths the rotations leave on the diagonal, and those
-    reach zero once the Krylov space is exhausted -- immediately for a zero right-hand side,
-    and after ``rank`` steps for any system solved exactly. The iterate is converged there,
-    so the remaining steps must add nothing rather than divide zero by zero.
-    """
+    """Steps taken after the bidiagonalisation has nothing left to build on."""
 
     @staticmethod
     def _system(rows: int, columns: int) -> jax.Array:
@@ -263,12 +248,6 @@ class TestAnExhaustedKrylovSpace:
         np.testing.assert_array_equal(solution, jnp.zeros(4))
 
     def test_steps_past_an_exact_solution_leave_it_where_it_is(self) -> None:
-        # Rounding leaves the last rotations a residue to work off, so the space exhausts
-        # well after `rank` and at no fixed step: across six seeds and three sizes the
-        # iterate settled anywhere between 10 and 35 steps on systems of 4 to 8 columns.
-        # Both counts below are past that range, which is what makes the comparison a
-        # statement about exhaustion rather than about where this system happened to reach
-        # it.
         matrix = self._system(6, 6)
         truth = jnp.arange(6, dtype=matrix.dtype)
         arguments = _matrix_free(matrix)
