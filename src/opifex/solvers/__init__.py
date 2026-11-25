@@ -9,7 +9,9 @@ from opifex.solvers.neural_operator import NeuralOperatorSolver
 from opifex.solvers.nonlinear_least_squares import (
     levenberg_marquardt,
     LevenbergMarquardt,
+    LinearSolverKind,
     NonlinearLeastSquaresProblem,
+    ScalingKind,
 )
 from opifex.solvers.pinn import (
     heat_residual,
@@ -42,6 +44,7 @@ __all__ = [
     "InitialValueProblem",
     "Kvaerno3",
     "LevenbergMarquardt",
+    "LinearSolverKind",
     "NeuralODE",
     "NeuralOperatorSolver",
     "NonlinearLeastSquaresProblem",
@@ -50,6 +53,7 @@ __all__ = [
     "PINNSolver",
     "Rodas4",
     "Ros34PW2",
+    "ScalingKind",
     "UDEConfig",
     "UDESolver",
     "additive_hybrid",

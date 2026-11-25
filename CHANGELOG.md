@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `fit_exact_gp`, `fit_heteroscedastic_exact_gp`, and `nonpositive_message` preserve input floating dtypes and delegate concrete scalar extraction to `calibrax.core.eager_scalar_float`.
 - `predict_linear_multi_fidelity_gp` validates `target_level` bounds with `ValueError` and clamps posterior variance at `0.0` instead of `1e-6`.
 - `local_penalization` in `opifex.uncertainty.active` uses `optax.safe_norm` so gradients at coinciding pending points are finite `0.0`.
+- `LevenbergMarquardt` in `opifex.solvers.nonlinear_least_squares` routes implicit differentiation through `opifex.core.solver` (`tangent_solver`, returning `NaN` on singular Hessians consistently with `BFGSSolver`) and runs an early-exiting `jax.lax.while_loop` under `implicit_diff=True` and `bounded_while_loop` under `implicit_diff=False`.
 - `solve_stiff_ode` in `opifex.solvers.stiff_ode` deduplicates working floating-dtype inference and pytree casting through `opifex.core.solver`.
 
 ### Changed

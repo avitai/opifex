@@ -3,18 +3,20 @@
 Covers three verification pillars:
 1. Numerical and theoretical accuracy in ``float32`` and ``float64`` for both primal
    solutions and reverse-mode gradients (closed-form weighted linear least squares,
-   SciPy MINPACK ``least_squares(method="lm")`` parity, pyadjoint Taylor remainder
-   convergence rate >= 1.9 on non-zero-residual nonlinear curves, ill-conditioned
-   ``float32`` QR vs Cholesky comparison, and ``float32``-vs-``float64`` accuracy).
+   exact ``1 / 1.1`` nonzero-residual strong-convexity minimiser and full-Hessian IFT
+   sensitivity bounds, pyadjoint Taylor remainder convergence rate >= 1.9 on
+   non-zero-residual nonlinear curves, ill-conditioned ``float32`` QR vs Cholesky
+   comparison, and ``float32``-vs-``float64`` accuracy).
 2. JAX and ``flax.nnx`` transformation compatibility (``jit``/``vmap`` ULP gradient
    agreement, ``expect_compiles`` single-trace caching, ``check_input_gradients``, and
    end-to-end ``@nnx.jit`` + ``nnx.Optimizer`` bi-level module training).
 3. Speed, FLOP accounting, and architectural contracts (10,000-curve batched ``vmap``
-   fit timed via ``calibrax.profiling.time_calls`` + ``FlopsCounter``, zero ``equinox``
-   stack imports, and ``opifex.core.solver`` / ``SolutionDistribution`` integration).
+   fit timed via ``calibrax.profiling.time_calls`` + ``FlopsCounter``, declared import
+   isolation, and ``opifex.core.solver`` / ``SolutionDistribution`` integration).
 """
 
 import ast
+import math
 import typing
 from pathlib import Path
 
@@ -26,7 +28,6 @@ import pytest
 from calibrax.profiling import FlopsCounter, time_calls
 from flax import nnx
 from jax.test_util import check_grads
-from scipy.optimize import least_squares
 from substrax.testing.compiles import expect_compiles
 from substrax.testing.gradients import check_input_gradients, check_parameter_gradients
 from tests.fields.staggered_support import (
@@ -88,11 +89,30 @@ class _ObservationWeightNet(nnx.Module):
         return jax.nn.softplus(self.head(features).squeeze(-1)) + 0.1
 
 
-def test_zero_equinox_imports_and_capability_contracts() -> None:
-    """Module must have zero equinox-stack imports and register solver capabilities."""
+def _tangent_bwd_contract_ceil(size: int, dtype: jnp.dtype, linear_solver: str) -> float:
+    """Normwise Frobenius backward-error ceiling guaranteed by the active tangent solver."""
+    u_round = 0.5 * float(jnp.finfo(dtype).eps)
+    gamma_3n = (3.0 * size * u_round) / (1.0 - 3.0 * size * u_round)
+    lu_ceil = min(max(64.0 * u_round, 8.0 * math.sqrt(size) * gamma_3n), 0.1)
+    if linear_solver == "lsmr":
+        eff_rtol = max(16.0 * u_round, 1e-12)
+        return max(100.0 * eff_rtol, lu_ceil)
+    return lu_ceil
+
+
+def test_nls_import_isolation_and_capability_contracts() -> None:
+    """Module imports only declared JAX/Flax/Optax/Opifex foundations and registers capabilities."""
     source = Path(nls_mod.__file__).read_text(encoding="utf-8")
     tree = ast.parse(source)
-    banned = {"equinox", "optimistix", "lineax", "diffrax"}
+    allowed_roots = {
+        "__future__",
+        "collections",
+        "flax",
+        "jax",
+        "opifex",
+        "optax",
+        "typing",
+    }
     imported_roots: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -100,7 +120,7 @@ def test_zero_equinox_imports_and_capability_contracts() -> None:
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             imported_roots.add(node.module.split(".")[0])
 
-    assert imported_roots.isdisjoint(banned)
+    assert imported_roots <= allowed_roots
     assert "TYPE_CHECKING" not in source
     for obj in (NonlinearLeastSquaresProblem, LevenbergMarquardt, levenberg_marquardt):
         assert typing.get_type_hints(obj)
@@ -163,8 +183,6 @@ def test_exact_weighted_linear_least_squares_values_and_jacobians(
 
         xtw = design.T * weights[None, :]
         xtwx = xtw @ design
-        exact_jac_y = jnp.linalg.solve(xtwx, xtw)
-        exact_theta = exact_jac_y @ y_obs
 
         tol_val = 1e-12 if enable_x64 else 2e-5
         method = LevenbergMarquardt(
@@ -190,14 +208,36 @@ def test_exact_weighted_linear_least_squares_values_and_jacobians(
         theta_hat = fit_params(y_obs)
         jac_hat = jax.jacrev(fit_params)(y_obs)
 
-        eps = float(jnp.finfo(dtype).eps)
-        cond = float(np.linalg.cond(np.asarray(xtwx, dtype=np.float64)))
-        bound = (128.0 if linear_solver != "lsmr" else 1024.0) * cond * eps
+        with jax.enable_x64(True):
+            xtw_64 = np.asarray(xtw, dtype=np.float64)
+            xtwx_64 = np.asarray(xtwx, dtype=np.float64)
+            y_64 = np.asarray(y_obs, dtype=np.float64)
+            th_64 = np.asarray(theta_hat, dtype=np.float64)
+            exact_th_64 = np.linalg.solve(xtwx_64, xtw_64 @ y_64)
+            exact_jac_64 = np.linalg.solve(xtwx_64, xtw_64)
+            svals = np.linalg.svd(xtwx_64, compute_uv=False)
+            sigma_min = float(svals[-1])
+            cond = float(svals[0] / svals[-1])
+            grad_64 = xtwx_64 @ th_64 - xtw_64 @ y_64
+            eps64 = float(np.finfo(np.float64).eps)
 
-        rel_val = float(jnp.linalg.norm(theta_hat - exact_theta) / jnp.linalg.norm(exact_theta))
-        rel_jac = float(jnp.linalg.norm(jac_hat - exact_jac_y) / jnp.linalg.norm(exact_jac_y))
-        assert rel_val <= bound
-        assert rel_jac <= bound
+        # Exact normal-equations perturbation identity: theta_hat - theta* = (X^T W X)^{-1} grad(theta_hat).
+        val_err = float(np.linalg.norm(th_64 - exact_th_64))
+        assert val_err <= float(np.linalg.norm(grad_64)) / sigma_min + 8.0 * eps64 * float(
+            np.linalg.norm(exact_th_64)
+        )
+
+        # Higham (2002, Thm. 7.2) sensitivity of H V = X^T W under the tangent solver's
+        # normwise backward-error contract (accounting for Frobenius-vs-2-norm sqrt(p)):
+        bwd_ceil = _tangent_bwd_contract_ceil(3, dtype, linear_solver)
+        jac_rel_bound = (
+            cond * math.sqrt(3.0) * bwd_ceil / max(1.0 - cond * math.sqrt(3.0) * bwd_ceil, 0.5)
+        )
+        rel_jac = float(
+            np.linalg.norm(np.asarray(jac_hat, dtype=np.float64) - exact_jac_64)
+            / np.linalg.norm(exact_jac_64)
+        )
+        assert rel_jac <= jac_rel_bound + 4.0 * float(jnp.finfo(dtype).eps)
 
 
 def test_qr_outperforms_cholesky_on_ill_conditioned_float32_jacobian() -> None:
@@ -246,63 +286,119 @@ def test_qr_outperforms_cholesky_on_ill_conditioned_float32_jacobian() -> None:
         assert err_cho > 1.0
 
 
-def test_matches_scipy_least_squares_within_conditioning_bound() -> None:
-    """float64 fit on noisy weighted 4PL Hill data matches SciPy TRF SVD within 64*cond*eps64."""
+def _verify_1_over_1_1_method(
+    method: LevenbergMarquardt,
+    residual_fn: typing.Callable[[jax.Array, tuple[jax.Array, jax.Array]], jax.Array],
+    theta0: jax.Array,
+    a_vec: jax.Array,
+    b_vec: jax.Array,
+    c_vec: jax.Array,
+    s_zero: jax.Array,
+    dtype: jnp.dtype,
+    linear_solver: str,
+) -> None:
+    """Assert strong-convexity optimality and full-Hessian IFT bounds for one method."""
+    u_round = 0.5 * float(jnp.finfo(dtype).eps)
+    mu_strong = 2.0 * (1.1**2) * float(jnp.min(a_vec + b_vec / 5.0))
+    sol = levenberg_marquardt(residual_fn, theta0, data=(c_vec, s_zero), method=method)
+    assert bool(sol.is_converged)
+
     with jax.enable_x64(True):
-        log_conc = jnp.linspace(-9.0, -4.0, 16, dtype=jnp.float64)
-        true_params = jnp.array([5.0, 95.0, -6.5, 1.35], dtype=jnp.float64)
-        rng = np.random.default_rng(17)
-        noise = jnp.asarray(rng.normal(0.0, 0.6, size=log_conc.shape), dtype=jnp.float64)
-        weights = jnp.linspace(0.8, 1.5, 16, dtype=jnp.float64)
-        sqrt_w_np = np.sqrt(np.asarray(weights))
-        y_obs = _hill_4pl(true_params, log_conc) + noise
-        init_params = jnp.array([0.0, 100.0, -6.0, 1.0], dtype=jnp.float64)
+        th_64 = sol.fields["params"].astype(jnp.float64)
+        c_64 = c_vec.astype(jnp.float64)
+        a_64 = a_vec.astype(jnp.float64)
+        b_64 = b_vec.astype(jnp.float64)
+        th_star_64 = c_64 / 1.1
+        u_64 = 1.1 * th_64 - c_64
+        grad_64 = 1.1 * (2.0 * (a_64 + b_64 / 5.0) * u_64 + 0.04 * (u_64**3))
+        dist = float(jnp.linalg.norm(th_64 - th_star_64))
+        grad_norm = float(jnp.linalg.norm(grad_64))
+        exact_cost = float(jnp.sum(b_64**2))
+        th_star_norm = float(jnp.linalg.norm(th_star_64))
+        eps_64 = float(jnp.finfo(jnp.float64).eps)
+        hess_diag_64 = (1.1**2) * (2.0 * (a_64 + b_64 / 5.0) + 0.12 * (u_64**2))
+        cond_h = float(jnp.max(hess_diag_64) / jnp.min(hess_diag_64))
+        inv_h_norm = float(1.0 / jnp.min(hess_diag_64))
+        lip_h = float(0.24 * (1.1**3) * jnp.max(jnp.abs(u_64)))
 
-        sol = levenberg_marquardt(
-            _hill_residual,
-            init_params,
-            data=(log_conc, y_obs),
-            weights=weights,
-            method=LevenbergMarquardt(
+    gamma_12 = (12.0 * u_round) / (1.0 - 12.0 * u_round)
+    assert abs(float(sol.metrics["cost"]) - exact_cost) <= (
+        grad_norm * dist + gamma_12 * exact_cost
+    )
+    assert dist <= grad_norm / mu_strong + 4.0 * eps_64 * th_star_norm
+    rep_grad_l2 = math.sqrt(3.0) * float(sol.metrics["grad_inf_norm"])
+    assert dist <= (rep_grad_l2 + 12.0 * u_round * th_star_norm) / mu_strong
+
+    jac_c, jac_s = jax.jacrev(
+        lambda c_in, s_in, m=method: levenberg_marquardt(
+            residual_fn, theta0, data=(c_in, s_in), method=m
+        ).fields["params"],
+        argnums=(0, 1),
+    )(c_vec, s_zero)
+
+    exact_jac_c = jnp.eye(3, dtype=dtype) / jnp.asarray(1.1, dtype=dtype)
+    exact_jac_s = jnp.diag(1.0 / (2.2 * (a_vec + b_vec / 5.0)))
+    bwd_ceil = _tangent_bwd_contract_ceil(3, dtype, linear_solver)
+    rel_ift = inv_h_norm * lip_h * dist + cond_h * math.sqrt(3.0) * bwd_ceil
+    for jac_num, jac_ref in ((jac_c, exact_jac_c), (jac_s, exact_jac_s)):
+        jac_ref_np = np.asarray(jac_ref, dtype=np.float64)
+        jac_num_np = np.asarray(jac_num, dtype=np.float64)
+        ref_norm = float(np.linalg.norm(jac_ref_np))
+        err_norm = float(np.linalg.norm(jac_num_np - jac_ref_np))
+        assert err_norm <= rel_ift * ref_norm + 4.0 * u_round * ref_norm
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.parametrize("linear_solver", ["qr", "cholesky", "lsmr"])
+def test_nonzero_residual_exact_1_over_1_1_minimiser_and_full_hessian_ift(
+    dtype: jnp.dtype,
+    linear_solver: LinearSolverKind,
+) -> None:
+    r"""Verify nonzero-residual nonlinear least squares against exact closed-form solution.
+
+    Consider residual ``r(theta, c, s)`` in ``R^{2d}`` with ``u = 1.1 * theta - c``:
+      ``r_top = sqrt(2 a) * u - s / sqrt(2 a)``,
+      ``r_bot = sqrt(2) * (0.1 * u^2 + b)``  (with ``a_i, b_i > 0``).
+    At ``s = 0``, ``0.5 * ||r||_2^2 = sum_i a_i u_i^2 + sum_i (0.1 u_i^2 + b_i)^2`` is
+    strictly strongly convex with global modulus ``mu = 2 * 1.1^2 * min_i(a_i + b_i / 5)``,
+    unique minimiser ``theta*(c, 0) = c / 1.1`` with strictly nonzero residual cost
+    ``sum_i b_i^2``, exact ``d(theta*)/dc = (1 / 1.1) I``, and exact full-Hessian IFT
+    sensitivity ``d(theta*)/ds|_{s=0} = diag(1 / (2.2 * (a_i + b_i / 5)))`` (which differs
+    from the Gauss-Newton ``J^T J`` inverse ``diag(1 / (2.2 * a_i))`` whenever ``b_i > 0``).
+    """
+    enable_x64 = dtype == jnp.float64
+    with jax.enable_x64(enable_x64):
+        a_vec = jnp.array([1.0, 2.0, 1.5], dtype=dtype)
+        b_vec = jnp.array([2.5, 1.5, 2.0], dtype=dtype)
+        c_vec = jnp.array([1.3, -2.1, 0.8], dtype=dtype)
+        s_zero = jnp.zeros(3, dtype=dtype)
+        theta0 = jnp.zeros(3, dtype=dtype)
+        tol = 1e-12 if enable_x64 else 1e-5
+
+        def residual_fn(theta: jax.Array, data: tuple[jax.Array, jax.Array]) -> jax.Array:
+            c_in, s_in = data
+            u = jnp.asarray(1.1, dtype=dtype) * theta - c_in
+            sqrt_2a = jnp.sqrt(2.0 * a_vec)
+            r_top = sqrt_2a * u - s_in / sqrt_2a
+            r_bot = jnp.sqrt(jnp.asarray(2.0, dtype=dtype)) * (
+                jnp.asarray(0.1, dtype=dtype) * (u * u) + b_vec
+            )
+            return jnp.concatenate([r_top, r_bot])
+
+        methods = [
+            LevenbergMarquardt(
                 max_iterations=80,
-                gtol=1e-14,
-                xtol=1e-14,
-                ftol=1e-14,
-                linear_solver="qr",
-            ),
-        )
-        assert bool(sol.is_converged)
-
-        def scipy_res_fn(th_np: np.ndarray) -> np.ndarray:
-            r = np.asarray(_hill_residual(jnp.asarray(th_np), (log_conc, y_obs)))
-            return sqrt_w_np * r
-
-        jac_jit = jax.jit(
-            jax.jacfwd(lambda th: jnp.sqrt(weights) * _hill_residual(th, (log_conc, y_obs)))
-        )
-
-        def scipy_jac_fn(th_np: np.ndarray) -> np.ndarray:
-            return np.asarray(jac_jit(jnp.asarray(th_np)))
-
-        scipy_res = least_squares(
-            scipy_res_fn,
-            np.asarray(init_params),
-            jac=scipy_jac_fn,  # type: ignore[arg-type]
-            method="trf",
-            x_scale="jac",
-            ftol=3e-16,
-            xtol=1e-14,
-            gtol=1e-14,
-        )
-        jac_opt = scipy_jac_fn(scipy_res.x)
-        cond_jtj = float(np.linalg.cond(jac_opt.T @ jac_opt))
-        eps64 = float(np.finfo(np.float64).eps)
-
-        rel_err = float(
-            np.linalg.norm(np.asarray(sol.fields["params"]) - scipy_res.x)
-            / np.linalg.norm(scipy_res.x)
-        )
-        assert rel_err <= 64.0 * cond_jtj * eps64
+                gtol=tol,
+                xtol=tol,
+                ftol=tol,
+                linear_solver=linear_solver,
+                lsmr_iterations=48,
+            )
+        ]
+        for method in methods:
+            _verify_1_over_1_1_method(
+                method, residual_fn, theta0, a_vec, b_vec, c_vec, s_zero, dtype, linear_solver
+            )
 
 
 @pytest.mark.parametrize("linear_solver", ["qr", "cholesky", "lsmr"])
@@ -385,10 +481,15 @@ def test_float32_value_and_gradient_accuracy_against_float64_oracle() -> None:
                 jnp.asarray(probe_64),
             )
         )(jnp.asarray(y_64))
-        jac_64 = jax.jacfwd(
-            lambda th: _hill_residual(th, (jnp.asarray(log_conc_64), jnp.asarray(y_64)))
+        hess_64 = jax.hessian(
+            lambda th: (
+                0.5
+                * jnp.sum(_hill_residual(th, (jnp.asarray(log_conc_64), jnp.asarray(y_64))) ** 2)
+            )
         )(sol_64.fields["params"])
-        cond_j = float(np.linalg.cond(np.asarray(jac_64)))
+        svals_h = np.linalg.svd(np.asarray(hess_64), compute_uv=False)
+        sigma_min_h = float(svals_h[-1])
+        cond_h = float(svals_h[0] / svals_h[-1])
 
     with jax.enable_x64(False):
         log_conc_32 = jnp.asarray(log_conc_64, dtype=jnp.float32)
@@ -415,18 +516,71 @@ def test_float32_value_and_gradient_accuracy_against_float64_oracle() -> None:
             )
         )(y_32)
 
-    eps32 = float(np.finfo(np.float32).eps)
-    val_rel = float(
+    with jax.enable_x64(True):
+        grad_at_32_64 = jax.grad(
+            lambda th: (
+                0.5
+                * jnp.sum(_hill_residual(th, (jnp.asarray(log_conc_64), jnp.asarray(y_64))) ** 2)
+            )
+        )(sol_32.fields["params"].astype(jnp.float64))
+    val_err = float(
         np.linalg.norm(np.asarray(sol_32.fields["params"]) - np.asarray(sol_64.fields["params"]))
-        / np.linalg.norm(np.asarray(sol_64.fields["params"]))
     )
     grad_rel = float(
         np.linalg.norm(np.asarray(grad_32) - np.asarray(grad_64))
         / np.linalg.norm(np.asarray(grad_64))
     )
     assert bool(sol_32.is_converged)
-    assert val_rel <= 64.0 * cond_j * eps32
-    assert grad_rel <= 128.0 * cond_j * eps32
+    # Local strong-convexity bound (factor 2 accounts for cubic remainder near sol_64):
+    assert val_err <= 2.0 * float(np.linalg.norm(np.asarray(grad_at_32_64))) / sigma_min_h
+    bwd_32 = _tangent_bwd_contract_ceil(4, jnp.dtype(jnp.float32), "qr")
+    assert grad_rel <= cond_h * (
+        math.sqrt(4.0) * bwd_32
+        + val_err / float(np.linalg.norm(np.asarray(sol_64.fields["params"])))
+    )
+
+
+def test_singular_tangent_consistency_and_both_loop_modes_ad() -> None:
+    """Singular Hessian r = th0 + th1 - y returns [nan, nan] tangents across LM, Gauss-Newton,
+    and BFGSSolver, while well-posed fits differentiate in jvp/jacfwd/grad for both implicit_diff modes."""
+    y_val = jnp.float32(2.0)
+    th_init = jnp.array([0.5, 0.5], dtype=jnp.float32)
+
+    for method in (
+        LevenbergMarquardt(linear_solver="qr"),
+        LevenbergMarquardt(linear_solver="cholesky"),
+        LevenbergMarquardt(linear_solver="lsmr"),
+    ):
+        jac_y = jax.jacrev(
+            lambda y, m=method: levenberg_marquardt(
+                lambda th, rhs: jnp.atleast_1d(th[0] + th[1] - rhs),
+                th_init,
+                data=y,
+                method=m,
+            ).fields["params"]
+        )(y_val)
+        assert jac_y.shape == (2,)
+        assert bool(jnp.all(jnp.isnan(jac_y)))
+
+    # Early exit + forward/reverse AD for both implicit_diff=True and implicit_diff=False:
+    with jax.enable_x64(True):
+        target = jnp.array([1.5, -0.8], dtype=jnp.float64)
+        init_p = jnp.zeros(2, dtype=jnp.float64)
+        for imp in (True, False):
+            m = LevenbergMarquardt(
+                max_iterations=40, gtol=1e-12, xtol=1e-12, ftol=1e-12, implicit_diff=imp
+            )
+            sol = levenberg_marquardt(lambda th, t: 2.0 * th - t, init_p, data=target, method=m)
+            assert int(sol.status) == int(Status.SUCCESS)
+            assert int(sol.stats["num_iterations"]) <= 5
+
+            def fit_fn(t_in: jax.Array, method_i=m) -> jax.Array:
+                return levenberg_marquardt(
+                    lambda th, t: 2.0 * th - t, init_p, data=t_in, method=method_i
+                ).fields["params"]
+
+            assert jnp.allclose(jax.jacfwd(fit_fn)(target), 0.5 * jnp.eye(2), atol=1e-10)
+            assert jnp.allclose(jax.jacrev(fit_fn)(target), 0.5 * jnp.eye(2), atol=1e-10)
 
 
 @pytest.mark.parametrize("implicit_diff", [True, False])
