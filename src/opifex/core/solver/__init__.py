@@ -6,6 +6,7 @@ one to the other after checking that they belong together. Time-stepping methods
 """
 
 from opifex.core.solver.integrate import FINAL_STATE, integrate, Snapshots
+from opifex.core.solver.loop import bounded_while_loop, unvmap_any
 from opifex.core.solver.lsmr import lsmr
 from opifex.core.solver.problem import IncompatibleProblemError, Method, Problem, solve
 from opifex.core.solver.solution import Solution
@@ -20,8 +21,10 @@ __all__ = [
     "Snapshots",
     "Solution",
     "Status",
+    "bounded_while_loop",
     "integrate",
     "is_successful",
     "lsmr",
     "solve",
+    "unvmap_any",
 ]

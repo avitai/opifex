@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `Status.INITIAL_FAILURE` (`10`) in `opifex.core.solver.status` for violated traced solver preconditions (such as non-monotone save times `ts` under `jax.jit`).
+- Checkpointed bounded while-loop primitive (`bounded_while_loop` and `custom_vmap` `unvmap_any`) in `opifex.core.solver` for early-exiting batched adaptive loops with forward- and reverse-mode automatic differentiation.
 
 ### Changed
 
