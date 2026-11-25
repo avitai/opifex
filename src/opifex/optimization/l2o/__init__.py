@@ -5,8 +5,8 @@ a :class:`~opifex.optimization.l2o.core.Task`, and applied to held-out tasks whe
 *tuned* classical baseline. The design follows the
 L2O literature (Andrychowicz et al. 2016, ``arXiv:1606.04474``; Metz et al. 2020,
 ``arXiv:2009.11243``; Vicol et al. 2021 PES, ``arXiv:2112.13835``); classical baselines use
-``optimistix``. Every reported number is measured — there are no fabricated objectives or
-speedups.
+pure-JAX BFGS and tuned Optax optimisers. Every reported number is measured — there are no
+fabricated objectives or speedups.
 
 Public surface:
 
@@ -24,8 +24,8 @@ Public surface:
 
 from opifex.optimization.l2o._uq_capabilities import L2O_CAPABILITIES
 from opifex.optimization.l2o.baselines import (
+    bfgs_minimise,
     loss_curve,
-    optimistix_minimise,
     tuned_optax_baseline,
 )
 from opifex.optimization.l2o.benchmark import (
@@ -69,11 +69,11 @@ __all__ = [
     "TaskFamily",
     "adapt",
     "benchmark_on_held_out_tasks",
+    "bfgs_minimise",
     "init_pes_state",
     "loss_curve",
     "maml_meta_train",
     "meta_train",
-    "optimistix_minimise",
     "pes_gradient_step",
     "reptile_meta_train",
     "single_task_to_family",

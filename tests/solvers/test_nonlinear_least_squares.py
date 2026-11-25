@@ -366,6 +366,12 @@ def test_nonzero_residual_exact_1_over_1_1_minimiser_and_full_hessian_ift(
     sensitivity ``d(theta*)/ds|_{s=0} = diag(1 / (2.2 * (a_i + b_i / 5)))`` (which differs
     from the Gauss-Newton ``J^T J`` inverse ``diag(1 / (2.2 * a_i))`` whenever ``b_i > 0``).
     """
+    from opifex.optimization.second_order.config import GaussNewtonConfig
+    from opifex.optimization.second_order.wrappers import (
+        create_gauss_newton_solver,
+        create_levenberg_marquardt_solver,
+    )
+
     enable_x64 = dtype == jnp.float64
     with jax.enable_x64(enable_x64):
         a_vec = jnp.array([1.0, 2.0, 1.5], dtype=dtype)
@@ -395,6 +401,11 @@ def test_nonzero_residual_exact_1_over_1_1_minimiser_and_full_hessian_ift(
                 lsmr_iterations=48,
             )
         ]
+        if linear_solver == "qr":
+            gn_cfg = GaussNewtonConfig(max_iterations=80, rtol=tol, atol=tol)
+            methods.append(create_gauss_newton_solver(gn_cfg))
+            methods.append(create_levenberg_marquardt_solver(gn_cfg))
+
         for method in methods:
             _verify_1_over_1_1_method(
                 method, residual_fn, theta0, a_vec, b_vec, c_vec, s_zero, dtype, linear_solver
@@ -543,6 +554,12 @@ def test_float32_value_and_gradient_accuracy_against_float64_oracle() -> None:
 def test_singular_tangent_consistency_and_both_loop_modes_ad() -> None:
     """Singular Hessian r = th0 + th1 - y returns [nan, nan] tangents across LM, Gauss-Newton,
     and BFGSSolver, while well-posed fits differentiate in jvp/jacfwd/grad for both implicit_diff modes."""
+    from opifex.optimization.second_order.wrappers import (
+        BFGSSolver,
+        create_gauss_newton_solver,
+        create_levenberg_marquardt_solver,
+    )
+
     y_val = jnp.float32(2.0)
     th_init = jnp.array([0.5, 0.5], dtype=jnp.float32)
 
@@ -550,6 +567,8 @@ def test_singular_tangent_consistency_and_both_loop_modes_ad() -> None:
         LevenbergMarquardt(linear_solver="qr"),
         LevenbergMarquardt(linear_solver="cholesky"),
         LevenbergMarquardt(linear_solver="lsmr"),
+        create_gauss_newton_solver(),
+        create_levenberg_marquardt_solver(),
     ):
         jac_y = jax.jacrev(
             lambda y, m=method: levenberg_marquardt(
@@ -561,6 +580,15 @@ def test_singular_tangent_consistency_and_both_loop_modes_ad() -> None:
         )(y_val)
         assert jac_y.shape == (2,)
         assert bool(jnp.all(jnp.isnan(jac_y)))
+
+    bfgs_jac_y = jax.jacrev(
+        lambda y: (
+            BFGSSolver()
+            .minimise(lambda th, rhs: 0.5 * (th[0] + th[1] - rhs) ** 2, th_init, args=y)
+            .fields["params"]
+        )
+    )(y_val)
+    assert bool(jnp.all(jnp.isnan(bfgs_jac_y)))
 
     # Early exit + forward/reverse AD for both implicit_diff=True and implicit_diff=False:
     with jax.enable_x64(True):

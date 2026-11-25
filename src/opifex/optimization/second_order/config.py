@@ -123,7 +123,7 @@ class GaussNewtonConfig:
         atol: Absolute tolerance for convergence
 
     References:
-        - optimistix.LevenbergMarquardt documentation
+        - Madsen & Nielsen (2010): Introduction to Optimization and Data Fitting
         - Survey Section 7.3
     """
 

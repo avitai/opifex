@@ -141,8 +141,9 @@ undeployable oracle, so it is not used as the comparison baseline.
 - Secondary metric: **speedup at a per-task target loss** — `baseline steps to reach target /
   learned steps`, censored when a method never reaches the target (returns the median over tasks,
   robust to censoring).
-- [`optimistix_minimise`][opifex.optimization.l2o.baselines.optimistix_minimise] wraps real
-  `optimistix` solvers (`BFGS`/`GradientDescent`/`NonlinearCG`) as strong second-order references.
+- [`bfgs_minimise`][opifex.optimization.l2o.baselines.bfgs_minimise] runs the pure-JAX
+  [`BFGSSolver`][opifex.optimization.second_order.wrappers.BFGSSolver] with zoom line search as a
+  strong quasi-Newton reference.
 
 Generalisation claims are scoped to in-distribution held-out tasks. Speedups are reported against
 a tuned baseline and accompanied by the VeLO-scaling caveat.
@@ -191,7 +192,7 @@ seconds on a GPU) reaches the target loss roughly **1.8× faster than a tuned Ad
 | `features.py` | per-parameter input features (momentum/RMS EMAs, tanh time embedding) |
 | `learned.py` | `LearnedOptimizer` ABC, `MLPLearnedOptimizer`, `LearnableSGD` |
 | `meta_train.py` | PES estimator + outer-Adam meta-training loop |
-| `baselines.py` | optimistix solvers and tuned-optax baselines |
+| `baselines.py` | pure-JAX BFGS solver and tuned-optax baselines |
 | `benchmark.py` | learning curves + censored speedup-at-target |
 | `engine.py` | high-level `L2OEngine` (meta-train / apply / benchmark / persist) |
 

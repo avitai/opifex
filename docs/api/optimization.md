@@ -61,7 +61,7 @@ Persistent Evolution Strategies meta-training (Vicol et al. 2021).
 
 ### Baselines and benchmarking
 
-optimistix classical baselines and honest learning-curve / speedup-at-target benchmarking.
+Pure-JAX BFGS classical baselines and honest learning-curve / speedup-at-target benchmarking.
 
 ::: opifex.optimization.l2o.baselines
 
@@ -108,7 +108,7 @@ The optimization module is organized into several key components:
 - **`features.py`**: per-parameter input features (momentum/RMS, time embedding)
 - **`learned.py`**: `LearnedOptimizer` ABC, `MLPLearnedOptimizer`, `LearnableSGD`
 - **`meta_train.py`**: Persistent Evolution Strategies (PES) meta-training
-- **`baselines.py`**: optimistix classical baselines and tuned-optax baselines
+- **`baselines.py`**: pure-JAX BFGS classical baselines and tuned-optax baselines
 - **`benchmark.py`**: honest learning-curve and speedup-at-target benchmarking
 - **`engine.py`**: high-level `L2OEngine` orchestrator
 
@@ -234,15 +234,19 @@ Curvature-based optimization methods including L-BFGS and hybrid optimizers.
             - LevenbergMarquardtConfig
             - HybridOptimizerConfig
 
-### L-BFGS and Gauss-Newton Wrappers
+### Second-Order Solvers and Wrappers
 
 ::: opifex.optimization.second_order.wrappers
     options:
         show_root_heading: true
         show_source: false
         members:
+            - OptimizationProblem
+            - BFGSSolver
+            - create_bfgs_solver
             - create_lbfgs_optimizer
             - create_gauss_newton_solver
+            - create_levenberg_marquardt_solver
 
 ### Hybrid Adam → L-BFGS Optimizer
 
