@@ -94,8 +94,9 @@ jobs:
         run: uv venv
 
       - name: Install dependencies
-        # Extras so integration suites exercise ase/pyscf instead of skipping.
-        run: uv sync --locked --extra dev --extra test --extra neural-dft --extra quantum-chemistry
+        # Extras so integration suites exercise ase/pyscf instead of skipping, plus
+        # benchmark group so @pytest.mark.benchmark suites exercise exponax.
+        run: uv sync --locked --group benchmark --extra dev --extra test --extra neural-dft --extra quantum-chemistry
 
       - name: Run extended suites
         env:

@@ -116,3 +116,12 @@ def test_setup_sh_syncs_the_extra_the_manifest_declares() -> None:
     )
     for extra in synced:
         assert extra in _extras(), f"setup.sh syncs --extra {extra}, which the manifest lacks"
+
+
+def test_exponax_lives_in_benchmark_group_not_test_extra() -> None:
+    """Reference stepper benchmark package ``exponax`` belongs in ``[dependency-groups] benchmark``."""
+    manifest = _pyproject()
+    test_reqs = _requirement_names(_extras()["test"])
+    assert "exponax" not in test_reqs
+    benchmark_group = manifest.get("dependency-groups", {}).get("benchmark", [])
+    assert "exponax" in _requirement_names(benchmark_group)

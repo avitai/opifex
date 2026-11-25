@@ -6,7 +6,7 @@ our :func:`solve_burgers_spectral` and exponax's Burgers stepper on an identical
 configuration must agree to machine precision -- a reference-grounded check that
 the ETDRK4 core, the convection nonlinearity, the dealiasing, and the Fourier
 conventions are all correct. Requires double precision (see the package-level
-``conftest`` fixture) and the optional ``exponax`` test dependency.
+``conftest`` fixture) and the optional ``benchmark`` dependency group (``exponax``).
 """
 
 import jax.numpy as jnp
@@ -19,6 +19,7 @@ from opifex.physics.spectral.steppers import solve_burgers_spectral
 exponax = pytest.importorskip("exponax")
 
 
+@pytest.mark.benchmark
 def test_burgers_matches_exponax_etdrk4() -> None:
     """``solve_burgers_spectral`` matches exponax's Burgers ETDRK4 stepper.
 

@@ -78,6 +78,63 @@ class TestBurgersSpectral:
         assert out.shape == (3, 2, 64)
         assert bool(jnp.all(jnp.isfinite(out)))
 
+    def test_matches_exact_cole_hopf_periodic_solution(self) -> None:
+        """Closed-form periodic Cole-Hopf oracle ``u = -2 * nu * phi_x / phi`` where
+        ``phi_t = nu * phi_xx`` converges at 4th-order ETDRK4 slope against exact truth."""
+        from calibrax.analysis import scaling_fit
+
+        num_points = 128
+        domain = 1.0
+        viscosity = 0.05
+        time_final = 0.2
+        x = np.linspace(0.0, domain, num_points, endpoint=False)
+        k1 = 2.0 * np.pi / domain
+        k2 = 4.0 * np.pi / domain
+
+        def cole_hopf_exact(t: float) -> np.ndarray:
+            c1 = 0.4 * np.exp(-viscosity * (k1**2) * t)
+            c2 = 0.15 * np.exp(-viscosity * (k2**2) * t)
+            phi = 1.0 + c1 * np.cos(k1 * x) + c2 * np.sin(k2 * x)
+            phi_x = -c1 * k1 * np.sin(k1 * x) + c2 * k2 * np.cos(k2 * x)
+            return -2.0 * viscosity * (phi_x / phi)
+
+        with jax.enable_x64(True):
+            u0_64 = jnp.asarray(cole_hopf_exact(0.0), dtype=jnp.float64)
+            u_final_exact = jnp.asarray(cole_hopf_exact(time_final), dtype=jnp.float64)
+            step_grid = [50, 100, 200]
+            errs_64: list[float] = []
+            for n_steps in step_grid:
+                ours_64 = solve_burgers_spectral(
+                    u0_64,
+                    viscosity,
+                    domain_extent=domain,
+                    time_final=time_final,
+                    num_steps=n_steps,
+                    num_snapshots=1,
+                )[-1]
+                assert ours_64.dtype == jnp.float64
+                errs_64.append(float(jnp.max(jnp.abs(ours_64 - u_final_exact))))
+
+            assert errs_64[2] < errs_64[1] < errs_64[0] < float(jnp.max(jnp.abs(u_final_exact)))
+            fit = scaling_fit([float(n) for n in step_grid], errs_64)
+            assert abs((-fit.exponent) - 4.0) < 0.2
+
+        with jax.enable_x64(False):
+            u0_32 = jnp.asarray(cole_hopf_exact(0.0), dtype=jnp.float32)
+            ours_32 = solve_burgers_spectral(
+                u0_32,
+                viscosity,
+                domain_extent=domain,
+                time_final=time_final,
+                num_steps=200,
+                num_snapshots=1,
+            )[-1]
+            assert ours_32.dtype == jnp.float32
+            round_32 = 200.0 * 64.0 * float(jnp.finfo(jnp.float32).eps)
+            assert float(jnp.max(jnp.abs(ours_32 - u_final_exact.astype(jnp.float32)))) <= (
+                errs_64[2] + round_32
+            )
+
 
 class TestKdVSpectral:
     """KdV conserves mass and the L2 invariant; a soliton moves at speed ~ c."""

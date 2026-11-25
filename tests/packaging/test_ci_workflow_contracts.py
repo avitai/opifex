@@ -254,3 +254,18 @@ def test_every_ci_pytest_run_overrides_the_default_per_test_timeout() -> None:
         f"CI pytest invocations missing --timeout>={MINIMUM_CI_TEST_TIMEOUT_SECONDS}: "
         f"{missing_or_low}"
     )
+
+
+def test_extended_tests_syncs_benchmark_group_while_pr_gate_does_not() -> None:
+    """``extended-tests`` selects ``benchmark`` marker tests and must sync ``--group benchmark``."""
+    ext_job = _workflow_jobs(NIGHTLY)["extended-tests"]
+    ext_syncs = [line for line in _run_lines(ext_job) if "uv sync" in line]
+    assert ext_syncs and all("--group benchmark" in line for line in ext_syncs)
+
+    pr_jobs = _workflow_jobs(PULL_REQUEST_GATE)
+    for job_id, job in pr_jobs.items():
+        for line in _run_lines(job):
+            if "uv sync" in line:
+                assert "--group benchmark" not in line, (
+                    f"{PULL_REQUEST_GATE}:{job_id} syncs benchmark"
+                )

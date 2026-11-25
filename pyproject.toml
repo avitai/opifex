@@ -2,6 +2,11 @@
 build-backend = "hatchling.build"
 requires = ["hatchling>=1.18"]
 
+[dependency-groups]
+benchmark = [
+  "exponax>=0.2.0"
+]
+
 [project]
 authors = [{email = "mahdi@avitai.bio", name = "Mahdi Shafiei"}]
 classifiers = [
@@ -267,9 +272,6 @@ test = [
   "hypothesis>=6.100",
   "beartype>=0.14.1",
   "coverage>=7.9.2",
-  # Reference pseudo-spectral PDE solvers, used to cross-check
-  # opifex.physics.spectral against an independent implementation.
-  "exponax>=0.2.0",
   "pytest>=8.4.1",
   "pytest-asyncio>=1.0.0",
   "pytest-benchmark>=5.1.0",

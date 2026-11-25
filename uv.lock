@@ -3836,7 +3836,6 @@ all = [
     { name = "build" },
     { name = "coverage" },
     { name = "distrax" },
-    { name = "exponax" },
     { name = "fastapi" },
     { name = "grain" },
     { name = "greenlet" },
@@ -3907,7 +3906,6 @@ all-cpu = [
     { name = "build" },
     { name = "coverage" },
     { name = "distrax" },
-    { name = "exponax" },
     { name = "fastapi" },
     { name = "grain" },
     { name = "greenlet" },
@@ -3964,7 +3962,6 @@ all-macos = [
     { name = "build" },
     { name = "coverage" },
     { name = "distrax" },
-    { name = "exponax" },
     { name = "fastapi" },
     { name = "grain" },
     { name = "greenlet" },
@@ -4213,7 +4210,6 @@ test = [
     { name = "asyncpg" },
     { name = "beartype" },
     { name = "coverage" },
-    { name = "exponax" },
     { name = "fastapi" },
     { name = "grain" },
     { name = "greenlet" },
@@ -4239,6 +4235,11 @@ test = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 
+[package.dev-dependencies]
+benchmark = [
+    { name = "exponax" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", marker = "extra == 'platform'", specifier = ">=0.20.0" },
@@ -4259,7 +4260,6 @@ requires-dist = [
     { name = "datarax", specifier = ">=0.1.17" },
     { name = "diffrax", specifier = ">=0.4.0" },
     { name = "distrax", marker = "extra == 'probabilistic'", specifier = ">=0.1.0,<0.2.0" },
-    { name = "exponax", marker = "extra == 'test'", specifier = ">=0.2.0" },
     { name = "fastapi", marker = "extra == 'platform'", specifier = ">=0.115.13" },
     { name = "flax", specifier = ">=0.12.10" },
     { name = "grain", marker = "extra == 'scientific-data'", specifier = ">=0.2.3" },
@@ -4370,6 +4370,9 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'platform'", specifier = ">=0.34.3" },
 ]
 provides-extras = ["all", "all-cpu", "all-macos", "cuda-dev", "cuda12", "dev", "docs", "metal", "mlflow", "neural-dft", "opifex-dev", "pdebench", "platform", "probabilistic", "profiling", "quantum-chemistry", "scientific-data", "test"]
+
+[package.metadata.requires-dev]
+benchmark = [{ name = "exponax", specifier = ">=0.2.0" }]
 
 [[package]]
 name = "opt-einsum"
