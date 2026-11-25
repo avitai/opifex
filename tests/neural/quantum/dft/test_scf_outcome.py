@@ -1,26 +1,29 @@
 """How an SCF solve reports what happened, and why that outcome is an array.
 
 The forward solve has two paths -- Anderson/DIIS self-consistency and direct energy
-minimisation -- and both end in a backend solve that reports whether it converged. A
-result that reduced that report to a Python ``bool`` could not be built inside a
-transform at all, and on a frozen dataclass it would ride in the static metadata that
-forms the jit cache key, so a converged and a stalled solve would compile separate
-programs.
+minimisation -- and both end in a pure-JAX backend solve that reports whether it
+converged. A result that reduced that report to a Python ``bool`` could not be built
+inside a transform at all, and on a frozen dataclass it would ride in the static
+metadata that forms the jit cache key, so a converged and a stalled solve would compile
+separate programs.
 
 So the outcome travels as the same ``int32`` status code the rest of opifex uses
-(:mod:`opifex.core.solver.status`), converted at one boundary.
+(:mod:`opifex.core.solver.status`).
 """
 
 from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
-import optimistix as optx
 import pytest
 
 from opifex.core.quantum.molecular_system import MolecularSystem
 from opifex.core.solver.status import Status
-from opifex.neural.quantum.dft._energy import _SOLVER_STATUS, solver_status
+from opifex.neural.quantum.dft._energy import DensitySolve
+from opifex.neural.quantum.dft._fixed_point import (
+    anderson_fixed_point,
+    AndersonAcceleration,
+)
 from opifex.neural.quantum.dft.scf import SCFResult, SCFSolver
 
 
@@ -37,46 +40,51 @@ def _h2_system() -> MolecularSystem:
 
 
 class TestTheStatusTranslation:
-    """The backend reports an enumeration; opifex reports a code."""
+    """Native pure-JAX fixed-point outcomes map directly to ``Status`` int32 arrays."""
 
     def test_a_successful_solve_is_a_success(self) -> None:
-        assert int(solver_status(optx.RESULTS.successful)) == Status.SUCCESS
+        solver = AndersonAcceleration(rtol=1e-6, atol=1e-6, history_size=4)
+        sol = anderson_fixed_point(
+            lambda y, _: 0.5 * y + 1.0, solver, jnp.array(0.0, dtype=jnp.float32), max_steps=32
+        )
+        assert int(sol.status) == Status.SUCCESS
+        assert bool(sol.is_converged)
 
-    @pytest.mark.parametrize(
-        ("outcome", "expected"),
-        [
-            ("nonlinear_max_steps_reached", Status.MAX_ITERS),
-            ("nonlinear_divergence", Status.CONVERGENCE_FAILURE),
-            ("nonfinite", Status.NONFINITE),
-            ("nonfinite_input", Status.NONFINITE),
-            ("singular", Status.LINEAR_SOLVE_FAILED),
-            ("max_steps_reached", Status.LINEAR_SOLVE_FAILED),
-        ],
-    )
-    def test_each_failure_keeps_its_reason(self, outcome: str, expected: Status) -> None:
+    def test_each_failure_keeps_its_reason(self) -> None:
         # Reduced to a flag these would be indistinguishable, and a caller could not tell
-        # "the budget ran out" from "the iteration diverged".
-        assert int(solver_status(getattr(optx.RESULTS, outcome))) == expected
+        # "the budget ran out" from "a non-finite iterate appeared".
+        solver = AndersonAcceleration(rtol=1e-7, atol=1e-7, history_size=4)
+        starved = anderson_fixed_point(
+            lambda y, _: jnp.cos(y), solver, jnp.array(0.0, dtype=jnp.float32), max_steps=1
+        )
+        nonfinite = anderson_fixed_point(
+            lambda y, _: y * jnp.nan, solver, jnp.array(1.0, dtype=jnp.float32), max_steps=4
+        )
+        nonfinite_input = anderson_fixed_point(
+            lambda y, _: y, solver, jnp.array(jnp.nan, dtype=jnp.float32), max_steps=4
+        )
+        assert int(starved.status) == Status.MAX_ITERS
+        assert int(nonfinite.status) == Status.NONFINITE
+        assert int(nonfinite_input.status) == Status.NONFINITE
 
-    def test_every_backend_outcome_is_translated(self) -> None:
-        # The control on the table: an outcome with no entry falls through to DEFAULT,
-        # which is not a success and carries no reason. A backend release adding an
-        # outcome fails here rather than silently reporting nothing -- the count is what
-        # catches the addition, since a name nobody listed cannot be looked up.
-        untranslated = [
-            name
-            for name, _ in _SOLVER_STATUS
-            if int(solver_status(getattr(optx.RESULTS, name))) == Status.DEFAULT
-        ]
-
-        assert untranslated == []
-        assert len(_SOLVER_STATUS) == len(optx.RESULTS)
+    def test_density_solve_preserves_status_and_iterations(self) -> None:
+        solver = AndersonAcceleration(rtol=1e-6, atol=1e-6, history_size=4)
+        sol = anderson_fixed_point(
+            lambda y, _: 0.5 * y + 1.0, solver, jnp.array(0.0, dtype=jnp.float32), max_steps=32
+        )
+        ds = DensitySolve.from_solution(sol, jnp.eye(2, dtype=jnp.float32))
+        assert int(ds.status) == Status.SUCCESS
+        assert int(ds.n_iterations) == int(sol.n_iterations)
+        assert bool(ds.is_converged)
 
     def test_it_is_a_traced_array(self) -> None:
-        status = solver_status(optx.RESULTS.successful)
+        solver = AndersonAcceleration(rtol=1e-6, atol=1e-6, history_size=4)
+        sol = anderson_fixed_point(
+            lambda y, _: 0.5 * y + 1.0, solver, jnp.array(0.0, dtype=jnp.float32), max_steps=16
+        )
 
-        assert isinstance(status, jax.Array)
-        assert status.dtype == jnp.int32
+        assert isinstance(sol.status, jax.Array)
+        assert sol.status.dtype == jnp.int32
 
 
 class TestTheResultIsAPytree:
@@ -134,6 +142,13 @@ class TestTheReportedOutcomeIsMeasured:
             result = SCFSolver(_h2_system(), mode="direct", max_iterations=100).solve()
 
         assert 0 < int(result.n_iterations) < 100
+
+    def test_a_single_step_direct_solve_executes_one_step(self) -> None:
+        with jax.enable_x64(True):
+            one_step = SCFSolver(_h2_system(), mode="direct", max_iterations=1).solve()
+
+        assert int(one_step.n_iterations) >= 1
+        assert int(one_step.status) == Status.MAX_ITERS
 
 
 class TestItSurvivesATransform:

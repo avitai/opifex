@@ -33,12 +33,15 @@ Differentiable energy and analytic forces
 :meth:`SCFSolver.energy_from_positions` returns the converged total energy as a
 pure, differentiable function of the nuclear coordinates: the integrals, grid and
 XC matrix are rebuilt from ``positions`` and the self-consistent density is found
-as an implicit fixed point (:mod:`opifex.neural.quantum.dft._energy`). Optimistix's
-:class:`~optimistix.ImplicitAdjoint` differentiates the converged fixed point by
-the implicit function theorem, so :meth:`SCFSolver.compute_forces` /
-:meth:`SCFSolver.energy_and_forces` -- the analytic forces
-:math:`F = -\partial E/\partial R` from :func:`jax.grad` -- are exact and avoid
-backprop through the SCF iterations (the PySCFAD rationale, Zhang & Chan 2022).
+as an implicit fixed point (:mod:`opifex.neural.quantum.dft._energy`).
+:func:`~opifex.neural.quantum.dft._fixed_point.anderson_fixed_point` differentiates
+the converged fixed point via :func:`jax.lax.custom_root` +
+:func:`~opifex.core.solver.dense_tangent_solve` (or a caller-selected matrix-free
+tangent solver), so
+:meth:`SCFSolver.compute_forces` / :meth:`SCFSolver.energy_and_forces` -- the
+analytic forces :math:`F = -\partial E/\partial R` from :func:`jax.grad` -- are
+exact and avoid backprop through the SCF iterations (the PySCFAD rationale, Zhang
+& Chan 2022).
 
 The reported total energy is the proper Kohn-Sham energy
 :math:`E = \operatorname{Tr}[D\,h_\text{core}] + \tfrac12 \operatorname{Tr}[D\,J]
@@ -69,6 +72,7 @@ from jax import Array
 
 from opifex.core.quantum.basis import AtomicOrbitalBasis
 from opifex.core.quantum.molecular_system import MolecularSystem  # noqa: TC001
+from opifex.core.solver.implicit import dense_tangent_solve, TangentSolverFn
 from opifex.core.solver.status import is_successful
 from opifex.neural.quantum.dft._energy import (
     _density_from_fock as _density_from_fock_impl,
@@ -151,6 +155,8 @@ class SCFSolver:
             trades XC-integration accuracy for speed (e.g. in tests).
         max_iterations: Maximum SCF / fixed-point / minimisation iterations.
         convergence_tolerance: RMS density-change convergence threshold.
+        tangent_solver: Linear solver ``(lin_op, rhs) -> v`` for implicit SCF
+            differentiation; defaults to :func:`~opifex.core.solver.dense_tangent_solve`.
     """
 
     def __init__(
@@ -164,6 +170,7 @@ class SCFSolver:
         grid_template: MolecularGridTemplate | None = None,
         max_iterations: int = 100,
         convergence_tolerance: float = 1.0e-8,
+        tangent_solver: TangentSolverFn = dense_tangent_solve,
     ) -> None:
         """Initialise the solver, its integral backend and the grid template."""
         if system.multiplicity != 1:
@@ -188,6 +195,7 @@ class SCFSolver:
         self._mode = SolverMode(mode)
         self._max_iterations = max_iterations
         self._convergence_tolerance = convergence_tolerance
+        self._tangent_solver = tangent_solver
         self._n_occupied = system.n_electrons // 2
         self._grid_template: MolecularGridTemplate = (
             grid_template if grid_template is not None else build_molecular_grid_traceable(system)
@@ -258,6 +266,7 @@ class SCFSolver:
                 tolerance=self._convergence_tolerance,
                 max_steps=self._max_iterations,
                 neural_spec=neural_spec,
+                tangent_solver=self._tangent_solver,
             )
         return total_energy(density, integrals, self._functional, neural_spec)
 
@@ -279,7 +288,12 @@ class SCFSolver:
         """
         if self._neural_spec is None:
             raise ValueError("energy_from_state requires a neural functional")
-        spec = NeuralXCSpec(graphdef=self._neural_spec.graphdef, state=state)
+        param_state = nnx.filter_state(state, nnx.Param)
+        spec = NeuralXCSpec(
+            graphdef=self._neural_spec.graphdef,
+            state=param_state,
+            rest_state=self._neural_spec.rest_state,
+        )
         where = self._system.positions if positions is None else positions
         return self._energy_from_positions(where, spec)
 
@@ -400,6 +414,7 @@ class SCFSolver:
             max_steps=self._max_iterations,
             neural_spec=self._neural_spec,
             initial_density=initial_density,
+            tangent_solver=self._tangent_solver,
         )
         return self._result_from(DensitySolve.from_solution(solution, solution.value), integrals)
 

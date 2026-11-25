@@ -9,12 +9,11 @@ the exchange-correlation matrix are all rebuilt from ``positions`` so that
 Two differentiation paths are provided for the self-consistent density:
 
 * **Implicit (default)** -- the Roothaan/Kohn-Sham step ``D -> SCF_step(D)`` is
-  wrapped as a fixed point solved by :func:`optimistix.fixed_point`. Optimistix's
-  default :class:`~optimistix.ImplicitAdjoint` differentiates the *converged*
-  fixed point through the implicit function theorem (a single linear solve via
-  ``lineax``), so the gradient is exact and memory-cheap -- no backprop through
-  the SCF iterations. This is the PySCFAD rationale (Zhang & Chan 2022,
-  arXiv:2207.13836).
+  solved by :func:`~opifex.neural.quantum.dft._fixed_point.anderson_fixed_point`,
+  which wraps the converged fixed point in :func:`jax.lax.custom_root` using
+  :func:`~opifex.core.solver.dense_tangent_solve` by default (or a caller-selected
+  matrix-free tangent solver) so the gradient is exact via the implicit function
+  theorem (Zhang & Chan 2022, ``arXiv:2207.13836``).
 * **Unrolled** -- a fixed number of differentiable SCF steps, used only as a
   sanity cross-check of the implicit gradient in the tests.
 
@@ -35,18 +34,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Final
+from typing import Any, cast
 
+import jax
 import jax.numpy as jnp
-import optimistix as optx
+import optax
 from flax import nnx, struct
 from jax import Array
 
 from opifex.core.quantum.backend import JaxGaussianBackend
 from opifex.core.quantum.basis import AtomicOrbitalBasis  # noqa: TC001
 from opifex.core.quantum.molecular_system import MolecularSystem
-from opifex.core.solver.status import is_successful, Status
-from opifex.neural.quantum.dft._fixed_point import AndersonAcceleration
+from opifex.core.solver.implicit import dense_tangent_solve, loop_status, TangentSolverFn
+from opifex.core.solver.status import is_successful
+from opifex.neural.quantum.dft._fixed_point import (
+    anderson_fixed_point,
+    AndersonAcceleration,
+    FixedPointSolution,
+)
 from opifex.neural.quantum.dft.grid import MolecularGridTemplate  # noqa: TC001
 from opifex.neural.quantum.dft.xc import (
     lda_energy_density,
@@ -55,57 +60,6 @@ from opifex.neural.quantum.dft.xc import (
     pbe_exchange_correlation_potential,
 )
 from opifex.neural.quantum.neural_xc import NeuralXCFunctional  # noqa: TC001
-
-
-_SOLVER_STATUS: Final[tuple[tuple[str, Status], ...]] = (
-    ("successful", Status.SUCCESS),
-    ("nonlinear_max_steps_reached", Status.MAX_ITERS),
-    ("nonlinear_divergence", Status.CONVERGENCE_FAILURE),
-    ("nonfinite", Status.NONFINITE),
-    ("nonfinite_input", Status.NONFINITE),
-    ("max_steps_reached", Status.LINEAR_SOLVE_FAILED),
-    ("singular", Status.LINEAR_SOLVE_FAILED),
-    ("breakdown", Status.LINEAR_SOLVE_FAILED),
-    ("stagnation", Status.LINEAR_SOLVE_FAILED),
-    ("conlim", Status.LINEAR_SOLVE_FAILED),
-)
-"""Every outcome the nonlinear-solve backend reports, as an opifex status code.
-
-The backend's own outcome set is layered: the nonlinear iteration adds its three
-outcomes to the seven an inner *linear* solve can report, which is why those seven all
-translate to :attr:`~opifex.core.solver.status.Status.LINEAR_SOLVE_FAILED` -- under a
-nonlinear solve they mean the step could not be taken. ``nonfinite_input`` is the one
-exception: the non-finite value the linear solve rejected came from the outer iteration,
-so it is reported as :attr:`~opifex.core.solver.status.Status.NONFINITE`.
-
-The table is the full set, and :func:`solver_status` is the only place the backend's
-outcome type is read, so nothing downstream of it handles a foreign enumeration.
-"""
-
-
-def solver_status(result: optx.RESULTS) -> Array:
-    """A backend solve outcome as the ``int32`` status code the rest of opifex uses.
-
-    The backend reports through an enumeration whose selection primitive takes a scalar
-    predicate, so it cannot carry one outcome per element of a batch; a plain integer
-    can, and it is what :mod:`opifex.core.solver.status` compares and persists. This is
-    the boundary where the conversion happens, once.
-
-    Selection is by ``jnp.where`` rather than a branch, so this runs inside a transform.
-    An outcome missing from :data:`_SOLVER_STATUS` yields
-    :attr:`~opifex.core.solver.status.Status.DEFAULT`, which is not a success.
-
-    Args:
-        result: The outcome reported by a backend solve.
-
-    Returns:
-        The matching status code, as a scalar ``int32`` array.
-    """
-    status = jnp.asarray(int(Status.DEFAULT), jnp.int32)
-    for name, code in _SOLVER_STATUS:
-        outcome = getattr(optx.RESULTS, name)
-        status = jnp.where(result == outcome, jnp.asarray(int(code), jnp.int32), status)
-    return status
 
 
 class DensitySolve(struct.PyTreeNode):
@@ -127,22 +81,20 @@ class DensitySolve(struct.PyTreeNode):
     status: Array
 
     @classmethod
-    def from_solution(cls, solution: optx.Solution, density: Array) -> DensitySolve:
-        """Read the measured outcome off a completed backend solve.
+    def from_solution(cls, solution: FixedPointSolution, density: Array) -> DensitySolve:
+        """Construct a :class:`DensitySolve` from a :class:`FixedPointSolution`.
 
         Args:
-            solution: The solve to read the step count and outcome from.
-            density: The density derived from the solve's value; for a fixed-point
-                solve that is the value itself, for direct minimisation it is the
-                density built from the optimised coefficients.
+            solution: Completed fixed-point solve carrying ``status`` and ``n_iterations``.
+            density: Converged AO density matrix derived from ``solution``.
 
         Returns:
             The density paired with the solve's step count and status.
         """
         return cls(
             density=density,
-            n_iterations=jnp.asarray(solution.stats["num_steps"], jnp.int32),
-            status=solver_status(solution.result),
+            n_iterations=jnp.asarray(solution.n_iterations, jnp.int32),
+            status=jnp.asarray(solution.status, jnp.int32),
         )
 
     @property
@@ -168,35 +120,39 @@ class NeuralXCSpec:
     them directly. Splitting the :class:`~opifex.neural.quantum.neural_xc.NeuralXCFunctional`
     into its static ``graphdef`` and its parameter ``state`` (the documented
     ``nnx.split`` round-trip) lets the parameters flow as differentiable leaves
-    through :func:`optimistix.fixed_point` and :func:`jax.grad`, so ``dE/dtheta``
-    is exact via the implicit function theorem -- the learned-XC training path.
+    through :func:`~opifex.neural.quantum.dft._fixed_point.anderson_fixed_point`
+    and :func:`jax.grad`, so ``dE/dtheta`` is exact via the implicit function
+    theorem -- the learned-XC training path.
 
     Attributes:
         graphdef: The static NNX graph definition of the functional.
-        state: The functional's parameter state (traceable pytree leaves).
+        state: The functional's trainable ``nnx.Param`` state (traceable pytree leaves).
+        rest_state: Optional non-parameter NNX state (such as ``RngState``) closed over
+            outside implicit differentiation.
     """
 
     graphdef: nnx.GraphDef
     state: nnx.State
+    rest_state: nnx.State | None = None
 
     @classmethod
     def from_functional(cls, functional: NeuralXCFunctional) -> NeuralXCSpec:
-        """Split an evaluation view of a :class:`NeuralXCFunctional` into ``(graphdef, state)``.
+        """Split an evaluation view of a :class:`NeuralXCFunctional` into ``Param`` and rest.
 
         The SCF evaluates the functional, not a dropout sample of it, whatever mode the caller's
         module is in. ``nnx.view(..., deterministic=True)`` gives a view in evaluation mode that
-        shares the caller's arrays and leaves the caller's module unchanged; the split's graphdef
-        carries that mode. ``raise_if_not_found=False`` because a functional built with
-        ``dropout_rate=0`` holds no dropout layer.
+        shares the caller's arrays and leaves the caller's module unchanged; splitting ``nnx.Param``
+        from ``rest_state`` keeps non-floating ``RngState`` leaves out of differentiated arguments.
         """
-        graphdef, state = nnx.split(
-            nnx.view(functional, deterministic=True, raise_if_not_found=False)
-        )
-        return cls(graphdef=graphdef, state=state)
+        viewed = nnx.view(functional, deterministic=True, raise_if_not_found=False)
+        graphdef, params, rest_state = nnx.split(viewed, nnx.Param, ...)
+        return cls(graphdef=graphdef, state=params, rest_state=rest_state)
 
     def merge(self) -> NeuralXCFunctional:
         """Reconstruct the live :class:`NeuralXCFunctional` from the split."""
-        return nnx.merge(self.graphdef, self.state)
+        if self.rest_state is None:
+            return nnx.merge(self.graphdef, self.state)
+        return nnx.merge(self.graphdef, self.state, self.rest_state)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -467,17 +423,18 @@ def scf_fixed_point(
     max_steps: int,
     neural_spec: NeuralXCSpec | None = None,
     initial_density: Array | None = None,
-) -> optx.Solution:
-    """Solve the Kohn-Sham density fixed point with Anderson acceleration.
+    tangent_solver: TangentSolverFn = dense_tangent_solve,
+) -> FixedPointSolution:
+    """Solve the Kohn-Sham density fixed point with pure-JAX Anderson acceleration.
 
     The single self-consistency engine shared by the differentiable energy path
     (:func:`converged_density_implicit`) and the forward solve
     (:meth:`opifex.neural.quantum.dft.scf.SCFSolver.solve`). Returns the full
-    :class:`optimistix.Solution` so callers can read the converged density
-    (``.value``), iteration count (``.stats``) and convergence status
-    (``.result``). The differentiated function is the bare Roothaan step, so the
-    default :class:`~optimistix.ImplicitAdjoint` yields the exact
-    implicit-function-theorem gradient regardless of the forward iteration path.
+    :class:`~opifex.neural.quantum.dft._fixed_point.FixedPointSolution` so callers
+    can read the converged density (``.value``), iteration count
+    (``.n_iterations``), and convergence status (``.status``). Implicit
+    differentiation via :func:`jax.lax.custom_root` yields exact
+    implicit-function-theorem gradients regardless of the forward iteration path.
 
     Args:
         integrals: The molecular integrals (overlap, core Hamiltonian, ERI, XC
@@ -487,15 +444,14 @@ def scf_fixed_point(
         tolerance: Relative and absolute residual tolerance for convergence.
         max_steps: Maximum number of Anderson fixed-point iterations.
         neural_spec: Optional learned-XC specification for the ``NEURAL`` path.
-        initial_density: Optional closed-shell density to seed the iteration. A
-            high-quality guess (e.g. one reconstructed from a predicted Fock)
-            reaches the fixed point in fewer steps. Defaults to the
-            core-Hamiltonian density. The converged result is independent of the
-            seed; only the iteration count changes.
+        initial_density: Optional closed-shell density to seed the iteration.
+            Defaults to the core-Hamiltonian density.
+        tangent_solver: Linear solver ``(lin_op, rhs) -> v`` for implicit
+            differentiation; defaults to :func:`~opifex.core.solver.dense_tangent_solve`.
 
     Returns:
-        The optimistix fixed-point solution (``.value`` density, ``.stats``
-        iteration count, ``.result`` convergence status).
+        :class:`~opifex.neural.quantum.dft._fixed_point.FixedPointSolution`
+        carrying ``.value``, ``.n_iterations``, and ``.status``.
     """
     if initial_density is None:
         initial = _density_from_fock(
@@ -506,9 +462,16 @@ def scf_fixed_point(
     solver = AndersonAcceleration(rtol=tolerance, atol=tolerance)
 
     def step(density: Array, _: None) -> Array:
+        """Evaluate one Kohn-Sham SCF map iteration."""
         return _scf_step(density, integrals, functional, n_occupied, neural_spec)
 
-    return optx.fixed_point(step, solver, initial, max_steps=max_steps, throw=False)
+    return anderson_fixed_point(
+        step,
+        solver,
+        initial,
+        max_steps=max_steps,
+        tangent_solver=tangent_solver,
+    )
 
 
 def converged_density_implicit(
@@ -519,19 +482,15 @@ def converged_density_implicit(
     tolerance: float,
     max_steps: int,
     neural_spec: NeuralXCSpec | None = None,
+    tangent_solver: TangentSolverFn = dense_tangent_solve,
 ) -> Array:
     r"""Converged density matrix via the implicit-function-theorem fixed point.
 
     Solves the Roothaan step :math:`D \to f(D)` with
-    :class:`~opifex.neural.quantum.dft._fixed_point.AndersonAcceleration` -- plain
-    Roothaan iteration charge-sloshes and fails to converge (water/LDA stalls at a
-    residual of :math:`\sim 0.9`), whereas Anderson mixing converges in a handful
-    of steps. The solver is only the *forward* iterator: :func:`optimistix.fixed_point`
-    differentiates the bare step ``f`` via the default
-    :class:`~optimistix.ImplicitAdjoint`, so the implicit-function-theorem gradient
-    is exact and independent of how the forward solve converged. With a
-    ``neural_spec`` the learned XC parameters flow as differentiable leaves, so
-    ``dE/dtheta`` is exact via the same implicit adjoint.
+    :class:`~opifex.neural.quantum.dft._fixed_point.AndersonAcceleration` and
+    differentiates the bare step ``f`` at the converged fixed point via
+    :func:`jax.lax.custom_root` + ``tangent_solver`` (defaulting to
+    :func:`~opifex.core.solver.dense_tangent_solve`).
     """
     return scf_fixed_point(
         integrals,
@@ -540,6 +499,7 @@ def converged_density_implicit(
         tolerance=tolerance,
         max_steps=max_steps,
         neural_spec=neural_spec,
+        tangent_solver=tangent_solver,
     ).value
 
 
@@ -578,6 +538,21 @@ def _cayley_orthonormal(parameters: Array, reference: Array, n_orbitals: int) ->
     return reference @ occupied_orthonormal
 
 
+class _DirectMinCarry(struct.PyTreeNode):
+    """Internal carry for L-BFGS direct energy minimization."""
+
+    params: Array
+    opt_state: Any
+    value: Array
+    grad: Array
+    step_count: Array
+    converged: Array
+    has_nonfinite: Array
+
+
+_DIRECT_MAX_STEP_NORM = 0.2
+
+
 def converged_density_direct(
     integrals: _Integrals,
     functional: Functional,
@@ -588,18 +563,12 @@ def converged_density_direct(
     max_steps: int,
     neural_spec: NeuralXCSpec | None = None,
 ) -> DensitySolve:
-    r"""Converged density via direct energy minimisation over orbital coefficients.
+    r"""Converged density via direct L-BFGS energy minimisation over orbitals.
 
-    SCF-free alternative (jrystal / DWD, arXiv:2411.05033): minimise the
-    Kohn-Sham energy directly with respect to a free coefficient matrix, mapped to
-    overlap-orthonormal occupied orbitals by a QR parametrisation, with the
-    closed-shell occupation ``D = 2 C_occ C_occ^T`` baked in. Optimisation uses
-    L-BFGS through :func:`optimistix.minimise`.
-
-    The minimiser runs with ``throw=False``, so a budget that runs out returns the
-    best point reached rather than raising. The outcome therefore travels with the
-    density -- a caller cannot otherwise tell a converged minimum from a truncated
-    descent, and the two differ by far more than the tolerance.
+    SCF-free alternative (jrystal / DWD, ``arXiv:2411.05033``): minimises the
+    Kohn-Sham energy directly over a QR-orthonormalised coefficient matrix using
+    pure-JAX :func:`optax.lbfgs` + :func:`optax.scale_by_zoom_linesearch` +
+    :func:`optax.value_and_grad_from_state` inside :func:`jax.lax.while_loop`.
 
     Args:
         integrals: The molecular integrals the energy is built from.
@@ -611,23 +580,98 @@ def converged_density_direct(
         neural_spec: Optional learned-XC specification for the ``NEURAL`` path.
 
     Returns:
-        The density with the minimiser's step count and status.
+        The density paired with the minimiser's step count and status.
     """
     reference = integrals.orthogonaliser
+    dtype = reference.dtype
+    tol_f = jnp.asarray(tolerance, dtype=dtype)
 
-    def energy_of_parameters(parameters: Array, _: None) -> Array:
+    def energy_fn(parameters: Array) -> Array:
+        """Compute Kohn-Sham total energy from free orbital parameters."""
         coefficients = _cayley_orthonormal(parameters, reference, n_occupied)
         density = 2.0 * coefficients @ coefficients.T
         return total_energy(density, integrals, functional, neural_spec)
 
-    # Initialise from the core-Hamiltonian guess (orthonormal-basis identity).
-    initial = jnp.eye(n_ao, dtype=reference.dtype)
-    solver = optx.BFGS(rtol=tolerance, atol=tolerance)
-    solution = optx.minimise(
-        energy_of_parameters, solver, initial, max_steps=max_steps, throw=False
+    max_ls = min(20, max(1, max_steps))
+    optimizer = optax.lbfgs(
+        memory_size=10,
+        scale_init_precond=True,
+        linesearch=optax.chain(
+            optax.clip_by_global_norm(_DIRECT_MAX_STEP_NORM),
+            optax.scale_by_zoom_linesearch(
+                max_linesearch_steps=max_ls,
+                max_learning_rate=1.0,
+                initial_guess_strategy="one",
+            ),
+        ),
     )
-    coefficients = _cayley_orthonormal(solution.value, reference, n_occupied)
-    return DensitySolve.from_solution(solution, 2.0 * coefficients @ coefficients.T)
+    val_and_grad_fn = optax.value_and_grad_from_state(energy_fn)
+
+    initial = jnp.eye(n_ao, dtype=dtype)
+    init_opt_state = optimizer.init(initial)
+    raw_init_val, raw_init_grad = val_and_grad_fn(initial, state=init_opt_state)
+    init_val = jnp.asarray(raw_init_val, dtype=dtype)
+    init_grad = cast("Array", raw_init_grad)
+    init_scale = jnp.maximum(jnp.asarray(1.0, dtype=dtype), jnp.abs(init_val))
+    init_nonfinite = ~jnp.isfinite(init_val) | ~jnp.all(jnp.isfinite(init_grad))
+    init_conv = (~init_nonfinite) & (jnp.max(jnp.abs(init_grad)) <= tol_f * init_scale)
+
+    def cond_fn(carry: _DirectMinCarry) -> Array:
+        """Check whether direct L-BFGS orbital minimization should continue."""
+        return (carry.step_count < max_steps) & (~carry.converged) & (~carry.has_nonfinite)
+
+    def body_fn(carry: _DirectMinCarry) -> _DirectMinCarry:
+        """Advance one L-BFGS orbital minimization step with zoom line search."""
+        raw_updates, next_opt_state = optimizer.update(
+            carry.grad,
+            carry.opt_state,
+            carry.params,
+            value=carry.value,  # pyright: ignore[reportCallIssue]
+            grad=carry.grad,  # pyright: ignore[reportCallIssue]
+            value_fn=energy_fn,  # pyright: ignore[reportCallIssue]
+        )
+        updates = cast("Array", raw_updates)
+        cand_params = cast("Array", optax.apply_updates(carry.params, updates))
+        raw_cand_val, raw_cand_grad = val_and_grad_fn(cand_params, state=next_opt_state)
+        cand_val = jnp.asarray(raw_cand_val, dtype=dtype)
+        cand_grad = cast("Array", raw_cand_grad)
+        step_nonfinite = ~jnp.isfinite(cand_val) | ~jnp.all(jnp.isfinite(cand_grad))
+
+        grad_inf = jnp.max(jnp.abs(cand_grad))
+        val_scale = jnp.maximum(jnp.asarray(1.0, dtype=dtype), jnp.abs(cand_val))
+        grad_ok = grad_inf <= tol_f * val_scale
+
+        next_params = jnp.where(step_nonfinite, carry.params, cand_params)
+        return _DirectMinCarry(
+            params=next_params,
+            opt_state=next_opt_state,
+            value=cand_val,
+            grad=cand_grad,
+            step_count=carry.step_count + jnp.asarray(1, dtype=jnp.int32),
+            converged=(~step_nonfinite) & grad_ok,
+            has_nonfinite=carry.has_nonfinite | step_nonfinite,
+        )
+
+    init_carry = _DirectMinCarry(
+        params=initial,
+        opt_state=init_opt_state,
+        value=init_val,
+        grad=init_grad,
+        step_count=jnp.asarray(0, dtype=jnp.int32),
+        converged=init_conv,
+        has_nonfinite=init_nonfinite,
+    )
+    final_carry = jax.lax.while_loop(cond_fn, body_fn, init_carry)
+    status = loop_status(
+        has_nonfinite=final_carry.has_nonfinite,
+        converged=final_carry.converged,
+    )
+    coefficients = _cayley_orthonormal(final_carry.params, reference, n_occupied)
+    return DensitySolve(
+        density=2.0 * coefficients @ coefficients.T,
+        n_iterations=final_carry.step_count,
+        status=status,
+    )
 
 
 __all__ = [
@@ -639,6 +683,6 @@ __all__ = [
     "converged_density_direct",
     "converged_density_implicit",
     "converged_density_unrolled",
-    "solver_status",
+    "scf_fixed_point",
     "total_energy",
 ]

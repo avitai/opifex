@@ -14,8 +14,20 @@ from opifex.core.solver import (
     dense_tangent_solve,
     gmres_tangent_solve,
     infer_inexact_dtype,
+    is_successful,
     lsmr_tangent_solve,
 )
+from opifex.neural.quantum.dft._fixed_point import (
+    anderson_fixed_point,
+    AndersonAcceleration,
+)
+from opifex.optimization.second_order.wrappers import BFGSSolver, OptimizationProblem
+from opifex.solvers.nonlinear_least_squares import (
+    LevenbergMarquardt,
+    NonlinearLeastSquaresProblem,
+)
+from opifex.solvers.stiff_ode import InitialValueProblem, Rodas4, solve_stiff_ode
+from opifex.solvers.ude import tsit5_solve, UDEConfig
 
 
 class TestInferInexactDtypeAndCastPytree:
@@ -71,6 +83,117 @@ class TestInferInexactDtypeAndCastPytree:
             assert cast_f64["half"].dtype == jnp.float64
             assert cast_f64["scalar"].dtype == jnp.float64
             assert cast_f64["indices"].dtype == jnp.int32
+
+
+class TestAllSolverCallersPreserveFloat32AndFloat64UnderX64:
+    """Verify all 5 pure-JAX solver callers keep float32 inputs in float32 under x64."""
+
+    def test_levenberg_marquardt_preserves_input_dtype_under_x64(self) -> None:
+        method = LevenbergMarquardt(max_iterations=25, gtol=1e-6, xtol=1e-6, ftol=1e-6)
+        with jax.enable_x64(True):
+            for dtype in (jnp.float32, jnp.float64):
+                x0 = jnp.array([0.2, -0.3], dtype=dtype)
+                target = jnp.array([1.5, -0.5], dtype=dtype)
+                prob = NonlinearLeastSquaresProblem(
+                    residual_fn=lambda th, tgt: th - tgt,
+                    initial_params=x0,
+                    data=target,
+                )
+                sol = method.solve(prob)
+                assert bool(is_successful(sol.status))
+                assert sol.fields["params"].dtype == dtype
+                assert sol.fields["residuals"].dtype == dtype
+                assert sol.metrics["cost"].dtype == dtype
+                grad = jax.grad(
+                    lambda tgt, init=x0: jnp.sum(
+                        method.solve(
+                            NonlinearLeastSquaresProblem(
+                                residual_fn=lambda th, t: th - t,
+                                initial_params=init,
+                                data=tgt,
+                            )
+                        ).fields["params"]
+                    )
+                )(target)
+                assert grad.dtype == dtype
+
+    def test_rodas4_and_solve_stiff_ode_preserve_float32_with_python_float_times_under_x64(
+        self,
+    ) -> None:
+        rodas = Rodas4(num_steps=16)
+        with jax.enable_x64(True):
+            for dtype in (jnp.float32, jnp.float64):
+                y0 = jnp.array([1.0, -0.5], dtype=dtype)
+                ivp = InitialValueProblem(
+                    vector_field=lambda _t, y, scale: -scale * y,
+                    y0=y0,
+                    t0=0.0,
+                    t1=1.0,
+                    args=0.5,
+                )
+                sol_direct = rodas.solve(ivp)
+                assert bool(is_successful(sol_direct.status))
+                assert sol_direct.fields["y"].dtype == dtype
+                assert sol_direct.fields["t"].dtype == dtype
+
+                sol_fn = solve_stiff_ode(
+                    lambda _t, y, scale: -scale * y,
+                    y0,
+                    t0=0.0,
+                    t1=1.0,
+                    args=0.5,
+                    method=rodas,
+                )
+                assert bool(is_successful(sol_fn.status))
+                assert sol_fn.fields["y"].dtype == dtype
+                assert sol_fn.fields["t"].dtype == dtype
+
+    def test_tsit5_solve_preserves_input_dtype_under_x64(self) -> None:
+        cfg = UDEConfig(dt0=0.05, rtol=1e-5, atol=1e-6, max_steps=128)
+        with jax.enable_x64(True):
+            for dtype in (jnp.float32, jnp.float64):
+                y0 = jnp.array([1.0, 0.5], dtype=dtype)
+                ts = jnp.linspace(0.0, 0.5, 5, dtype=dtype)
+                sol = tsit5_solve(
+                    lambda _t, y, rate: -rate * y,
+                    y0,
+                    ts,
+                    config=cfg,
+                    args=1.0,
+                )
+                assert bool(is_successful(sol.status))
+                assert sol.fields["y"].dtype == dtype
+                assert sol.fields["t"].dtype == dtype
+
+    def test_anderson_fixed_point_preserves_input_dtype_under_x64(self) -> None:
+        anderson = AndersonAcceleration(rtol=1e-6, atol=1e-6, history_size=4)
+        with jax.enable_x64(True):
+            for dtype in (jnp.float32, jnp.float64):
+                y0 = jnp.array([0.0, 0.2], dtype=dtype)
+                sol = anderson_fixed_point(
+                    lambda y, shift: 0.5 * y + shift,
+                    anderson,
+                    y0,
+                    args=1.0,
+                    max_steps=32,
+                )
+                assert bool(sol.is_converged)
+                assert sol.value.dtype == dtype
+
+    def test_bfgs_solver_preserves_input_dtype_under_x64(self) -> None:
+        solver = BFGSSolver(max_iterations=40, rtol=1e-5, atol=1e-5)
+        with jax.enable_x64(True):
+            for dtype in (jnp.float32, jnp.float64):
+                x0 = jnp.array([2.0, -1.5], dtype=dtype)
+                prob = OptimizationProblem(
+                    objective_fn=lambda x, shift: 0.5 * jnp.sum((x - shift) ** 2),
+                    initial_params=x0,
+                    args=1.0,
+                )
+                sol = solver.solve(prob)
+                assert bool(is_successful(sol.status))
+                assert sol.fields["params"].dtype == dtype
+                assert sol.metrics["loss"].dtype == dtype
 
 
 def _lu_bwd_contract_bound(size: int, dtype: jnp.dtype) -> float:

@@ -1,10 +1,12 @@
 r"""Tests for implicit-differentiation SCF, analytic forces and PBE energies.
 
-The differentiable SCF wraps the Roothaan fixed point with ``optimistix``'s
-implicit-function-theorem adjoint (the PySCFAD rationale: differentiate through
-the converged fixed point, not the iteration), so nuclear forces are exact and
-memory-cheap. Validation is against central finite differences of the total
-energy and against PySCF's RKS analytic gradient / total energy.
+The differentiable SCF wraps the Roothaan fixed point with
+``anderson_fixed_point``'s pure-JAX ``jax.lax.custom_root`` +
+``dense_tangent_solve`` implicit-function-theorem adjoint (the PySCFAD
+rationale: differentiate through the converged fixed point, not the iteration),
+so nuclear forces are exact and memory-cheap. Validation is against central
+finite differences of the total energy and against PySCF's RKS analytic
+gradient / total energy.
 
 References
 ----------
@@ -58,13 +60,20 @@ def _h2o_system() -> MolecularSystem:
 
 
 def test_energy_and_forces_returns_consistent_energy() -> None:
-    """The implicit-diff energy equals the plain DIIS-SCF total energy."""
+    """The implicit-diff energy equals the plain DIIS-SCF total energy across tangent solvers."""
+    from opifex.core.solver import lsmr_tangent_solve
+
     with jax.enable_x64(True):
         solver = SCFSolver(_h2_system())
         diis_energy = float(solver.solve().total_energy)
         energy, forces = solver.energy_and_forces()
+        solver_lsmr = SCFSolver(_h2_system(), tangent_solver=lsmr_tangent_solve)
+        energy_lsmr, forces_lsmr = solver_lsmr.energy_and_forces()
+        forces_diff = float(jnp.max(jnp.abs(forces - forces_lsmr)))
     assert float(energy) == pytest.approx(diis_energy, abs=1e-6)
+    assert float(energy_lsmr) == pytest.approx(diis_energy, abs=1e-6)
     assert forces.shape == (2, 3)
+    assert forces_diff < 1e-9
 
 
 def test_forces_match_finite_difference_h2_lda() -> None:
