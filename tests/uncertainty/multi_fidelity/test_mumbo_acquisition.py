@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import functools
 import math
+from collections.abc import Callable  # noqa: TC003
 from itertools import pairwise
-from typing import cast, TYPE_CHECKING
+from typing import cast
 
 import jax
 import jax.numpy as jnp
@@ -26,11 +27,7 @@ import pytest
 from scipy import integrate, optimize
 from scipy.stats import norm
 
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from opifex.uncertainty.multi_fidelity import LinearMultiFidelityGPState
+from opifex.uncertainty.multi_fidelity import LinearMultiFidelityGPState  # noqa: TC001
 
 
 _EPS32 = float(np.finfo(np.float32).eps)
@@ -446,3 +443,103 @@ def test_mumbo_is_jit_compatible_and_differentiable_in_the_candidates() -> None:
     x_candidates = jnp.asarray([[0.2], [0.5], [0.8]])
     assert bool(jnp.allclose(jax.jit(total)(x_candidates), total(x_candidates), atol=1e-6))
     assert bool(jnp.all(jnp.isfinite(jax.grad(total)(x_candidates))))
+
+
+def test_mumbo_acquisition_discrete_x_grid_avoids_continuous_box_sampling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Supplying ``x_grid`` evaluates the target GP strictly on ``x_grid`` and compiles once."""
+    from substrax.testing import TraceCounter
+
+    import opifex.uncertainty.multi_fidelity.mumbo as mumbo_module
+    from opifex.uncertainty.multi_fidelity import (
+        mumbo_acquisition,
+        predict_linear_multi_fidelity_gp,
+    )
+
+    state = _fitted_state()
+    discrete_grid = jnp.array([[0.1], [0.25], [0.75], [0.9]], dtype=jnp.float32)
+    observed_x_tests: list[jax.Array] = []
+
+    def spy_predict(*, state, x_test, target_level):
+        observed_x_tests.append(x_test)
+        return predict_linear_multi_fidelity_gp(
+            state=state, x_test=x_test, target_level=target_level
+        )
+
+    monkeypatch.setattr(mumbo_module, "predict_linear_multi_fidelity_gp", spy_predict)
+    candidates = jnp.array([[0.25], [0.75]], dtype=jnp.float32)
+    levels = jnp.array([0, 1], dtype=jnp.int32)
+    scores = mumbo_acquisition(
+        state=state,
+        x_candidates=candidates,
+        candidate_levels=levels,
+        target_level=1,
+        rng_key=jax.random.key(4),
+        num_gumbel_samples=6,
+        x_grid=discrete_grid,
+    )
+    assert scores.shape == (2,)
+    assert bool(jnp.all(jnp.isfinite(scores)))
+    assert len(observed_x_tests) == 2
+    assert jnp.array_equal(observed_x_tests[0], discrete_grid)
+
+    monkeypatch.undo()
+    counter = TraceCounter()
+    jitted = jax.jit(
+        counter.wrap(
+            lambda xg: mumbo_acquisition(
+                state=state,
+                x_candidates=candidates,
+                candidate_levels=levels,
+                target_level=1,
+                rng_key=jax.random.key(5),
+                num_gumbel_samples=4,
+                x_grid=xg,
+            )
+        )
+    )
+    with counter.expect(new_traces=1):
+        out1 = jitted(discrete_grid)
+    with counter.expect(new_traces=0):
+        _ = jitted(discrete_grid * 0.95)
+    assert out1.shape == (2,)
+
+    for bad_grid in (
+        jnp.ones((4,), dtype=jnp.float32),
+        jnp.ones((0, 1), dtype=jnp.float32),
+        jnp.ones((4, 2), dtype=jnp.float32),
+    ):
+        with pytest.raises(ValueError, match="x_grid"):
+            mumbo_acquisition(
+                state=state,
+                x_candidates=candidates,
+                candidate_levels=levels,
+                target_level=1,
+                rng_key=jax.random.key(6),
+                x_grid=bad_grid,
+            )
+
+    from substrax.testing import restored_jax_config
+
+    with pytest.raises(ValueError, match="x_candidates"):
+        mumbo_acquisition(
+            state=state,
+            x_candidates=jnp.array([0.25, 0.75], dtype=jnp.float32),
+            candidate_levels=levels,
+            target_level=1,
+            rng_key=jax.random.key(7),
+        )
+
+    with restored_jax_config():
+        jax.config.update("jax_enable_x64", True)
+        scores_f32 = mumbo_acquisition(
+            state=state,
+            x_candidates=candidates.astype(jnp.float32),
+            candidate_levels=levels,
+            target_level=1,
+            rng_key=jax.random.key(8),
+            grid_size=32,
+            num_gumbel_samples=4,
+        )
+        assert scores_f32.dtype == jnp.float32

@@ -777,6 +777,9 @@ unfixable = []
 "src/opifex/uncertainty/monitoring/reliability_report.py" = [
   "PLR0913" # Reliability-report assembler: one optional kwarg per UQ metric
 ]
+"src/opifex/uncertainty/multi_fidelity/mumbo.py" = [
+  "PLR0913" # MUMBO acquisition: one kwarg per multi-fidelity / Gumbel / quadrature quantity
+]
 "src/opifex/uncertainty/multi_fidelity/nonlinear.py" = [
   "PLR0913" # NARGP two-term Perdikaris (2017) fit/kernel: one kwarg per kernel hyperparameter family
 ]

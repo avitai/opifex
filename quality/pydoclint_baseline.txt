@@ -688,10 +688,6 @@ src/opifex/uncertainty/multi_fidelity/linear.py
     DOC501: Function `fit_linear_multi_fidelity_gp` has raise statements, but the docstring does not have a "Raises" section
     DOC503: Function `fit_linear_multi_fidelity_gp` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['ValueError'].
 --------------------
-src/opifex/uncertainty/multi_fidelity/mumbo.py
-    DOC501: Function `mumbo_acquisition` has raise statements, but the docstring does not have a "Raises" section
-    DOC503: Function `mumbo_acquisition` exceptions in the "Raises" section in the docstring do not match those in the function body. Raised exceptions in the docstring: []. Raised exceptions in the body: ['RuntimeError'].
---------------------
 src/opifex/uncertainty/pac_bayes/bounds.py
     DOC502: Function `mcallester_bound` has a "Raises" section in the docstring, but there are not "raise" statements in the body
     DOC502: Function `quadratic_bound` has a "Raises" section in the docstring, but there are not "raise" statements in the body
