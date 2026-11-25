@@ -12,13 +12,11 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence"
 ]
 dependencies = [
-  "jax>=0.8.0",
-  # JAX - upgraded to 0.8.0 for performance and NNX compatibility
-  # 0.12.1 is where nnx Variable gained set_value / get_value. datarax's pipeline
-  # iterator calls them at every yield boundary, so on 0.12.0 every test that drives a
-  # datarax loader dies with "'ArrayImpl' object has no attribute 'set_value'".
-  "flax>=0.12.1",
-  # FLAX NNX - upgraded to 0.12.0 for modern nnx.Optimizer API
+  "jax>=0.11.1",
+  # 0.12.9 subclasses jax.experimental.hijax.HiPrimitive, which jax exports only up to
+  # 0.11.1, so importing flax.nnx fails with 0.12.9 on jax>=0.11.2; 0.12.10 is the first
+  # release that picks the primitive name dynamically for the installed jax.
+  "flax>=0.12.10",
   "diffrax>=0.4.0",
   # differential equations
   # 0.2.8 removed optax/contrib/_complex_valued.py's module-level
@@ -57,7 +55,7 @@ dependencies = [
   # the pytest workers during collection. The floor states that requirement so a
   # conservative re-lock cannot silently drop back to 0.1.0.
   "avitai-artifex>=0.1.15",
-  "calibrax[publication]>=0.1.21",
+  "calibrax[publication]>=0.1.23",
   # 0.1.17 moves the checkpoint-state protocol to substrax's ``Checkpointable`` and removes
   # ``datarax.typing.Checkpointable``. Nothing here imports that name — the two mentions in
   # ``uncertainty/sbi/simulators.py`` are prose in a docstring — so the floor is raised to
@@ -65,7 +63,7 @@ dependencies = [
   "datarax>=0.1.17",
   # 0.1.6 adds substrax.runtime, substrax.artifacts and substrax.testing; 0.1.8 substrax.rng
   # and substrax.optim.
-  "substrax>=0.1.32",
+  "substrax>=0.1.37",
   # TensorFlow Probability's JAX substrate supplies bessel_ive for the periodic state-space
   # kernels, as in bayesnewton. It was already installed through avitai-artifex -> distrax.
   "tfp-nightly>=0.26.0.dev20251024"
@@ -113,7 +111,7 @@ cuda12 = [
   # lockstep a manual pin was there to guarantee is enforced upstream. An exact pin here also
   # governed everything else, because uv resolves ONE universal lockfile across all extras:
   # it held dev, test and docs at jax 0.8.0 while no workflow installs this extra at all.
-  "jax[cuda12]>=0.8.0",
+  "jax[cuda12]>=0.11.1",
   # The floors below are STRICTER than jax-cuda12-plugin[with-cuda] requires and are kept
   # deliberately; curand and nvtx are not in with-cuda at all. Do not delete them as
   # duplicates.
@@ -165,7 +163,7 @@ dev = [
   # deliberate change, not something a Tuesday should do to the gate.
   "ruff>=0.15.2,<0.16",
   # `substrax-compute` runs the examples on a GPU; the Modal backend needs Modal
-  "substrax[modal]>=0.1.32",
+  "substrax[modal]>=0.1.37",
   "twine>=4.0.2"
 ]
 docs = [
@@ -185,7 +183,7 @@ metal = [
 ]
 mlflow = [
   # The MLflow experiment backend records through substrax's MLFlowLogger.
-  "substrax[mlflow]>=0.1.32"
+  "substrax[mlflow]>=0.1.37"
 ]
 neural-dft = [
   # Neural DFT specific dependencies for quantum chemistry
@@ -282,7 +280,7 @@ test = [
   "pytest-split>=0.10.0",
   "pytest-timeout>=2.4.0",
   "pytest-xdist>=3.8.0",
-  "substrax[notebooks,testing]>=0.1.32"
+  "substrax[notebooks,testing]>=0.1.37"
 ]
 
 [project.scripts]

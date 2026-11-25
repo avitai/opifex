@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installed (a free-threaded 3.14 on one development machine).
   Every CI job with a Python matrix sets `UV_PYTHON` to its matrix version, which the pin
   would otherwise override for its uv commands.
+- `_DeterministicLinear.__call__` in `opifex.neural.bayesian.probabilistic_pinns` drops unread `deterministic` and `rngs` flags (dispatching via `_apply_pinn_layer`) and `BayesianLinear` and `BayesianSpectralConvolution` drop redundant `substrax-allow` comments.
+- Raised minimum dependency floors to `jax>=0.11.1`, `flax>=0.12.10`, `calibrax[publication]>=0.1.23`, and `substrax>=0.1.37`. Under `calibrax>=0.1.23`, `CompilationProfiler` times tracing, lowering, and XLA compilation (`lower(...).compile()`) only rather than the first program execution, so `avg_compilation_time_ms` and `max_compilation_time_ms` in `opifex.benchmarking.profiling.profiling_harness` read lower wherever a first run was slow.
 
 ## [0.2.14] - 2026-11-21
 

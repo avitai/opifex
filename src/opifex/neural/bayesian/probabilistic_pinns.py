@@ -181,31 +181,32 @@ def _coerce_predictive_mode(mode: PredictiveMode | str) -> PredictiveMode:
 
 
 class _DeterministicLinear(nnx.Module):
-    """Deterministic linear layer sharing the ``BayesianLinear`` call interface.
-
-    Wrapping ``nnx.Linear`` lets a PINN's layer stack be uniform: every layer
-    accepts ``(x, *, deterministic, rngs)`` and exposes ``kl_divergence()``. The
-    deterministic layer ignores the sampling controls and contributes zero KL,
-    so forward and KL loops iterate without per-layer type dispatch.
-    """
+    """Deterministic linear layer paired with zero KL divergence for non-Bayesian PINNs."""
 
     def __init__(self, in_features: int, out_features: int, *, rngs: nnx.Rngs) -> None:
         """Initialize the wrapped dense layer."""
         self.linear = nnx.Linear(in_features, out_features, rngs=rngs)
 
-    def __call__(
-        self,
-        x: jax.Array,
-        *,
-        deterministic: bool | None = None,  # noqa: ARG002 - uniform layer interface
-        rngs: nnx.Rngs | jax.Array | None = None,  # noqa: ARG002 - uniform layer interface
-    ) -> jax.Array:
-        """Apply the dense layer (sampling controls are inert)."""
+    def __call__(self, x: jax.Array) -> jax.Array:
+        """Apply the dense projection."""
         return self.linear(x)
 
     def kl_divergence(self) -> jax.Array:
         """Return zero KL — a deterministic layer has no variational parameters."""
         return jnp.array(0.0)
+
+
+def _apply_pinn_layer(
+    layer: BayesianLinear | _DeterministicLinear,
+    x: jax.Array,
+    *,
+    deterministic: bool | None = None,
+    rngs: nnx.Rngs | jax.Array | None = None,
+) -> jax.Array:
+    """Apply a Bayesian or deterministic PINN dense layer."""
+    if isinstance(layer, BayesianLinear):
+        return layer(x, deterministic=deterministic, rngs=rngs)
+    return layer(x)
 
 
 class MultiFidelityPINN(nnx.Module):
@@ -381,10 +382,10 @@ class MultiFidelityPINN(nnx.Module):
         """
         h = x
         for layer in self.low_fidelity_layers:
-            h = self.activation(layer(h, deterministic=deterministic))
+            h = self.activation(_apply_pinn_layer(layer, h, deterministic=deterministic))
 
         # Output prediction
-        prediction = self.low_fidelity_output(h, deterministic=deterministic)
+        prediction = _apply_pinn_layer(self.low_fidelity_output, h, deterministic=deterministic)
 
         # Estimate uncertainty (simplified - could be improved with ensemble)
         uncertainty = jnp.std(prediction, axis=-1, keepdims=True) + 1e-6
@@ -404,10 +405,12 @@ class MultiFidelityPINN(nnx.Module):
         h = correction_input
 
         for layer in self.high_fidelity_networks[0][:-1]:
-            h = self.activation(layer(h, deterministic=deterministic))
+            h = self.activation(_apply_pinn_layer(layer, h, deterministic=deterministic))
 
         # Correction prediction
-        correction = self.high_fidelity_networks[0][-1](h, deterministic=deterministic)
+        correction = _apply_pinn_layer(
+            self.high_fidelity_networks[0][-1], h, deterministic=deterministic
+        )
 
         high_pred = low_pred + correction
 
@@ -652,8 +655,8 @@ class ProbabilisticPINN(nnx.Module):
         """Forward pass; a Bayesian layer samples from ``rngs`` when given, else its own stream."""
         h = x
         for layer in self.layers:
-            h = nnx.tanh(layer(h, deterministic=deterministic, rngs=rngs))
-        return self.output_layer(h, deterministic=deterministic, rngs=rngs)
+            h = nnx.tanh(_apply_pinn_layer(layer, h, deterministic=deterministic, rngs=rngs))
+        return _apply_pinn_layer(self.output_layer, h, deterministic=deterministic, rngs=rngs)
 
     def kl_divergence(self) -> jax.Array:
         """Sum the per-layer KL divergences for every Bayesian layer.
